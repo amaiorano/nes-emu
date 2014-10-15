@@ -2,6 +2,7 @@
 #include "FileStream.h"
 #include "Rom.h"
 #include "Cpu.h"
+#include "CpuRam.h"
 #include <memory>
 
 void PrintAppInfo()
@@ -59,18 +60,19 @@ int main(int argc, char* argv[])
 
 		PrintRomInfo(inputFile, header);
 
-		Cpu cpu;
+		CpuRam cpuRam;
 
 		// Next is PRG-ROM data (16384 * x bytes)
 		const size_t prgRomSize = header.GetPrgRomSizeBytes();
-
 		{
 			uint8 prgRom[CpuRam::kPrgRomMaxSize] = {0};
 			fs.Read(prgRom, prgRomSize);
-
-			cpu.Reset(prgRom, prgRomSize);
+			cpuRam.LoadPrgRom(prgRom, prgRomSize);
 		}
 
+		Cpu cpu;
+		cpu.Initialize(cpuRam);
+		cpu.Reset();
 		cpu.Run();
 	}
 	catch (const std::exception& ex)

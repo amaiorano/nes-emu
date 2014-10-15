@@ -5,10 +5,13 @@
 class CpuRam
 {
 public:
-	static const uint16 kPrgRomMaxSize = KB(32);
-	static const uint16 kPrgRomLowBase = 0x8000;
-	static const uint16 kPrgRomHighBase = 0xC000;
-	static const uint16 kStackBase = 0x0100; // Range [$0100,$01FF]
+	static const uint16 kPrgRomMaxSize	= KB(32);
+	static const uint16 kPrgRomLowBase	= 0x8000;
+	static const uint16 kPrgRomHighBase	= 0xC000;
+	static const uint16 kStackBase		= 0x0100; // Range [$0100,$01FF]
+	static const uint16 kNmiVector		= 0xFFFA; // and 0xFFFB
+	static const uint16 kResetVector	= 0xFFFC; // and 0xFFFD
+	static const uint16 kIrqVector		= 0xFFFE; // and 0xFFFF
 
 	CpuRam()
 	{
@@ -62,21 +65,17 @@ public:
 		return (m_memory[address + 1] << 8) | m_memory[address];
 	}
 
-	// Use with care! Writing more than a single byte can be wrong if crossing a mirror boundary
-	uint8* ReadPtr8(uint16 address)
+	void Write8(uint16 address, uint8 value)
 	{
-		return &(m_memory[WrapMirroredAddress(address)]);
+		address = WrapMirroredAddress(address);
+		m_memory[address] = value;
 	}
 
-	// Stack works top down from $01FF to $0100, wraps around with no stack overflow
-	void StackPush(uint8& SP, uint8 value)
+	void Write16(uint16 address, uint16 value)
 	{
-		m_memory[kStackBase + SP--] = value;
-	}
-
-	uint8 StackPop(uint8& SP)
-	{
-		return m_memory[kStackBase + SP++];
+		address = WrapMirroredAddress(address);
+		m_memory[address] = value & 0x00FF;
+		m_memory[address + 1] = value >> 8;
 	}
 
 private:

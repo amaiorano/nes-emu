@@ -1,17 +1,46 @@
 #pragma once
 
-#include "CpuRam.h"
+#include "Base.h"
+
+class CpuRam;
+struct OpCodeEntry;
 
 class Cpu
 {
 public:
-	void Reset(uint8* pPrgRom, size_t prgRomSize);
-
+	void Initialize(CpuRam& cpuRam);
+	void Reset();
 	void Run();
 
 private:
-	CpuRam m_ram;
+	// Updates m_operandAddress for current instruction based on addressing mode. Operand data is assumed to be at PC + 1 if it exists.
+	void UpdateOperand();
 
+	// Executes current instruction, updates PC
+	void ExecuteInstruction();
+
+	// For instructions that work on accumulator (A) or memory location
+	uint8 GetAccumOrMemValue() const;
+	void SetAccumOrMemValue(uint8 value);
+
+	// For instructions that work on memory location
+	uint8 GetMemValue() const;
+	void SetMemValue(uint8 value);
+
+	// Returns the target location for branch or jmp instructions
+	uint16 GetBranchOrJmpLocation() const;
+
+	// Stack manipulation functions, modify SP
+	void Push8(uint8 value);
+	void Push16(uint16 value);
+	uint8 Pop8();
+	uint16 Pop16();
+
+	// Data members
+
+	CpuRam* m_pRam;
+	OpCodeEntry* m_pEntry; // Current opcode entry
+	
 	// Registers - not using the usual m_ prefix because I find the code looks
 	// more straightfoward when using the typical register names
 	uint16 PC;	// Program counter
@@ -19,10 +48,9 @@ private:
 	uint8 A;	// Accumulator
 	uint8 X;	// X register
 	uint8 Y;	// Y register
+
 	struct StatusRegister
 	{
-		void Reset() { flags = 0; }
-
 		union
 		{
 			struct
@@ -32,7 +60,7 @@ private:
 				uint8 Bit5 : 1;	// Unused
 				uint8 B : 1;	// BRK executed (IRQ/software interupt)
 				uint8 D : 1;	// Decimal mode
-				uint8 I : 1;	// Interrupt enabled
+				uint8 I : 1;	// Interrupt (IRQ) disabled
 				uint8 Z : 1;	// Zero flag
 				uint8 C : 1;	// Carry flag
 			};
@@ -41,4 +69,6 @@ private:
 	} P; // Processor status (flags)
 	static_assert(sizeof(StatusRegister)==1, "StatusRegister must be 1 byte");
 
+	// Operand address is either the operand's memory location, or the target for a branch or jmp
+	uint16 m_operandAddress;
 };
