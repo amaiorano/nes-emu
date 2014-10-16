@@ -60,6 +60,13 @@ namespace
 
 void Cpu::Initialize(CpuRam& cpuRam)
 {
+	// Validate that the bitfield is ordered correctly
+	{
+		StatusRegister testR;
+		testR.flags = 0x01; // Bit 1 should be Carry
+		assert(testR.C == 1 && "Bitfield is not ordered correctly on this platform");
+	}
+
 	m_pRam = &cpuRam;
 }
 
@@ -71,7 +78,7 @@ void Cpu::Reset()
 	SP = 0x0FD;
 	
 	P.flags = 0;
-	P.Bit5 = 1;
+	P.U = 1;
 	P.B = 1;
 	P.I = 1;
 
@@ -326,13 +333,11 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case AND: // "AND" memory with accumulator
-		{
-			// Operation:  A /\ M -> A                    N Z C I D V
-			//                                            / / _ _ _ _
-			A &= GetMemValue();
-			P.N = CalcNegativeFlag(A);
-			P.Z = CalcZeroFlag(A);
-		}
+		// Operation:  A /\ M -> A                    N Z C I D V
+		//                                            / / _ _ _ _
+		A &= GetMemValue();
+		P.N = CalcNegativeFlag(A);
+		P.Z = CalcZeroFlag(A);
 		break;
 
 	case ASL: // Shift Left One Bit (Memory or Accumulator)
@@ -389,9 +394,9 @@ void Cpu::ExecuteInstruction()
 	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS)
 		// NOTE: A BRK command cannot be masked by setting I.
 		{
-			uint16 returnAddr = PC += m_pEntry->numBytes;
+			uint16 returnAddr = PC + m_pEntry->numBytes;
 			Push16(returnAddr);
-			P.B = 1; // Set break flag before pushing status register
+			P.B = 1; // Set break flag before pushing status register (signifies s/w interrupt)
 			Push8(P.flags);
 			P.I = 1; // Disable hardware IRQs
 			PC = m_pRam->Read16(CpuRam::kIrqVector);
@@ -453,81 +458,198 @@ void Cpu::ExecuteInstruction()
 		}
 		break;
 
-	case DEC:
+	case DEC: // Decrement memory by one
+		{
+			uint8 result = GetMemValue() - 1;
+			P.N = CalcNegativeFlag(result);
+			P.Z = CalcZeroFlag(result);
+			SetMemValue(result);
+		}
 		break;
-	case DEX:
+
+	case DEX: // Decrement index X by one
+		--X;
+		P.N = CalcNegativeFlag(X);
+		P.Z = CalcZeroFlag(X);
 		break;
-	case DEY:
+
+	case DEY: // DEY Decrement index Y by one
+		--Y;
+		P.N = CalcNegativeFlag(Y);
+		P.Z = CalcZeroFlag(Y);
 		break;
-	case EOR:
+
+	case EOR: // EOR "Exclusive-Or" memory with accumulator
+		A = A ^ GetMemValue();
+		P.N = CalcNegativeFlag(A);
+		P.Z = CalcZeroFlag(A);
 		break;
-	case INC:
+
+	case INC: // INC Increment memory by one
+		{
+			uint8 result = GetMemValue() + 1;
+			P.N = CalcNegativeFlag(result);
+			P.Z = CalcZeroFlag(result);
+			SetMemValue(result);
+		}
 		break;
-	case INX:
+
+	case INX: // INX Increment Index X by one
+		++X;
+		P.N = CalcNegativeFlag(X);
+		P.Z = CalcZeroFlag(X);
 		break;
-	case INY:
+
+	case INY: // INY Increment Index Y by one
+		++Y;
+		P.N = CalcNegativeFlag(Y);
+		P.Z = CalcZeroFlag(Y);
 		break;
-	case JMP:
+
+	case JMP: // JMP Jump to new location
+		PC = GetBranchOrJmpLocation();
 		break;
-	case JSR:
+
+	case JSR: // Jump to new location saving return address
+		{
+			// JSR actually pushes address of the next instruction - 1.
+			// RTS jumps to popped value + 1.
+			uint16 returnAddr = PC + m_pEntry->numBytes - 1;
+			Push16(returnAddr);
+			PC = GetBranchOrJmpLocation();
+		}
 		break;
-	case LDA:
+
+	case LDA: // Load accumulator with memory
+		A = GetMemValue();
+		P.N = CalcNegativeFlag(A);
+		P.Z = CalcZeroFlag(A);
 		break;
-	case LDX:
+
+	case LDX: // Load index X with memory
+		X = GetMemValue();
+		P.N = CalcNegativeFlag(X);
+		P.Z = CalcZeroFlag(X);
 		break;
-	case LDY:
+
+	case LDY: // Load index Y with memory
+		Y = GetMemValue();
+		P.N = CalcNegativeFlag(Y);
+		P.Z = CalcZeroFlag(Y);
 		break;
-	case LSR:
+
+	case LSR: // Shift right one bit (memory or accumulator)
+		{
+			// Operation:  0 -> |7|6|5|4|3|2|1|0| -> C               N Z C I D V
+			//                                                       0 / / _ _ _
+			const uint8 value = GetAccumOrMemValue();
+			const uint8 result = value >> 1;
+			P.C = value & 0x01; // Will get shifted into carry
+			P.Z = CalcZeroFlag(result);
+			P.N = 0; // 0 is shifted into sign bit position
+		}		
 		break;
-	case NOP:
+
+	case NOP: // No Operation (2 cycles)
 		break;
-	case ORA:
+
+	case ORA: // "OR" memory with accumulator
+		A |= GetMemValue();
+		P.N = CalcNegativeFlag(A);
+		P.Z = CalcZeroFlag(A);
 		break;
-	case PHA:
+
+	case PHA: // Push accumulator on stack
+		Push8(A);
 		break;
-	case PHP:
+
+	case PHP: // Push processor status on stack
+		P.B = 1; // Set break flag before pushing status register (signifies s/w interrupt)
+		Push8(P.flags);
 		break;
+
 	case PLA:
+		
 		break;
+
 	case PLP:
+		
 		break;
+
 	case ROL:
+		
 		break;
+
 	case ROR:
+		
 		break;
+
 	case RTI:
+		
 		break;
-	case RTS:
+
+	case RTS: // Return from subroutine
+		{
+			uint16 returnAddress = Pop16() + 1;
+			PC = returnAddress;
+		}
 		break;
+
 	case SBC:
+		
 		break;
+
 	case SEC: // Set carry flag
 		P.C = 1;
+		
 		break;
+
 	case SED: // Set decimal mode
 		P.D = 1;
+		
 		break;
+
 	case SEI: // Set interrupt disable status
 		P.I = 1;
+		
 		break;
+
 	case STA:
+		
 		break;
+
 	case STX:
+		
 		break;
+
 	case STY:
+		
 		break;
+
 	case TAX:
+		
 		break;
+
 	case TAY:
+		
 		break;
+
 	case TSX:
+		
 		break;
+
 	case TXA:
+		
 		break;
+
 	case TXS:
+		
 		break;
+
 	case TYA:
+		
 		break;
+
 	}
 
 	// If instruction hasn't modified PC, move it to next instruction

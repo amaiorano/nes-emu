@@ -53,17 +53,20 @@ private:
 	{
 		union
 		{
+			// NOTE: The bit ordering is platform-dependent. We assert the order is correct
+			// at runtime.
 			struct
 			{
-				uint8 N : 1;	// Negative flag (aka Sign flag)
-				uint8 V : 1;	// Overflow flag
-				uint8 Bit5 : 1;	// Unused
-				uint8 B : 1;	// BRK executed (IRQ/software interupt)
-				uint8 D : 1;	// Decimal mode
-				uint8 I : 1;	// Interrupt (IRQ) disabled
-				uint8 Z : 1;	// Zero flag
 				uint8 C : 1;	// Carry flag
+				uint8 Z : 1;	// Zero flag
+				uint8 I : 1;	// Interrupt (IRQ) disabled
+				uint8 D : 1;	// Decimal mode
+				uint8 B : 1;	// BRK executed (IRQ/software interupt)
+				uint8 U : 1;	// Unused
+				uint8 V : 1;	// Overflow flag
+				uint8 N : 1;	// Negative flag (aka Sign flag)
 			};
+
 			uint8 flags;
 		};
 	} P; // Processor status (flags)
