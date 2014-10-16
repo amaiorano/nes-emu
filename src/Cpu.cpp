@@ -86,7 +86,7 @@ void Cpu::Reset()
 	PC = m_pRam->Read16(CpuRam::kResetVector);
 }
 
-static void Disassemble(uint16 PC, OpCodeEntry* m_pEntry, const CpuRam* pRam)
+void Cpu::DebuggerPrintOp()
 {
 	// Print PC
 	printf(ADDR_16 "\t", PC);
@@ -95,7 +95,7 @@ static void Disassemble(uint16 PC, OpCodeEntry* m_pEntry, const CpuRam* pRam)
 	for (uint16 i = 0; i < 4; ++i)
 	{
 		if (i < m_pEntry->numBytes)
-			printf("%02X", pRam->Read8(PC + i));
+			printf("%02X", m_pRam->Read8(PC + i));
 		else
 			printf(" ");
 	}
@@ -109,7 +109,7 @@ static void Disassemble(uint16 PC, OpCodeEntry* m_pEntry, const CpuRam* pRam)
 	{
 	case AddressMode::Immedt:
 		{
-			const uint8 address = pRam->Read8(PC+1);
+			const uint8 address = m_pRam->Read8(PC+1);
 			printf("#" ADDR_8, address);
 		}
 		break;
@@ -127,7 +127,7 @@ static void Disassemble(uint16 PC, OpCodeEntry* m_pEntry, const CpuRam* pRam)
 	case AddressMode::Relatv:
 		{
 			// For branch instructions, resolve the target address and print it in comments
-			const int8 offset = pRam->Read8(PC+1); // Signed offset in [-128,127]
+			const int8 offset = m_pRam->Read8(PC+1); // Signed offset in [-128,127]
 			const uint16 target = PC + m_pEntry->numBytes + offset;
 			printf(ADDR_8 " ; " ADDR_16 " (%d)", offset, target, offset);
 		}
@@ -135,63 +135,63 @@ static void Disassemble(uint16 PC, OpCodeEntry* m_pEntry, const CpuRam* pRam)
 
 	case AddressMode::ZeroPg:
 		{
-			const uint8 address = pRam->Read8(PC+1);
+			const uint8 address = m_pRam->Read8(PC+1);
 			printf(ADDR_8, address);
 		}
 		break;
 
 	case AddressMode::ZPIdxX:
 		{
-			const uint8 address = pRam->Read8(PC+1);
+			const uint8 address = m_pRam->Read8(PC+1);
 			printf(ADDR_8 ",X", address);
 		}
 		break;
 
 	case AddressMode::ZPIdxY:
 		{
-			const uint8 address = pRam->Read8(PC+1);
+			const uint8 address = m_pRam->Read8(PC+1);
 			printf(ADDR_8 ",Y", address);
 		}
 		break;
 
 	case AddressMode::Absolu:
 		{
-			uint16 address = pRam->Read16(PC+1);
+			uint16 address = m_pRam->Read16(PC+1);
 			printf(ADDR_16, address);
 		}
 		break;
 
 	case AddressMode::AbIdxX:
 		{
-			uint16 address = pRam->Read16(PC+1);
+			uint16 address = m_pRam->Read16(PC+1);
 			printf(ADDR_16 ",X", address);
 		}
 		break;
 
 	case AddressMode::AbIdxY:
 		{
-			uint16 address = pRam->Read16(PC+1);
+			uint16 address = m_pRam->Read16(PC+1);
 			printf(ADDR_16 ",Y", address);
 		}
 		break;
 
 	case AddressMode::Indrct:
 		{
-			uint16 address = pRam->Read16(PC+1);
+			uint16 address = m_pRam->Read16(PC+1);
 			printf("(" ADDR_16 ")", address);
 		}
 		break;
 
 	case AddressMode::IdxInd:
 		{
-			const uint8 address = pRam->Read8(PC+1);
+			const uint8 address = m_pRam->Read8(PC+1);
 			printf("(" ADDR_8 ",X)", address);
 		}
 		break;
 
 	case AddressMode::IndIdx:
 		{
-			const uint8 address = pRam->Read8(PC+1);
+			const uint8 address = m_pRam->Read8(PC+1);
 			printf("(" ADDR_8 "),Y", address);
 		}
 		break;
@@ -200,8 +200,21 @@ static void Disassemble(uint16 PC, OpCodeEntry* m_pEntry, const CpuRam* pRam)
 		assert(false && "Invalid addressing mode");
 		break;
 	}
-
+	
 	printf("\n");
+}
+
+void Cpu::DebuggerPrintState()
+{
+#define HILO(v) ((P.##v)?toupper(#v[0]):tolower(#v[0]))
+
+	printf("\tSP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c]\n",
+		SP, A, X, Y, HILO(N), HILO(V), HILO(U), HILO(B), HILO(D), HILO(I), HILO(Z), HILO(C));
+
+#undef HILO
+
+	while (!_kbhit()) {}
+	_getch();
 }
 
 void Cpu::Run()
@@ -218,14 +231,16 @@ void Cpu::Run()
 		}
 
 #if DEBUGGING_ENABLED
-		Disassemble(PC, m_pEntry, m_pRam);
-		while (!_kbhit()) {}
-		_getch();
+		DebuggerPrintOp();
 #endif
 
 		UpdateOperand();
 
 		ExecuteInstruction();
+
+#if DEBUGGING_ENABLED
+		DebuggerPrintState();
+#endif
 	}
 }
 
@@ -240,7 +255,7 @@ void Cpu::UpdateOperand()
 	switch (m_pEntry->addrMode)
 	{
 	case AddressMode::Immedt:
-		m_operandAddress = m_pRam->Read8(PC+1);
+		m_operandAddress = PC + 1; // Set to address of immediate value in code segment
 		break;
 
 	case AddressMode::Implid:
@@ -320,10 +335,9 @@ void Cpu::ExecuteInstruction()
 	{
 	case ADC: // Add memory to accumulator with carry
 		{
-			// Operation:  A + M + C -> A, C              N Z C I D V
-			//                                            / / / _ _ /
-			uint8 value = GetAccumOrMemValue();
-			uint16 result = TO16(A) + TO16(value) + TO16(P.C);
+			// Operation:  A + M + C -> A, C
+			const uint8 value = GetMemValue();
+			const uint16 result = TO16(A) + TO16(value) + TO16(P.C);
 			P.N = CalcNegativeFlag(result);
 			P.Z = CalcZeroFlag(result);
 			P.C = CalcCarryFlag(result);
@@ -333,8 +347,6 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case AND: // "AND" memory with accumulator
-		// Operation:  A /\ M -> A                    N Z C I D V
-		//                                            / / _ _ _ _
 		A &= GetMemValue();
 		P.N = CalcNegativeFlag(A);
 		P.Z = CalcZeroFlag(A);
@@ -342,9 +354,7 @@ void Cpu::ExecuteInstruction()
 
 	case ASL: // Shift Left One Bit (Memory or Accumulator)
 		{
-			// Operation:  C <- |7|6|5|4|3|2|1|0| <- 0    N Z C I D V
-			//                                            / / / _ _ _
-			uint16 result = TO16(GetAccumOrMemValue()) << 1;
+			const uint16 result = TO16(GetAccumOrMemValue()) << 1;
 			P.N = CalcNegativeFlag(result);
 			P.Z = CalcZeroFlag(result);
 			P.C = CalcCarryFlag(result);
@@ -391,8 +401,7 @@ void Cpu::ExecuteInstruction()
 			PC = GetBranchOrJmpLocation();
 		break;
 
-	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS)
-		// NOTE: A BRK command cannot be masked by setting I.
+	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS) (used with RTI)
 		{
 			uint16 returnAddr = PC + m_pEntry->numBytes;
 			Push16(returnAddr);
@@ -430,10 +439,8 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case CMP: // CMP Compare memory and accumulator
-		// Operation:  A - M                              N Z C I D V
-		//                                                / / / _ _ _
 		{
-			uint16 result = TO16(A) - TO16(GetMemValue());
+			const uint16 result = TO16(A) - TO16(GetMemValue());
 			P.N = CalcNegativeFlag(result);
 			P.Z = CalcZeroFlag(result);
 			P.C = CalcCarryFlag(result);
@@ -451,7 +458,7 @@ void Cpu::ExecuteInstruction()
 
 	case CPY: // CPY Compare memory and index Y
 		{
-			uint16 result = TO16(Y) - TO16(GetMemValue());
+			const uint16 result = TO16(Y) - TO16(GetMemValue());
 			P.N = CalcNegativeFlag(result);
 			P.Z = CalcZeroFlag(result);
 			P.C = CalcCarryFlag(result);
@@ -460,7 +467,7 @@ void Cpu::ExecuteInstruction()
 
 	case DEC: // Decrement memory by one
 		{
-			uint8 result = GetMemValue() - 1;
+			const uint8 result = GetMemValue() - 1;
 			P.N = CalcNegativeFlag(result);
 			P.Z = CalcZeroFlag(result);
 			SetMemValue(result);
@@ -473,48 +480,48 @@ void Cpu::ExecuteInstruction()
 		P.Z = CalcZeroFlag(X);
 		break;
 
-	case DEY: // DEY Decrement index Y by one
+	case DEY: // Decrement index Y by one
 		--Y;
 		P.N = CalcNegativeFlag(Y);
 		P.Z = CalcZeroFlag(Y);
 		break;
 
-	case EOR: // EOR "Exclusive-Or" memory with accumulator
+	case EOR: // "Exclusive-Or" memory with accumulator
 		A = A ^ GetMemValue();
 		P.N = CalcNegativeFlag(A);
 		P.Z = CalcZeroFlag(A);
 		break;
 
-	case INC: // INC Increment memory by one
+	case INC: // Increment memory by one
 		{
-			uint8 result = GetMemValue() + 1;
+			const uint8 result = GetMemValue() + 1;
 			P.N = CalcNegativeFlag(result);
 			P.Z = CalcZeroFlag(result);
 			SetMemValue(result);
 		}
 		break;
 
-	case INX: // INX Increment Index X by one
+	case INX: // Increment Index X by one
 		++X;
 		P.N = CalcNegativeFlag(X);
 		P.Z = CalcZeroFlag(X);
 		break;
 
-	case INY: // INY Increment Index Y by one
+	case INY: // Increment Index Y by one
 		++Y;
 		P.N = CalcNegativeFlag(Y);
 		P.Z = CalcZeroFlag(Y);
 		break;
 
-	case JMP: // JMP Jump to new location
+	case JMP: // Jump to new location
 		PC = GetBranchOrJmpLocation();
 		break;
 
-	case JSR: // Jump to new location saving return address
+	case JSR: // Jump to subroutine (used with RTS)
 		{
 			// JSR actually pushes address of the next instruction - 1.
 			// RTS jumps to popped value + 1.
-			uint16 returnAddr = PC + m_pEntry->numBytes - 1;
+			const uint16 returnAddr = PC + m_pEntry->numBytes - 1;
 			Push16(returnAddr);
 			PC = GetBranchOrJmpLocation();
 		}
@@ -540,8 +547,6 @@ void Cpu::ExecuteInstruction()
 
 	case LSR: // Shift right one bit (memory or accumulator)
 		{
-			// Operation:  0 -> |7|6|5|4|3|2|1|0| -> C               N Z C I D V
-			//                                                       0 / / _ _ _
 			const uint8 value = GetAccumOrMemValue();
 			const uint8 result = value >> 1;
 			P.C = value & 0x01; // Will get shifted into carry
@@ -568,88 +573,121 @@ void Cpu::ExecuteInstruction()
 		Push8(P.flags);
 		break;
 
-	case PLA:
-		
+	case PLA: // Pull accumulator from stack
+		A = Pop8();
+		P.N = CalcNegativeFlag(A);
+		P.Z = CalcZeroFlag(A);
 		break;
 
-	case PLP:
-		
+	case PLP: // Pull processor status from stack
+		P.flags = Pop8();
+		assert(P.B == 1); // Should be set since we set it on PHP
 		break;
 
-	case ROL:
-		
-		break;
-
-	case ROR:
-		
-		break;
-
-	case RTI:
-		
-		break;
-
-	case RTS: // Return from subroutine
+	case ROL: // Rotate one bit left (memory or accumulator)
 		{
-			uint16 returnAddress = Pop16() + 1;
-			PC = returnAddress;
+			const uint16 result = (TO16(GetAccumOrMemValue()) << 1) | TO16(P.C);
+			P.C = CalcCarryFlag(result);
+			P.N = CalcNegativeFlag(result);
+			P.Z = CalcZeroFlag(result);
+			SetAccumOrMemValue(TO8(result));
 		}
 		break;
 
-	case SBC:
-		
+	case ROR: // Rotate one bit right (memory or accumulator)
+		{
+			const uint8 value = GetAccumOrMemValue();
+			const uint8 result = (value >> 1) & (P.C << 7);
+			P.C = value & 0x01;
+			P.N = CalcNegativeFlag(result);
+			P.Z = CalcZeroFlag(result);
+			SetAccumOrMemValue(result);
+		}
+		break;
+
+	case RTI: // Return from interrupt (used with BRK)
+		{
+			P.flags = Pop8();
+			PC = Pop16();
+		}
+		break;
+
+	case RTS: // Return from subroutine (used with JSR)
+		{
+			PC = Pop16() + 1;
+		}
+		break;
+
+	case SBC: // Subtract memory from accumulator with borrow
+		{
+			// Operation:  A - M - C -> A
+			const uint8 value = -GetMemValue(); // We negate the value so we can add. This works because the carry is set when borrowing.
+			const uint16 result = TO16(A) + TO16(value) + TO16(P.C);
+			P.N = CalcNegativeFlag(result);
+			P.Z = CalcZeroFlag(result);
+			P.C = CalcCarryFlag(result);
+			P.V = CalcOverflowFlag(A, value, result);
+			A = TO8(result);
+		}
 		break;
 
 	case SEC: // Set carry flag
 		P.C = 1;
-		
 		break;
 
 	case SED: // Set decimal mode
 		P.D = 1;
-		
 		break;
 
 	case SEI: // Set interrupt disable status
 		P.I = 1;
-		
 		break;
 
-	case STA:
-		
+	case STA: // Store accumulator in memory
+		m_pRam->Write8(GetMemValue(), A);
 		break;
 
-	case STX:
-		
+	case STX: // Store index X in memory
+		m_pRam->Write8(GetMemValue(), X);
 		break;
 
-	case STY:
-		
+	case STY: // Store index Y in memory
+		m_pRam->Write8(GetMemValue(), Y);
 		break;
 
-	case TAX:
-		
+	case TAX: // Transfer accumulator to index X
+		X = A;
+		P.N = CalcNegativeFlag(X);
+		P.Z = CalcZeroFlag(X);
 		break;
 
-	case TAY:
-		
+	case TAY: // Transfer accumulator to index Y
+		Y = A;
+		P.N = CalcNegativeFlag(Y);
+		P.Z = CalcZeroFlag(Y);
 		break;
 
-	case TSX:
-		
+	case TSX: // Transfer stack pointer to index X
+		X = SP;
+		P.N = CalcNegativeFlag(X);
+		P.Z = CalcZeroFlag(X);
 		break;
 
-	case TXA:
-		
+	case TXA: // Transfer index X to accumulator
+		A = X;
+		P.N = CalcNegativeFlag(A);
+		P.Z = CalcZeroFlag(A);
 		break;
 
-	case TXS:
-		
+	case TXS: // Transfer index X to stack pointer
+		SP = X;
 		break;
 
-	case TYA:
-		
+	case TYA: // Transfer index Y to accumulator
+		A = Y;
+		P.N = CalcNegativeFlag(A);
+		P.Z = CalcZeroFlag(A);
 		break;
-
 	}
 
 	// If instruction hasn't modified PC, move it to next instruction

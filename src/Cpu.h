@@ -19,6 +19,9 @@ private:
 	// Executes current instruction, updates PC
 	void ExecuteInstruction();
 
+	void DebuggerPrintOp();
+	void DebuggerPrintState();
+
 	// For instructions that work on accumulator (A) or memory location
 	uint8 GetAccumOrMemValue() const;
 	void SetAccumOrMemValue(uint8 value);
