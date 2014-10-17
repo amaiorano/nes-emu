@@ -67,6 +67,7 @@ void Cpu::Initialize(CpuRam& cpuRam)
 		assert(testR.C == 1 && "Bitfield is not ordered correctly on this platform");
 	}
 
+	m_quit = false;
 	m_pRam = &cpuRam;
 }
 
@@ -208,19 +209,34 @@ void Cpu::DebuggerPrintState()
 {
 #define HILO(v) ((P.##v)?toupper(#v[0]):tolower(#v[0]))
 
-	printf("\tSP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c]\n",
-		SP, A, X, Y, HILO(N), HILO(V), HILO(U), HILO(B), HILO(D), HILO(I), HILO(Z), HILO(C));
+	printf("  SP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c] ("ADDR_16")="ADDR_8"\n",
+		SP, A, X, Y, HILO(N), HILO(V), HILO(U), HILO(B), HILO(D), HILO(I), HILO(Z), HILO(C),
+		m_operandAddress, m_pRam->Read8(m_operandAddress));
 
 #undef HILO
 
-	while (!_kbhit()) {}
-	_getch();
+	static bool stepMode = true;
+
+	if (stepMode)
+	{
+		while (!_kbhit()) {}
+	
+		switch (tolower(_getch()))
+		{
+		case 'q':
+			m_quit = true;
+			break;
+
+		case 'g':
+			stepMode = false;
+			break;
+		}
+	}
 }
 
 void Cpu::Run()
 {
-	bool quit = false;
-	while (!quit)
+	while (!m_quit)
 	{
 		uint8 opCode = m_pRam->Read8(PC);
 		m_pEntry = g_ppOpCodeTable[opCode];
@@ -251,6 +267,10 @@ void Cpu::UpdateOperand()
 	//@OPT: The first read from memory always reads from code segment, so there's no need to worry
 	// about mirroring. Either provide a faster CpuRam::Read func, or just get a pointer to the start
 	// of the code segment.
+
+#if CONFIG_DEBUG
+	m_operandAddress = 0; // Reset to help find bugs
+#endif
 
 	switch (m_pEntry->addrMode)
 	{

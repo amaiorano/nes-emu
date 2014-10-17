@@ -7,6 +7,10 @@
     #pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
 #endif
 
+#if defined(_DEBUG)
+#define CONFIG_DEBUG 1
+#endif
+
 typedef unsigned char uint8;
 typedef char int8;
 typedef unsigned short uint16;

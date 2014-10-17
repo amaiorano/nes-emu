@@ -41,6 +41,7 @@ private:
 
 	// Data members
 
+	bool m_quit;
 	CpuRam* m_pRam;
 	OpCodeEntry* m_pEntry; // Current opcode entry
 	
