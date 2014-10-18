@@ -664,15 +664,15 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case STA: // Store accumulator in memory
-		m_pRam->Write8(GetMemValue(), A);
+		SetMemValue(A);
 		break;
 
 	case STX: // Store index X in memory
-		m_pRam->Write8(GetMemValue(), X);
+		SetMemValue(X);
 		break;
 
 	case STY: // Store index Y in memory
-		m_pRam->Write8(GetMemValue(), Y);
+		SetMemValue(Y);
 		break;
 
 	case TAX: // Transfer accumulator to index X
