@@ -1,7 +1,7 @@
 #include "Cpu.h"
 #include "CpuRam.h"
 #include "OpCodeTable.h"
-#include <conio.h>
+#include "System.h"
 
 #define ADDR_8 "$%02X"
 #define ADDR_16 "$%04X"
@@ -219,9 +219,7 @@ void Cpu::DebuggerPrintState()
 
 	if (stepMode)
 	{
-		while (!_kbhit()) {}
-	
-		switch (tolower(_getch()))
+		switch (tolower(System::WaitForKeyPress()))
 		{
 		case 'q':
 			m_quit = true;

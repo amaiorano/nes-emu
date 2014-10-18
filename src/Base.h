@@ -3,12 +3,21 @@
 #include <cstdarg>
 #include <cassert>
 
+// Platform defines
 #ifdef _MSC_VER
-    #pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
+	#define PLATFORM_WINDOWS 1
+#else
+	#error "Define current platform"
 #endif
 
+// Build config defines
 #if defined(_DEBUG)
-#define CONFIG_DEBUG 1
+	#define CONFIG_DEBUG 1
+#endif
+
+// Disable warnings
+#if PLATFORM_WINDOWS
+    #pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
 #endif
 
 typedef unsigned char uint8;

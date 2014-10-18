@@ -17,10 +17,12 @@
     <ClInclude Include="src\FileStream.h" />
     <ClInclude Include="src\OpCodeTable.h" />
     <ClInclude Include="src\Rom.h" />
+    <ClInclude Include="src\System.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\System.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{E55952C3-2CE3-429D-9A92-CD2C921C1FF4}</ProjectGuid>
