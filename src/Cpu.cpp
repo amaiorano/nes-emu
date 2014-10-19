@@ -130,7 +130,7 @@ void Cpu::DebuggerPrintOp()
 			// For branch instructions, resolve the target address and print it in comments
 			const int8 offset = m_pRam->Read8(PC+1); // Signed offset in [-128,127]
 			const uint16 target = PC + m_pEntry->numBytes + offset;
-			printf(ADDR_8 " ; " ADDR_16 " (%d)", offset, target, offset);
+			printf(ADDR_8 " ; " ADDR_16 " (%d)", (uint8)offset, target, offset);
 		}
 		break;
 
