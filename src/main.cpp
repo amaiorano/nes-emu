@@ -10,8 +10,8 @@ void PrintAppInfo()
 	const char* text =
 		"; nes-emu - Nintendo Entertainment System Emulator\n"
 		"; Author: Antonio Maiorano (amaiorano at gmail dot com)\n"
-		"; Source code available at http://github.com/amaiorano/nes-emu/\n"
-		"\n";
+		"; Source code available at http://github.com/amaiorano/nes-emu/"
+		"\n\n";
 
 	printf(text);
 }

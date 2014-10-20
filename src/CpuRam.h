@@ -62,7 +62,7 @@ public:
 	uint16 Read16(uint16 address) const
 	{
 		address = WrapMirroredAddress(address);
-		return (m_memory[address + 1] << 8) | m_memory[address];
+		return TO16(m_memory[address]) | (TO16(m_memory[address + 1]) << 8);
 	}
 
 	void Write8(uint16 address, uint8 value)

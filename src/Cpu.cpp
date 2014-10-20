@@ -5,8 +5,6 @@
 
 #define ADDR_8 "$%02X"
 #define ADDR_16 "$%04X"
-#define TO16(v8) ((uint16)(v8))
-#define TO8(v16) ((uint8)(v16 & 0x00FF))
 
 #define DEBUGGING_ENABLED 1
 
@@ -318,8 +316,14 @@ void Cpu::UpdateOperand()
 
 	case AddressMode::Indrct: // for JMP only
 		{
-			const uint16 indirectAddress = m_pRam->Read16(PC+1);
-			m_operandAddress = m_pRam->Read16(indirectAddress);
+			uint16 indirectAddress1 = m_pRam->Read16(PC+1);
+
+			// Handle the 6502 bug for when the low-byte of the effective address is FF,
+			// in which case the 2nd byte read does not correctly cross page boundaries.
+			// The bug is that the high byte does not change.
+			uint16 indirectAddress2 = (indirectAddress1 & 0xFF00) | ((indirectAddress1 + 1) & 0x00FF);
+
+			m_operandAddress = TO16(m_pRam->Read8(indirectAddress1)) | TO16(m_pRam->Read8(indirectAddress2)) << 8;
 		}
 		break;
 

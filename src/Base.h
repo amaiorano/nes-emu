@@ -17,7 +17,7 @@
 
 // Disable warnings
 #if PLATFORM_WINDOWS
-    #pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
+	#pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
 #endif
 
 typedef unsigned char uint8;
@@ -35,6 +35,9 @@ static_assert(sizeof(int32)==4, "Invalid type size");
 
 #define KB(n) (n*1024)
 #define MB(n) (n*1024*1024)
+
+#define TO16(v8) ((uint16)(v8))
+#define TO8(v16) ((uint8)(v16 & 0x00FF))
 
 #define ARRAYSIZE(arr) (sizeof(arr)/sizeof(arr[0]))
 
