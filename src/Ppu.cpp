@@ -1,5 +1,5 @@
 #include "Ppu.h"
-#include "CpuRam.h" //@TODO: Rename CpuRam.h to Memory.h
+#include "Memory.h" //@TODO: Rename CpuRam.h to Memory.h
 #include "Renderer.h"
 
 Ppu::Ppu()

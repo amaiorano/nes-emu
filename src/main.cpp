@@ -2,7 +2,7 @@
 #include "FileStream.h"
 #include "Rom.h"
 #include "Cpu.h"
-#include "CpuRam.h"
+#include "Memory.h"
 #include "Ppu.h"
 
 void PrintAppInfo()

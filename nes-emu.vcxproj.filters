@@ -13,9 +13,6 @@
     <ClInclude Include="src\Cpu.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\CpuRam.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="src\FileStream.h">
       <Filter>src</Filter>
     </ClInclude>
@@ -32,6 +29,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\Ppu.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Memory.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

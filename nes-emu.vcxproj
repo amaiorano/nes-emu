@@ -13,7 +13,7 @@
   <ItemGroup>
     <ClInclude Include="src\Base.h" />
     <ClInclude Include="src\Cpu.h" />
-    <ClInclude Include="src\CpuRam.h" />
+    <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />
     <ClInclude Include="src\OpCodeTable.h" />
     <ClInclude Include="src\Ppu.h" />
