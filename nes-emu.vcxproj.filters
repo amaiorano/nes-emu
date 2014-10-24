@@ -28,6 +28,12 @@
     <ClInclude Include="src\System.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Renderer.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Ppu.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
@@ -37,6 +43,12 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\System.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Renderer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Ppu.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

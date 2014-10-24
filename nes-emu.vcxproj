@@ -16,12 +16,16 @@
     <ClInclude Include="src\CpuRam.h" />
     <ClInclude Include="src\FileStream.h" />
     <ClInclude Include="src\OpCodeTable.h" />
+    <ClInclude Include="src\Ppu.h" />
+    <ClInclude Include="src\Renderer.h" />
     <ClInclude Include="src\Rom.h" />
     <ClInclude Include="src\System.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Ppu.cpp" />
+    <ClCompile Include="src\Renderer.cpp" />
     <ClCompile Include="src\System.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

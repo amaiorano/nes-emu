@@ -3,7 +3,7 @@
 #include "Rom.h"
 #include "Cpu.h"
 #include "CpuRam.h"
-#include <memory>
+#include "Ppu.h"
 
 void PrintAppInfo()
 {
@@ -61,8 +61,10 @@ int main(int argc, char* argv[])
 		PrintRomInfo(inputFile, header);
 
 		CpuRam cpuRam;
+		PpuRam ppuRam;
+		SpriteRam spriteRam;
 
-		// Next is PRG-ROM data (16384 * x bytes)
+		// Next is PRG-ROM data (16K or 32K)
 		const size_t prgRomSize = header.GetPrgRomSizeBytes();
 		{
 			uint8 prgRom[CpuRam::kPrgRomMaxSize] = {0};
@@ -70,10 +72,22 @@ int main(int argc, char* argv[])
 			cpuRam.LoadPrgRom(prgRom, prgRomSize);
 		}
 
+		// Next is CHR-ROM data (8K)
+		const size_t chrRomSize = header.GetChrRomSizeBytes();
+		{
+			uint8 chrRom[PpuRam::kChrRomSize];
+			fs.Read(chrRom, chrRomSize);
+			ppuRam.LoadChrRom(chrRom, chrRomSize);
+		}
+
 		Cpu cpu;
 		cpu.Initialize(cpuRam);
 		cpu.Reset();
 		cpu.Run();
+
+		Ppu ppu;
+		ppu.Initialize(cpuRam, ppuRam, spriteRam);
+		ppu.Run();
 	}
 	catch (const std::exception& ex)
 	{
