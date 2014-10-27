@@ -6,6 +6,7 @@
 #define ADDR_8 "$%02X"
 #define ADDR_16 "$%04X"
 
+// If set, debugging features are enabled for the emulator (slower)
 #define DEBUGGING_ENABLED 1
 
 namespace
@@ -236,10 +237,11 @@ void Cpu::DebuggerPrintState()
 #undef HILO
 
 	static bool stepMode = true;
-
+	char key;
 	if (stepMode)
 	{
-		switch (tolower(System::WaitForKeyPress()))
+		key = System::WaitForKeyPress();
+		switch (tolower(key))
 		{
 		case 'q':
 			m_quit = true;
@@ -249,6 +251,10 @@ void Cpu::DebuggerPrintState()
 			stepMode = false;
 			break;
 		}
+	}
+	else if (System::GetKeyPress(key))
+	{
+		stepMode = true;
 	}
 }
 

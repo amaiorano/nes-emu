@@ -20,6 +20,8 @@
 	#pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
 #endif
 
+#define FORCEINLINE __inline
+
 typedef unsigned char uint8;
 typedef char int8;
 typedef unsigned short uint16;
@@ -41,8 +43,6 @@ static_assert(sizeof(int32)==4, "Invalid type size");
 
 #define ARRAYSIZE(arr) (sizeof(arr)/sizeof(arr[0]))
 
-#define FORCEINLINE __inline
-
 // Little utility to have compiler spit out the size of a type. Declare dummy var of this type,
 // and compiler will fail because the type is fully defined, and should spit out the size of your
 // type in the error message. Example usage: CTPrintSize<YourType> dummy;
@@ -53,6 +53,7 @@ template <typename T> struct CTPrintSize : __CTPrintSize<sizeof(T)> {};
 // Example: std::shared_ptr<uint8> pData(new uint8[10], ArrayDeleter<uint8>); 
 template <typename T> void ArrayDeleter(T* p) { delete [] p; }
 
+// Utility for creating a temporary formatted string
 template <int MaxLength = 1024>
 struct FormattedString
 {
