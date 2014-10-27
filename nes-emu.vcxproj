@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Base.h" />
+    <ClInclude Include="src\Bitfield.h" />
     <ClInclude Include="src\Cpu.h" />
     <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />

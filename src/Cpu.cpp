@@ -56,15 +56,23 @@ namespace
 	FORCEINLINE uint8 CalcOverflowFlag(uint8 a, uint8 b, uint8 r);
 }
 
+namespace StatusFlag
+{
+	enum Type : uint8
+	{
+		Carry			= 0x01,
+		Zero			= 0x02,
+		InterruptsOff	= 0x04, // Interrupt (IRQ) disabled
+		Decimal			= 0x08,
+		BrkExecuted		= 0x10, // BRK executed (IRQ/software interupt)
+		Unused			= 0x20,
+		Overflow		= 0x40, // 'V'
+		Negative		= 0x80, // aka Sign flag
+	};		
+}
+
 void Cpu::Initialize(CpuRam& cpuRam)
 {
-	// Validate that the bitfield is ordered correctly
-	{
-		StatusRegister testR;
-		testR.flags = 0x01; // Bit 1 should be Carry
-		assert(testR.C == 1 && "Bitfield is not ordered correctly on this platform");
-	}
-
 	m_quit = false;
 	m_pRam = &cpuRam;
 }
@@ -76,10 +84,10 @@ void Cpu::Reset()
 	A = X = Y = 0;
 	SP = 0x0FD;
 	
-	P.flags = 0;
-	P.U = 1;
-	P.B = 1;
-	P.I = 1;
+	P.ClearAll();
+	P.Set(StatusFlag::Unused);
+	P.Set(StatusFlag::BrkExecuted);
+	P.Set(StatusFlag::InterruptsOff);
 
 	// Entry point is located at the Reset interrupt location
 	PC = m_pRam->Read16(CpuRam::kResetVector);
@@ -205,10 +213,24 @@ void Cpu::DebuggerPrintOp()
 
 void Cpu::DebuggerPrintState()
 {
-#define HILO(v) ((P.##v)?toupper(#v[0]):tolower(#v[0]))
+	static const char StatusFlagNames[] =
+	{
+		'C',
+		'Z',
+		'I',
+		'D',
+		'B',
+		'U',
+		'V',
+		'N',
+	};
+
+	using namespace StatusFlag;
+
+#define HILO(v) (P.Test(v) ? StatusFlagNames[BitFlagToPos<v>::Result-1] : tolower(StatusFlagNames[BitFlagToPos<v>::Result-1]))
 
 	printf("  SP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c] ("ADDR_16")="ADDR_8"\n",
-		SP, A, X, Y, HILO(N), HILO(V), HILO(U), HILO(B), HILO(D), HILO(I), HILO(Z), HILO(C),
+		SP, A, X, Y, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(InterruptsOff), HILO(Zero), HILO(Carry),
 		m_operandAddress, m_pRam->Read8(m_operandAddress));
 
 #undef HILO
@@ -350,6 +372,7 @@ void Cpu::UpdateOperand()
 void Cpu::ExecuteInstruction()
 {
 	using namespace OpCodeName;
+	using namespace StatusFlag;
 
 	const uint16 startPC = PC;
 
@@ -359,67 +382,67 @@ void Cpu::ExecuteInstruction()
 		{
 			// Operation:  A + M + C -> A, C
 			const uint8 value = GetMemValue();
-			const uint16 result = TO16(A) + TO16(value) + TO16(P.C);
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
-			P.C = CalcCarryFlag(result);
-			P.V = CalcOverflowFlag(A, value, result);
+			const uint16 result = TO16(A) + TO16(value) + TO16(P.Test(Carry));
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
+			P.Set(Carry, CalcCarryFlag(result));
+			P.Set(Overflow, CalcOverflowFlag(A, value, result));
 			A = TO8(result);
 		}
 		break;
 
 	case AND: // "AND" memory with accumulator
 		A &= GetMemValue();
-		P.N = CalcNegativeFlag(A);
-		P.Z = CalcZeroFlag(A);
+		P.Set(Negative, CalcNegativeFlag(A));
+		P.Set(Zero, CalcZeroFlag(A));
 		break;
 
 	case ASL: // Shift Left One Bit (Memory or Accumulator)
 		{
 			const uint16 result = TO16(GetAccumOrMemValue()) << 1;
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
-			P.C = CalcCarryFlag(result);
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
+			P.Set(Carry, CalcCarryFlag(result));
 			SetAccumOrMemValue(TO8(result));
 		}
 		break;
 
 	case BCC: // Branch on Carry Clear
-		if (P.C == 0)
+		if (!P.Test(Carry))
 			PC = GetBranchOrJmpLocation();
 		break;
 
 	case BCS: // Branch on Carry Set
-		if (P.C)
+		if (P.Test(Carry))
 			PC = GetBranchOrJmpLocation();
 		break;
 
 	case BEQ: // Branch on result zero (equal means compare difference is 0)
-		if (P.Z)
+		if (P.Test(Zero))
 			PC = GetBranchOrJmpLocation();
 		break;
 
 	case BIT: // Test bits in memory with accumulator
 		{
 			uint8 result = A & GetMemValue();
-			P.N = result & 0x80; // Bit 7
-			P.V = result & 0x40; // Bit 6
-			P.Z = CalcZeroFlag(result);
+			P.Set(Negative, result & 0x80); // Bit 7
+			P.Set(Overflow, result & 0x40); // Bit 6
+			P.Set(Zero, CalcZeroFlag(result));
 		}
 		break;
 
 	case BMI: // Branch on result minus
-		if (P.N)
+		if (P.Test(Negative))
 			PC = GetBranchOrJmpLocation();
 		break;
 
 	case BNE:  // Branch on result non-zero
-		if (P.Z == 0)
+		if (!P.Test(Zero))
 			PC = GetBranchOrJmpLocation();
 		break;
 
 	case BPL: // Branch on result plus
-		if (P.N == 0)
+		if (!P.Test(Negative))
 			PC = GetBranchOrJmpLocation();
 		break;
 
@@ -427,112 +450,112 @@ void Cpu::ExecuteInstruction()
 		{
 			uint16 returnAddr = PC + m_pEntry->numBytes;
 			Push16(returnAddr);
-			P.B = 1; // Set break flag before pushing status register (signifies s/w interrupt)
-			Push8(P.flags);
-			P.I = 1; // Disable hardware IRQs
+			P.Set(BrkExecuted); // Set break flag before pushing status register (signifies s/w interrupt)
+			Push8(P.Value());
+			P.Set(InterruptsOff); // Disable hardware IRQs
 			PC = m_pRam->Read16(CpuRam::kIrqVector);
 		}
 		break;
 
 	case BVC: // Branch on Overflow Clear
-		if (P.V == 0)
+		if (!P.Test(Overflow))
 			PC = GetBranchOrJmpLocation();
 		break;
 
 	case BVS: // Branch on Overflow Set
-		if (P.V)
+		if (P.Test(Overflow))
 			PC = GetBranchOrJmpLocation();
 		break;
 
 	case CLC: // CLC Clear carry flag
-		P.C = 0;
+		P.Clear(Carry);
 		break;
 
 	case CLD: // CLD Clear decimal mode
-		P.D = 0;
+		P.Clear(Decimal);
 		break;
 
 	case CLI: // CLI Clear interrupt disable bit
-		P.I = 0;
+		P.Clear(InterruptsOff);
 		break;
 
 	case CLV: // CLV Clear overflow flag
-		P.V = 0;
+		P.Clear(Overflow);
 		break;
 
 	case CMP: // CMP Compare memory and accumulator
 		{
 			const uint16 result = TO16(A) - TO16(GetMemValue());
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
-			P.C = CalcCarryFlag(result);
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
+			P.Set(Carry, CalcCarryFlag(result));
 		}
 		break;
 
 	case CPX: // CPX Compare Memory and Index X
 		{
 			uint16 result = TO16(X) - TO16(GetMemValue());
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
-			P.C = CalcCarryFlag(result);
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
+			P.Set(Carry, CalcCarryFlag(result));
 		}
 		break;
 
 	case CPY: // CPY Compare memory and index Y
 		{
 			const uint16 result = TO16(Y) - TO16(GetMemValue());
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
-			P.C = CalcCarryFlag(result);
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
+			P.Set(Carry, CalcCarryFlag(result));
 		}
 		break;
 
 	case DEC: // Decrement memory by one
 		{
 			const uint8 result = GetMemValue() - 1;
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
 			SetMemValue(result);
 		}
 		break;
 
 	case DEX: // Decrement index X by one
 		--X;
-		P.N = CalcNegativeFlag(X);
-		P.Z = CalcZeroFlag(X);
+		P.Set(Negative, CalcNegativeFlag(X));
+		P.Set(Zero, CalcZeroFlag(X));
 		break;
 
 	case DEY: // Decrement index Y by one
 		--Y;
-		P.N = CalcNegativeFlag(Y);
-		P.Z = CalcZeroFlag(Y);
+		P.Set(Negative, CalcNegativeFlag(Y));
+		P.Set(Zero, CalcZeroFlag(Y));
 		break;
 
 	case EOR: // "Exclusive-Or" memory with accumulator
 		A = A ^ GetMemValue();
-		P.N = CalcNegativeFlag(A);
-		P.Z = CalcZeroFlag(A);
+		P.Set(Negative, CalcNegativeFlag(A));
+		P.Set(Zero, CalcZeroFlag(A));
 		break;
 
 	case INC: // Increment memory by one
 		{
 			const uint8 result = GetMemValue() + 1;
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
 			SetMemValue(result);
 		}
 		break;
 
 	case INX: // Increment Index X by one
 		++X;
-		P.N = CalcNegativeFlag(X);
-		P.Z = CalcZeroFlag(X);
+		P.Set(Negative, CalcNegativeFlag(X));
+		P.Set(Zero, CalcZeroFlag(X));
 		break;
 
 	case INY: // Increment Index Y by one
 		++Y;
-		P.N = CalcNegativeFlag(Y);
-		P.Z = CalcZeroFlag(Y);
+		P.Set(Negative, CalcNegativeFlag(Y));
+		P.Set(Zero, CalcZeroFlag(Y));
 		break;
 
 	case JMP: // Jump to new location
@@ -551,29 +574,29 @@ void Cpu::ExecuteInstruction()
 
 	case LDA: // Load accumulator with memory
 		A = GetMemValue();
-		P.N = CalcNegativeFlag(A);
-		P.Z = CalcZeroFlag(A);
+		P.Set(Negative, CalcNegativeFlag(A));
+		P.Set(Zero, CalcZeroFlag(A));
 		break;
 
 	case LDX: // Load index X with memory
 		X = GetMemValue();
-		P.N = CalcNegativeFlag(X);
-		P.Z = CalcZeroFlag(X);
+		P.Set(Negative, CalcNegativeFlag(X));
+		P.Set(Zero, CalcZeroFlag(X));
 		break;
 
 	case LDY: // Load index Y with memory
 		Y = GetMemValue();
-		P.N = CalcNegativeFlag(Y);
-		P.Z = CalcZeroFlag(Y);
+		P.Set(Negative, CalcNegativeFlag(Y));
+		P.Set(Zero, CalcZeroFlag(Y));
 		break;
 
 	case LSR: // Shift right one bit (memory or accumulator)
 		{
 			const uint8 value = GetAccumOrMemValue();
 			const uint8 result = value >> 1;
-			P.C = value & 0x01; // Will get shifted into carry
-			P.Z = CalcZeroFlag(result);
-			P.N = 0; // 0 is shifted into sign bit position
+			P.Set(Carry, value & 0x01); // Will get shifted into carry
+			P.Set(Zero, CalcZeroFlag(result));
+			P.Clear(Negative); // 0 is shifted into sign bit position
 		}		
 		break;
 
@@ -582,8 +605,8 @@ void Cpu::ExecuteInstruction()
 
 	case ORA: // "OR" memory with accumulator
 		A |= GetMemValue();
-		P.N = CalcNegativeFlag(A);
-		P.Z = CalcZeroFlag(A);
+		P.Set(Negative, CalcNegativeFlag(A));
+		P.Set(Zero, CalcZeroFlag(A));
 		break;
 
 	case PHA: // Push accumulator on stack
@@ -591,27 +614,27 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case PHP: // Push processor status on stack
-		P.B = 1; // Set break flag before pushing status register (signifies s/w interrupt)
-		Push8(P.flags);
+		P.Set(BrkExecuted); // Set break flag before pushing status register (signifies s/w interrupt)
+		Push8(P.Value());
 		break;
 
 	case PLA: // Pull accumulator from stack
 		A = Pop8();
-		P.N = CalcNegativeFlag(A);
-		P.Z = CalcZeroFlag(A);
+		P.Set(Negative, CalcNegativeFlag(A));
+		P.Set(Zero, CalcZeroFlag(A));
 		break;
 
 	case PLP: // Pull processor status from stack
-		P.flags = Pop8();
-		assert(P.B == 1); // Should be set since we set it on PHP
+		P.Set(Pop8());
+		assert(P.Test(BrkExecuted)); // Should be set since we set it on PHP
 		break;
 
 	case ROL: // Rotate one bit left (memory or accumulator)
 		{
-			const uint16 result = (TO16(GetAccumOrMemValue()) << 1) | TO16(P.C);
-			P.C = CalcCarryFlag(result);
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
+			const uint16 result = (TO16(GetAccumOrMemValue()) << 1) | TO16(P.Test(Carry));
+			P.Set(Carry, CalcCarryFlag(result));
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
 			SetAccumOrMemValue(TO8(result));
 		}
 		break;
@@ -619,17 +642,17 @@ void Cpu::ExecuteInstruction()
 	case ROR: // Rotate one bit right (memory or accumulator)
 		{
 			const uint8 value = GetAccumOrMemValue();
-			const uint8 result = (value >> 1) & (P.C << 7);
-			P.C = value & 0x01;
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
+			const uint8 result = (value >> 1) & (P.Test(Carry) << 7);
+			P.Set(Carry, value & 0x01);
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
 			SetAccumOrMemValue(result);
 		}
 		break;
 
 	case RTI: // Return from interrupt (used with BRK)
 		{
-			P.flags = Pop8();
+			P.Set(Pop8());
 			PC = Pop16();
 		}
 		break;
@@ -644,25 +667,25 @@ void Cpu::ExecuteInstruction()
 		{
 			// Operation:  A - M - C -> A
 			const uint8 value = -GetMemValue(); // We negate the value so we can add. This works because the carry is set when borrowing.
-			const uint16 result = TO16(A) + TO16(value) + TO16(P.C);
-			P.N = CalcNegativeFlag(result);
-			P.Z = CalcZeroFlag(result);
-			P.C = CalcCarryFlag(result);
-			P.V = CalcOverflowFlag(A, value, result);
+			const uint16 result = TO16(A) + TO16(value) + TO16(P.Test(Carry));
+			P.Set(Negative, CalcNegativeFlag(result));
+			P.Set(Zero, CalcZeroFlag(result));
+			P.Set(Carry, CalcCarryFlag(result));
+			P.Set(Overflow, CalcOverflowFlag(A, value, result));
 			A = TO8(result);
 		}
 		break;
 
 	case SEC: // Set carry flag
-		P.C = 1;
+		P.Set(Carry);
 		break;
 
 	case SED: // Set decimal mode
-		P.D = 1;
+		P.Set(Decimal);
 		break;
 
 	case SEI: // Set interrupt disable status
-		P.I = 1;
+		P.Set(InterruptsOff);
 		break;
 
 	case STA: // Store accumulator in memory
@@ -679,26 +702,26 @@ void Cpu::ExecuteInstruction()
 
 	case TAX: // Transfer accumulator to index X
 		X = A;
-		P.N = CalcNegativeFlag(X);
-		P.Z = CalcZeroFlag(X);
+		P.Set(Negative, CalcNegativeFlag(X));
+		P.Set(Zero, CalcZeroFlag(X));
 		break;
 
 	case TAY: // Transfer accumulator to index Y
 		Y = A;
-		P.N = CalcNegativeFlag(Y);
-		P.Z = CalcZeroFlag(Y);
+		P.Set(Negative, CalcNegativeFlag(Y));
+		P.Set(Zero, CalcZeroFlag(Y));
 		break;
 
 	case TSX: // Transfer stack pointer to index X
 		X = SP;
-		P.N = CalcNegativeFlag(X);
-		P.Z = CalcZeroFlag(X);
+		P.Set(Negative, CalcNegativeFlag(X));
+		P.Set(Zero, CalcZeroFlag(X));
 		break;
 
 	case TXA: // Transfer index X to accumulator
 		A = X;
-		P.N = CalcNegativeFlag(A);
-		P.Z = CalcZeroFlag(A);
+		P.Set(Negative, CalcNegativeFlag(A));
+		P.Set(Zero, CalcZeroFlag(A));
 		break;
 
 	case TXS: // Transfer index X to stack pointer
@@ -707,8 +730,8 @@ void Cpu::ExecuteInstruction()
 
 	case TYA: // Transfer index Y to accumulator
 		A = Y;
-		P.N = CalcNegativeFlag(A);
-		P.Z = CalcZeroFlag(A);
+		P.Set(Negative, CalcNegativeFlag(A));
+		P.Set(Zero, CalcZeroFlag(A));
 		break;
 	}
 

@@ -70,3 +70,37 @@ struct FormattedString
 
 	char buffer[MaxLength];
 };
+
+// Bit operations
+
+template <typename T, typename U>
+FORCEINLINE void SetBits(T& target, U value)
+{
+	target |= value;
+}
+
+template <typename T, typename U>
+FORCEINLINE void ClearBits(T& target, U value)
+{
+	target &= ~value;
+}
+
+template <typename T, typename U>
+FORCEINLINE T ReadBits(T& target, U value)
+{
+	return target & value;
+}
+
+// Metafunction that returns position of single bit in bit flag
+// (in fact, returns the position of the most significant bit, or 0)
+template <size_t Value>
+struct BitFlagToPos
+{
+	static const size_t Result = 1 + BitFlagToPos<(Value >> 1)>::Result;
+};
+
+template <>
+struct BitFlagToPos<0>
+{
+	static const size_t Result = 0;
+};

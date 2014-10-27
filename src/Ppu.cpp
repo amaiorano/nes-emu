@@ -1,6 +1,7 @@
 #include "Ppu.h"
 #include "Memory.h" //@TODO: Rename CpuRam.h to Memory.h
 #include "Renderer.h"
+#include "Bitfield.h"
 
 Ppu::Ppu()
 	: m_cpuRam(nullptr)
@@ -22,31 +23,6 @@ void Ppu::Reset()
 
 void Ppu::Run()
 {
-	struct Bits8
-	{
-		Bits8() {}
-		Bits8(uint8 value) : value(value) {}
-
-		union
-		{
-			struct
-			{
-				//@TODO: ifdef LITTLE_ENDIAN
-				uint8 Bit0 : 1;
-				uint8 Bit1 : 1;
-				uint8 Bit2 : 1;
-				uint8 Bit3 : 1;
-				uint8 Bit4 : 1;
-				uint8 Bit5 : 1;
-				uint8 Bit6 : 1;
-				uint8 Bit7 : 1;
-			};
-			uint8 value;
-		};
-
-	};
-	static_assert(sizeof(Bits8)==1, "Invalid size");
-
 	Renderer renderer;
 	renderer.Create();
 
@@ -57,19 +33,19 @@ void Ppu::Run()
 		// Every 16 bytes is 1 8x8 tile
 		const int tileOffset = tileIndex * 16;
 		assert(tileOffset+16<KB(16));
-		Bits8* pByte1 = (Bits8*)&chrRom[tileOffset + 0];
-		Bits8* pByte2 = (Bits8*)&chrRom[tileOffset + 8];
+		Bitfield8* pByte1 = (Bitfield8*)&chrRom[tileOffset + 0];
+		Bitfield8* pByte2 = (Bitfield8*)&chrRom[tileOffset + 8];
 
 		for (size_t y = 0; y < 8; ++y)
 		{
-			tile[0][y] = pByte1->Bit7 | (pByte2->Bit7 << 1);
-			tile[1][y] = pByte1->Bit6 | (pByte2->Bit6 << 1);
-			tile[2][y] = pByte1->Bit5 | (pByte2->Bit5 << 1);
-			tile[3][y] = pByte1->Bit4 | (pByte2->Bit4 << 1);
-			tile[4][y] = pByte1->Bit3 | (pByte2->Bit3 << 1);
-			tile[5][y] = pByte1->Bit2 | (pByte2->Bit2 << 1);
-			tile[6][y] = pByte1->Bit1 | (pByte2->Bit1 << 1);
-			tile[7][y] = pByte1->Bit0 | (pByte2->Bit0 << 1);
+			tile[0][y] = pByte1->TestPos(7) | (pByte2->TestPos(7) << 1);
+			tile[1][y] = pByte1->TestPos(6) | (pByte2->TestPos(6) << 1);
+			tile[2][y] = pByte1->TestPos(5) | (pByte2->TestPos(5) << 1);
+			tile[3][y] = pByte1->TestPos(4) | (pByte2->TestPos(4) << 1);
+			tile[4][y] = pByte1->TestPos(3) | (pByte2->TestPos(3) << 1);
+			tile[5][y] = pByte1->TestPos(2) | (pByte2->TestPos(2) << 1);
+			tile[6][y] = pByte1->TestPos(1) | (pByte2->TestPos(1) << 1);
+			tile[7][y] = pByte1->TestPos(0) | (pByte2->TestPos(0) << 1);
 
 			++pByte1;
 			++pByte2;

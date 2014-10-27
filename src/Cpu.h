@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Base.h"
+#include "Bitfield.h"
 
 class CpuRam;
 struct OpCodeEntry;
@@ -47,34 +48,12 @@ private:
 	
 	// Registers - not using the usual m_ prefix because I find the code looks
 	// more straightfoward when using the typical register names
-	uint16 PC;	// Program counter
-	uint8 SP;	// Stack pointer
-	uint8 A;	// Accumulator
-	uint8 X;	// X register
-	uint8 Y;	// Y register
-
-	struct StatusRegister
-	{
-		union
-		{
-			// NOTE: The bit ordering is platform-dependent. We assert the order is correct
-			// at runtime.
-			struct
-			{
-				uint8 C : 1;	// Carry flag
-				uint8 Z : 1;	// Zero flag
-				uint8 I : 1;	// Interrupt (IRQ) disabled
-				uint8 D : 1;	// Decimal mode
-				uint8 B : 1;	// BRK executed (IRQ/software interupt)
-				uint8 U : 1;	// Unused
-				uint8 V : 1;	// Overflow flag
-				uint8 N : 1;	// Negative flag (aka Sign flag)
-			};
-
-			uint8 flags;
-		};
-	} P; // Processor status (flags)
-	static_assert(sizeof(StatusRegister)==1, "StatusRegister must be 1 byte");
+	uint16 PC;		// Program counter
+	uint8 SP;		// Stack pointer
+	uint8 A;		// Accumulator
+	uint8 X;		// X register
+	uint8 Y;		// Y register
+	Bitfield8 P;	// Processor status (flags)
 
 	// Operand address is either the operand's memory location, or the target for a branch or jmp
 	uint16 m_operandAddress;

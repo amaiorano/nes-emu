@@ -1,5 +1,6 @@
 #pragma once
 #include "Base.h"
+#include "Bitfield.h"
 
 class CpuRam;
 class PpuRam;
