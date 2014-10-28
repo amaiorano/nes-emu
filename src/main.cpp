@@ -38,11 +38,16 @@ int main(int argc, char* argv[])
 		PrintAppInfo();
 
 		if (argc != 2)
+		{
+			ShowUsage(argv[0]);
 			throw std::exception("Missing argument(s)");
+		}
 
 		const char* inputFile = argv[1];
 
 		Nes nes;
+		nes.Initialize();
+
 		nes.LoadRom(inputFile);
 		PrintRomInfo(inputFile, nes.GetRomHeader());
 		nes.Reset();
@@ -50,13 +55,11 @@ int main(int argc, char* argv[])
 	}
 	catch (const std::exception& ex)
 	{
-		printf("%s\n", ex.what());
-		return ShowUsage(argv[0]);
+		printf("Exception caught: %s\n", ex.what());
 	}
 	catch (...)
 	{
-		printf("Unknown exception\n");
-		return ShowUsage(argv[0]);
+		printf("Unknown exception caught\n");
 	}
 
 	return 0;

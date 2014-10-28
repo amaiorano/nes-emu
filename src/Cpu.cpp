@@ -1,14 +1,7 @@
 #include "Cpu.h"
 #include "Nes.h"
-#include "Memory.h"
 #include "OpCodeTable.h"
-#include "System.h"
-
-#define ADDR_8 "$%02X"
-#define ADDR_16 "$%04X"
-
-// If set, debugging features are enabled for the emulator (slower)
-#define DEBUGGING_ENABLED 1
+#include "Debugger.h"
 
 namespace
 {
@@ -58,24 +51,8 @@ namespace
 	FORCEINLINE uint8 CalcOverflowFlag(uint8 a, uint8 b, uint8 r);
 }
 
-namespace StatusFlag
-{
-	enum Type : uint8
-	{
-		Carry			= 0x01,
-		Zero			= 0x02,
-		InterruptsOff	= 0x04, // Interrupt (IRQ) disabled
-		Decimal			= 0x08,
-		BrkExecuted		= 0x10, // BRK executed (IRQ/software interupt)
-		Unused			= 0x20,
-		Overflow		= 0x40, // 'V'
-		Negative		= 0x80, // aka Sign flag
-	};		
-}
-
 void Cpu::Initialize(Nes& nes, CpuRam& cpuRam)
 {
-	m_quit = false;
 	m_pNes = &nes;
 	m_pRam = &cpuRam;
 }
@@ -96,195 +73,20 @@ void Cpu::Reset()
 	PC = m_pRam->Read16(CpuRam::kResetVector);
 }
 
-void Cpu::DebuggerPrintOp()
-{
-	// Print PC
-	printf(ADDR_16 "\t", PC);
-
-	// Print instruction in hex
-	for (uint16 i = 0; i < 4; ++i)
-	{
-		if (i < m_pEntry->numBytes)
-			printf("%02X", m_pRam->Read8(PC + i));
-		else
-			printf(" ");
-	}
-	printf("\t");
-
-	// Print opcode name
-	printf("%s ", OpCodeName::String[m_pEntry->opCodeName]);
-
-	// Print operand
-	switch (m_pEntry->addrMode)
-	{
-	case AddressMode::Immedt:
-		{
-			const uint8 address = m_pRam->Read8(PC+1);
-			printf("#" ADDR_8, address);
-		}
-		break;
-
-	case AddressMode::Implid:
-		// No operand to output
-		break;
-
-	case AddressMode::Accumu:
-		{
-			printf("A");
-		}
-		break;
-
-	case AddressMode::Relatv:
-		{
-			// For branch instructions, resolve the target address and print it in comments
-			const int8 offset = m_pRam->Read8(PC+1); // Signed offset in [-128,127]
-			const uint16 target = PC + m_pEntry->numBytes + offset;
-			printf(ADDR_8 " ; " ADDR_16 " (%d)", (uint8)offset, target, offset);
-		}
-		break;
-
-	case AddressMode::ZeroPg:
-		{
-			const uint8 address = m_pRam->Read8(PC+1);
-			printf(ADDR_8, address);
-		}
-		break;
-
-	case AddressMode::ZPIdxX:
-		{
-			const uint8 address = m_pRam->Read8(PC+1);
-			printf(ADDR_8 ",X", address);
-		}
-		break;
-
-	case AddressMode::ZPIdxY:
-		{
-			const uint8 address = m_pRam->Read8(PC+1);
-			printf(ADDR_8 ",Y", address);
-		}
-		break;
-
-	case AddressMode::Absolu:
-		{
-			uint16 address = m_pRam->Read16(PC+1);
-			printf(ADDR_16, address);
-		}
-		break;
-
-	case AddressMode::AbIdxX:
-		{
-			uint16 address = m_pRam->Read16(PC+1);
-			printf(ADDR_16 ",X", address);
-		}
-		break;
-
-	case AddressMode::AbIdxY:
-		{
-			uint16 address = m_pRam->Read16(PC+1);
-			printf(ADDR_16 ",Y", address);
-		}
-		break;
-
-	case AddressMode::Indrct:
-		{
-			uint16 address = m_pRam->Read16(PC+1);
-			printf("(" ADDR_16 ")", address);
-		}
-		break;
-
-	case AddressMode::IdxInd:
-		{
-			const uint8 address = m_pRam->Read8(PC+1);
-			printf("(" ADDR_8 ",X)", address);
-		}
-		break;
-
-	case AddressMode::IndIdx:
-		{
-			const uint8 address = m_pRam->Read8(PC+1);
-			printf("(" ADDR_8 "),Y", address);
-		}
-		break;
-
-	default:
-		assert(false && "Invalid addressing mode");
-		break;
-	}
-	
-	printf("\n");
-}
-
-void Cpu::DebuggerPrintState()
-{
-	static const char StatusFlagNames[] =
-	{
-		'C',
-		'Z',
-		'I',
-		'D',
-		'B',
-		'U',
-		'V',
-		'N',
-	};
-
-	using namespace StatusFlag;
-
-#define HILO(v) (P.Test(v) ? StatusFlagNames[BitFlagToPos<v>::Result-1] : tolower(StatusFlagNames[BitFlagToPos<v>::Result-1]))
-
-	printf("  SP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c] ("ADDR_16")="ADDR_8"\n",
-		SP, A, X, Y, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(InterruptsOff), HILO(Zero), HILO(Carry),
-		m_operandAddress, m_pRam->Read8(m_operandAddress));
-
-#undef HILO
-
-	static bool stepMode = true;
-	char key;
-	if (stepMode)
-	{
-		key = System::WaitForKeyPress();
-		switch (tolower(key))
-		{
-		case 'q':
-			m_quit = true;
-			break;
-
-		case 'g':
-			stepMode = false;
-			break;
-		}
-	}
-	else if (System::GetKeyPress(key))
-	{
-		stepMode = true;
-	}
-}
-
 void Cpu::Run()
 {
-	//@TODO: For now, Run executes one instruction while implementing PPU
-	//while (!m_quit)
+	uint8 opCode = m_pRam->Read8(PC);
+	m_pEntry = g_ppOpCodeTable[opCode];
+
+	if (m_pEntry == nullptr)
 	{
-		uint8 opCode = m_pRam->Read8(PC);
-		m_pEntry = g_ppOpCodeTable[opCode];
-
-		if (m_pEntry == nullptr)
-		{
-			assert(false && "Unknown opcode");
-		}
-
-#if DEBUGGING_ENABLED
-		DebuggerPrintOp();
-#endif
-
-		UpdateOperand();
-
-		ExecuteInstruction();
-
-#if DEBUGGING_ENABLED
-		DebuggerPrintState();
-#endif
+		assert(false && "Unknown opcode");
 	}
+
+	Debugger::PreCpuInstruction();
+	UpdateOperand();
+	ExecuteInstruction();
+	Debugger::PostCpuInstruction();
 }
 
 void Cpu::UpdateOperand()

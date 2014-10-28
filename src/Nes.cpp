@@ -1,6 +1,12 @@
 #include "Nes.h"
 #include "FileStream.h"
 #include "Rom.h"
+#include "Debugger.h"
+
+void Nes::Initialize()
+{
+	Debugger::Initialize(*this);
+}
 
 void Nes::LoadRom(const char* file)
 {
@@ -17,8 +23,6 @@ void Nes::LoadRom(const char* file)
 
 	if ( m_romHeader.IsPlayChoice10() || m_romHeader.IsVSUnisystem() )
 		throw std::exception("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
-
-	//PrintRomInfo(file, m_romHeader);
 
 	// Next is PRG-ROM data (16K or 32K)
 	const size_t prgRomSize = m_romHeader.GetPrgRomSizeBytes();
@@ -48,9 +52,10 @@ void Nes::Reset()
 
 void Nes::Run()
 {
-	while (!m_cpu.ShouldQuit())
+	for (;;)
 	{
 		m_cpu.Run();
+		Debugger::Update();
 		m_ppu.Run();
 	}
 }

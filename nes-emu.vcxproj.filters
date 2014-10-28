@@ -40,6 +40,9 @@
     <ClInclude Include="src\Nes.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Debugger.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
@@ -58,6 +61,12 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\Nes.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Debugger.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\OpCodeTable.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

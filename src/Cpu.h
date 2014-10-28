@@ -7,6 +7,21 @@ class Nes;
 class CpuRam;
 struct OpCodeEntry;
 
+namespace StatusFlag
+{
+	enum Type : uint8
+	{
+		Carry			= 0x01,
+		Zero			= 0x02,
+		InterruptsOff	= 0x04, // Interrupt (IRQ) disabled
+		Decimal			= 0x08,
+		BrkExecuted		= 0x10, // BRK executed (IRQ/software interupt)
+		Unused			= 0x20,
+		Overflow		= 0x40, // 'V'
+		Negative		= 0x80, // aka Sign flag
+	};		
+}
+
 class Cpu
 {
 public:
@@ -14,17 +29,14 @@ public:
 	void Reset();
 	void Run();
 
-	bool ShouldQuit() const { return m_quit; }
-
 private:
+	friend class DebuggerImpl;
+
 	// Updates m_operandAddress for current instruction based on addressing mode. Operand data is assumed to be at PC + 1 if it exists.
 	void UpdateOperand();
 
 	// Executes current instruction, updates PC
 	void ExecuteInstruction();
-
-	void DebuggerPrintOp();
-	void DebuggerPrintState();
 
 	// For instructions that work on accumulator (A) or memory location
 	uint8 GetAccumOrMemValue() const;
@@ -45,7 +57,6 @@ private:
 
 	// Data members
 
-	bool m_quit;
 	Nes* m_pNes;
 	CpuRam* m_pRam;
 	OpCodeEntry* m_pEntry; // Current opcode entry

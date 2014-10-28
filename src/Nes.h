@@ -8,6 +8,7 @@
 class Nes
 {
 public:
+	void Initialize();
 	void LoadRom(const char* file);
 	void Reset();
 	void Run();
@@ -25,6 +26,8 @@ public:
 	}
 
 private:
+	friend class DebuggerImpl;
+
 	RomHeader m_romHeader;
 	Cpu m_cpu;
 	Ppu m_ppu;
