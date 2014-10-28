@@ -796,8 +796,8 @@ void Cpu::Push8(uint8 value)
 
 void Cpu::Push16(uint16 value)
 {
-	m_pRam->Write16(CpuRam::kStackBase + SP, value);
-	SP -= 2;
+	Push8(value >> 8);
+	Push8(value & 0x00FF);
 }
 
 uint8 Cpu::Pop8()
@@ -808,7 +808,6 @@ uint8 Cpu::Pop8()
 
 uint16 Cpu::Pop16()
 {
-	SP += 2;
-	return m_pRam->Read16(CpuRam::kStackBase + SP);
+	return TO16(Pop8()) | TO16(Pop8()) << 8;
 }
 
