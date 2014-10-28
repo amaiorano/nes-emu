@@ -16,6 +16,7 @@
     <ClInclude Include="src\Cpu.h" />
     <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />
+    <ClInclude Include="src\Nes.h" />
     <ClInclude Include="src\OpCodeTable.h" />
     <ClInclude Include="src\Ppu.h" />
     <ClInclude Include="src\Renderer.h" />
@@ -25,6 +26,7 @@
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Nes.cpp" />
     <ClCompile Include="src\Ppu.cpp" />
     <ClCompile Include="src\Renderer.cpp" />
     <ClCompile Include="src\System.cpp" />

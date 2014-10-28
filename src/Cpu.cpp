@@ -1,4 +1,5 @@
 #include "Cpu.h"
+#include "Nes.h"
 #include "Memory.h"
 #include "OpCodeTable.h"
 #include "System.h"
@@ -72,9 +73,10 @@ namespace StatusFlag
 	};		
 }
 
-void Cpu::Initialize(CpuRam& cpuRam)
+void Cpu::Initialize(Nes& nes, CpuRam& cpuRam)
 {
 	m_quit = false;
+	m_pNes = &nes;
 	m_pRam = &cpuRam;
 }
 
@@ -260,7 +262,8 @@ void Cpu::DebuggerPrintState()
 
 void Cpu::Run()
 {
-	while (!m_quit)
+	//@TODO: For now, Run executes one instruction while implementing PPU
+	//while (!m_quit)
 	{
 		uint8 opCode = m_pRam->Read8(PC);
 		m_pEntry = g_ppOpCodeTable[opCode];
@@ -753,7 +756,9 @@ uint8 Cpu::GetAccumOrMemValue() const
 	if (m_pEntry->addrMode == AddressMode::Accumu)
 		return A;
 	
-	return m_pRam->Read8(m_operandAddress);
+	uint8 result = m_pRam->Read8(m_operandAddress);
+	m_pNes->OnCpuMemoryRead(result);
+	return result;
 }
 
 void Cpu::SetAccumOrMemValue(uint8 value)
@@ -767,19 +772,23 @@ void Cpu::SetAccumOrMemValue(uint8 value)
 	else
 	{
 		m_pRam->Write8(m_operandAddress, value);
+		m_pNes->OnCpuMemoryWrite(m_operandAddress);
 	}
 }
 
 uint8 Cpu::GetMemValue() const
 {
 	assert(m_pEntry->addrMode & AddressMode::MemoryValueOperand);
-	return m_pRam->Read8(m_operandAddress);
+	uint8 result = m_pRam->Read8(m_operandAddress);
+	m_pNes->OnCpuMemoryRead(result);
+	return result;
 }
 
 void Cpu::SetMemValue(uint8 value)
 {
 	assert(m_pEntry->addrMode & AddressMode::MemoryValueOperand);
 	m_pRam->Write8(m_operandAddress, value);
+	m_pNes->OnCpuMemoryWrite(m_operandAddress);
 }
 
 uint16 Cpu::GetBranchOrJmpLocation() const
@@ -810,4 +819,3 @@ uint16 Cpu::Pop16()
 {
 	return TO16(Pop8()) | TO16(Pop8()) << 8;
 }
-

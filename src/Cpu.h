@@ -3,15 +3,18 @@
 #include "Base.h"
 #include "Bitfield.h"
 
+class Nes;
 class CpuRam;
 struct OpCodeEntry;
 
 class Cpu
 {
 public:
-	void Initialize(CpuRam& cpuRam);
+	void Initialize(Nes& nes, CpuRam& cpuRam);
 	void Reset();
 	void Run();
+
+	bool ShouldQuit() const { return m_quit; }
 
 private:
 	// Updates m_operandAddress for current instruction based on addressing mode. Operand data is assumed to be at PC + 1 if it exists.
@@ -43,6 +46,7 @@ private:
 	// Data members
 
 	bool m_quit;
+	Nes* m_pNes;
 	CpuRam* m_pRam;
 	OpCodeEntry* m_pEntry; // Current opcode entry
 	

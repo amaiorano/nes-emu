@@ -2,6 +2,66 @@
 #include "Base.h"
 #include <array>
 
+namespace PpuControl1 // $2000 (W)
+{
+	enum Type : uint8
+	{
+		NameTableAddressMask			= 0x03,
+		PpuAddressIncrement				= 0x04, // 0 = 1 byte, 1 = 32 bytes
+		SpritePatternTableAddress		= 0x08, // 0 = $0000, 1 = $1000 in VRAM
+		BackgroundPatternTableAddress	= 0x10, // 0 = $0000, 1 = $1000 in VRAM
+		SpriteSize						= 0x20, // 0 = 8x8, 1 = 8x16
+		PpuMasterSlaveSelect			= 0x40, // 0 = Master, 1 = Slave (Unused)
+		NmiOnVBlank						= 0x80, // 0 = Disabled, 1 = Enabled
+	};
+
+	// Returns current name table address in VRAM ($2000, $2400, $2800, or $2C00)
+	inline uint16 GetNameTableAddress(uint16 ppuControl1)
+	{
+		return 0x2000 + ((uint16)(ppuControl1 & NameTableAddressMask)) * 0x0400;
+	}
+
+	inline uint16 GetSpritePatternTableAddress(uint16 ppuControl1)
+	{
+		return (ppuControl1 & SpritePatternTableAddress)? 0x1000 : 0x0000;
+	}
+
+	inline uint16 GetBackgroundPatternTableAddress(uint16 ppuControl1)
+	{
+		return (ppuControl1 & BackgroundPatternTableAddress)? 0x1000 : 0x0000;
+	}
+
+	inline uint16 GetPpuAddressIncrementSize(uint16 ppuControl1)
+	{
+		return (ppuControl1 & PpuAddressIncrement)? 32 : 1;
+	}
+}
+
+namespace PpuControl2 // $2001 (W)
+{
+	enum Type : uint8
+	{
+		DisplayType = 0x01, // 0 = Color, 1 = Monochrome
+		BackgroundClipping = 0x02, // 0 = BG invisible in left 8-pixel column, 1 = No clipping
+		SpriteClipping = 0x04, // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
+		BackgroundVisible = 0x08, // 0 = Background not displayed, 1 = Background visible
+		SpriteVisible = 0x10, // 0 = Sprites not displayed, 1 = Sprites visible		
+		ColorIntensityMask = 0xE0, // High 3 bits if DisplayType == 0
+		FullBackgroundColorMask = 0xE0, // High 3 bits if DisplayType == 1
+	};
+}
+
+namespace PpuStatus // $2002 (R)
+{
+	enum Type : uint8
+	{
+		VRAMWritesIgnored	= 0x10,
+		ScanlineSpritesGt8	= 0x20,
+		PpuHitSprite0		= 0x40,
+		InVBlank			= 0x80,
+	};
+}
+
 template <typename Derived, size_t memorySize>
 class MemoryBase
 {
@@ -46,6 +106,13 @@ public:
 		return &m_memory[address];
 	}
 
+	// Casts result to T*
+	template <typename T>
+	T* UnsafePtrAs(uint16 address)
+	{
+		return reinterpret_cast<T*>(UnsafePtr(address));
+	}
+
 protected:
 	std::array<uint8, memorySize> m_memory;
 };
@@ -61,6 +128,16 @@ public:
 	static const uint16 kNmiVector		= 0xFFFA; // and 0xFFFB
 	static const uint16 kResetVector	= 0xFFFC; // and 0xFFFD
 	static const uint16 kIrqVector		= 0xFFFE; // and 0xFFFF
+
+	// PPU memory-mapped registers
+	static const uint16 kPpuControl1		= 0x2000; // (W)
+	static const uint16 kPpuControl2		= 0x2001; // (W)
+	static const uint16 kPpuStatus			= 0x2002; // (R)
+	static const uint16 kPpuSprRamAddress	= 0x2003; // (W) \_
+	static const uint16 kPpuSprRamIO		= 0x2004; // (W) /
+	static const uint16 kPpuVRamAddress1	= 0x2005; // (W2)
+	static const uint16 kPpuVRamAddress2	= 0x2006; // (W2) \_
+	static const uint16 kPpuVRamIO			= 0x2007; // (RW) /
 
 	void LoadPrgRom(uint8* pPrgRom, size_t size)
 	{
@@ -125,7 +202,7 @@ public:
 
 	static uint16 WrapMirroredAddress(uint16 address)
 	{
-		// Handle name-table wrapping
+		// Name-table wrapping
 		if (address >= kNameTable1 && address < kNameTablesEnd)
 		{
 			//@TODO: use screen arrangement to determine the type of wrapping (if any)
@@ -134,16 +211,17 @@ public:
 
 		// Palette: mirror every 4th byte of sprite palette to image palette
 		else if (address >= kSpritePalette && address < kPalettesEnd 
-			&& (address & 0x0003)==0) // If low 2 bits are 0
+			&& (address & 0x0003)==0) // If low 2 bits are 0 (multiple of 4)
 		{
-			return address & ~0x0010; // Turn off bit 5
+			return address & ~0x0010; // Turn off bit 5 (0x3F1x -> 0x3F0x)
 		}
-	}
+		return address;
+	}	
 };
 
 // SPR-RAM or OAM (object attribute memory)
 class SpriteRam : public MemoryBase<SpriteRam, 256>
 {
 public:
-
+	FORCEINLINE static uint16 WrapMirroredAddress(uint16 /*address*/) {}
 };

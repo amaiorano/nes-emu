@@ -1,35 +1,34 @@
 #include "Base.h"
-#include "FileStream.h"
-#include "Rom.h"
-#include "Cpu.h"
-#include "Memory.h"
-#include "Ppu.h"
+#include "Nes.h"
 
-void PrintAppInfo()
+namespace
 {
-	const char* text =
-		"; nes-emu - Nintendo Entertainment System Emulator\n"
-		"; Author: Antonio Maiorano (amaiorano at gmail dot com)\n"
-		"; Source code available at http://github.com/amaiorano/nes-emu/"
-		"\n\n";
+	void PrintAppInfo()
+	{
+		const char* text =
+			"; nes-emu - Nintendo Entertainment System Emulator\n"
+			"; Author: Antonio Maiorano (amaiorano at gmail dot com)\n"
+			"; Source code available at http://github.com/amaiorano/nes-emu/"
+			"\n\n";
 
-	printf(text);
-}
+		printf(text);
+	}
 
-void PrintRomInfo(const char* inputFile, RomHeader& header)
-{
-	printf("; Input file: %s\n", inputFile);
-	printf("; PRG ROM size: %d bytes\n", header.GetPrgRomSizeBytes());
-	printf("; CHR ROM size: %d bytes\n", header.GetChrRomSizeBytes());
-	printf("; Mapper number: %d\n", header.GetMapperNumber());
-	printf("; Has SRAM: %s\n", header.HasSRAM()? "yes" : "no");
-	printf("\n");
-}
+	void PrintRomInfo(const char* inputFile, const RomHeader& header)
+	{
+		printf("; Input file: %s\n", inputFile);
+		printf("; PRG ROM size: %d bytes\n", header.GetPrgRomSizeBytes());
+		printf("; CHR ROM size: %d bytes\n", header.GetChrRomSizeBytes());
+		printf("; Mapper number: %d\n", header.GetMapperNumber());
+		printf("; Has SRAM: %s\n", header.HasSRAM()? "yes" : "no");
+		printf("\n");
+	}
 
-int ShowUsage(const char* appPath)
-{
-	printf("Usage: %s <nes rom>\n\n", appPath);
-	return -1;
+	int ShowUsage(const char* appPath)
+	{
+		printf("Usage: %s <nes rom>\n\n", appPath);
+		return -1;
+	}
 }
 
 int main(int argc, char* argv[])
@@ -43,51 +42,11 @@ int main(int argc, char* argv[])
 
 		const char* inputFile = argv[1];
 
-		FileStream fs(inputFile, "rb");
-
-		RomHeader header;
-		fs.Read((uint8*)&header, sizeof(RomHeader));
-
-		if ( !header.IsValidHeader() )
-			throw std::exception("Invalid header");
-
-		// Next is Trainer, if present (0 or 512 bytes)
-		if ( header.HasTrainer() )
-			throw std::exception("Not supporting trainer roms");
-
-		if ( header.IsPlayChoice10() || header.IsVSUnisystem() )
-			throw std::exception("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
-
-		PrintRomInfo(inputFile, header);
-
-		CpuRam cpuRam;
-		PpuRam ppuRam;
-		SpriteRam spriteRam;
-
-		// Next is PRG-ROM data (16K or 32K)
-		const size_t prgRomSize = header.GetPrgRomSizeBytes();
-		{
-			uint8 prgRom[CpuRam::kPrgRomMaxSize] = {0};
-			fs.Read(prgRom, prgRomSize);
-			cpuRam.LoadPrgRom(prgRom, prgRomSize);
-		}
-
-		// Next is CHR-ROM data (8K)
-		const size_t chrRomSize = header.GetChrRomSizeBytes();
-		{
-			uint8 chrRom[PpuRam::kChrRomSize];
-			fs.Read(chrRom, chrRomSize);
-			ppuRam.LoadChrRom(chrRom, chrRomSize);
-		}
-
-		Cpu cpu;
-		cpu.Initialize(cpuRam);
-		cpu.Reset();
-		cpu.Run();
-
-		Ppu ppu;
-		ppu.Initialize(cpuRam, ppuRam, spriteRam);
-		ppu.Run();
+		Nes nes;
+		nes.LoadRom(inputFile);
+		PrintRomInfo(inputFile, nes.GetRomHeader());
+		nes.Reset();
+		nes.Run();
 	}
 	catch (const std::exception& ex)
 	{

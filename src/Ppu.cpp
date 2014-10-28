@@ -1,5 +1,5 @@
 #include "Ppu.h"
-#include "Memory.h" //@TODO: Rename CpuRam.h to Memory.h
+#include "Memory.h"
 #include "Renderer.h"
 #include "Bitfield.h"
 
@@ -15,13 +15,67 @@ void Ppu::Initialize(CpuRam& cpuRam, PpuRam& ppuRam, SpriteRam& spriteRam)
 	m_cpuRam = &cpuRam;
 	m_ppuRam = &ppuRam;
 	m_spriteRam = &spriteRam;
+
+	m_ppuControl1 = m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControl1);
+	m_ppuControl2 = m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControl2);
+	m_ppuStatus = m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuStatus);
 }
 
 void Ppu::Reset()
 {
+	// Fake a first vblank
+	m_ppuStatus->Set(PpuStatus::InVBlank);
 }
 
 void Ppu::Run()
+{
+	printf("Ppu cycle\n");
+}
+
+void Ppu::OnCpuMemoryRead(uint16 address)
+{
+	switch (address)
+	{
+	case CpuRam::kPpuStatus: // $2002
+		m_ppuStatus->Clear(PpuStatus::InVBlank);
+		//@TODO: After a read occurs, $2005 is reset, hence the next write to $2005 will be Horizontal.
+
+		// After a read occurs, $2006 is reset, hence the next write to $2006 will be the high byte portion.
+		m_vramAddress.high = true;
+
+		break;
+	}
+}
+
+void Ppu::OnCpuMemoryWrite(uint16 address)
+{
+	switch (address)
+	{
+	case CpuRam::kPpuVRamAddress2: // $2006
+		{
+			// Implement double write (alternate between writing high byte and low byte)
+			uint16 value = TO16(m_cpuRam->Read8(address));
+			if (m_vramAddress.high)
+				m_vramAddress.address = (value << 8) | (m_vramAddress.address & 0x00FF);
+			else
+				m_vramAddress.address = value | (m_vramAddress.address & 0xFF00);
+			
+			m_vramAddress.high = !m_vramAddress.high;
+		}
+		break;
+
+	case CpuRam::kPpuVRamIO: // $2007
+		{
+			// Write value to VRAM and increment address
+			uint8 value = m_cpuRam->Read8(address);
+			m_ppuRam->Write8(m_vramAddress.address, value);
+			m_vramAddress.address += PpuControl1::GetPpuAddressIncrementSize( m_ppuControl1->Value() );
+		}
+		break;
+	}
+}
+
+void Ppu::HACK_DrawPatternTables()
 {
 	Renderer renderer;
 	renderer.Create();
