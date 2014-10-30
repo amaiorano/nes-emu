@@ -2,66 +2,6 @@
 #include "Base.h"
 #include <array>
 
-namespace PpuControl1 // $2000 (W)
-{
-	enum Type : uint8
-	{
-		NameTableAddressMask			= 0x03,
-		PpuAddressIncrement				= 0x04, // 0 = 1 byte, 1 = 32 bytes
-		SpritePatternTableAddress		= 0x08, // 0 = $0000, 1 = $1000 in VRAM
-		BackgroundPatternTableAddress	= 0x10, // 0 = $0000, 1 = $1000 in VRAM
-		SpriteSize						= 0x20, // 0 = 8x8, 1 = 8x16
-		PpuMasterSlaveSelect			= 0x40, // 0 = Master, 1 = Slave (Unused)
-		NmiOnVBlank						= 0x80, // 0 = Disabled, 1 = Enabled
-	};
-
-	// Returns current name table address in VRAM ($2000, $2400, $2800, or $2C00)
-	inline uint16 GetNameTableAddress(uint16 ppuControl1)
-	{
-		return 0x2000 + ((uint16)(ppuControl1 & NameTableAddressMask)) * 0x0400;
-	}
-
-	inline uint16 GetSpritePatternTableAddress(uint16 ppuControl1)
-	{
-		return (ppuControl1 & SpritePatternTableAddress)? 0x1000 : 0x0000;
-	}
-
-	inline uint16 GetBackgroundPatternTableAddress(uint16 ppuControl1)
-	{
-		return (ppuControl1 & BackgroundPatternTableAddress)? 0x1000 : 0x0000;
-	}
-
-	inline uint16 GetPpuAddressIncrementSize(uint16 ppuControl1)
-	{
-		return (ppuControl1 & PpuAddressIncrement)? 32 : 1;
-	}
-}
-
-namespace PpuControl2 // $2001 (W)
-{
-	enum Type : uint8
-	{
-		DisplayType = 0x01, // 0 = Color, 1 = Monochrome
-		BackgroundClipping = 0x02, // 0 = BG invisible in left 8-pixel column, 1 = No clipping
-		SpriteClipping = 0x04, // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
-		BackgroundVisible = 0x08, // 0 = Background not displayed, 1 = Background visible
-		SpriteVisible = 0x10, // 0 = Sprites not displayed, 1 = Sprites visible		
-		ColorIntensityMask = 0xE0, // High 3 bits if DisplayType == 0
-		FullBackgroundColorMask = 0xE0, // High 3 bits if DisplayType == 1
-	};
-}
-
-namespace PpuStatus // $2002 (R)
-{
-	enum Type : uint8
-	{
-		VRAMWritesIgnored	= 0x10,
-		ScanlineSpritesGt8	= 0x20,
-		PpuHitSprite0		= 0x40,
-		InVBlank			= 0x80,
-	};
-}
-
 template <typename Derived, size_t memorySize>
 class MemoryBase
 {

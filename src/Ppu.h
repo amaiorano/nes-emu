@@ -2,6 +2,7 @@
 #include "Base.h"
 #include "Bitfield.h"
 
+class Nes;
 class CpuRam;
 class PpuRam;
 class SpriteRam;
@@ -10,7 +11,7 @@ class Ppu
 {
 public:
 	Ppu();
-	void Initialize(CpuRam& cpuRam, PpuRam& ppuRam, SpriteRam& spriteRam);
+	void Initialize(Nes& nes, CpuRam& cpuRam, PpuRam& ppuRam, SpriteRam& spriteRam);
 	void Reset();
 	void Run();
 
@@ -20,6 +21,7 @@ public:
 private:
 	void HACK_DrawPatternTables();
 
+	Nes* m_nes;
 	CpuRam* m_cpuRam;
 	PpuRam* m_ppuRam;
 	SpriteRam* m_spriteRam;

@@ -41,7 +41,7 @@ void Nes::LoadRom(const char* file)
 	}
 
 	m_cpu.Initialize(*this, m_cpuRam);
-	m_ppu.Initialize(m_cpuRam, m_ppuRam, m_spriteRam);
+	m_ppu.Initialize(*this, m_cpuRam, m_ppuRam, m_spriteRam);
 }
 
 void Nes::Reset()

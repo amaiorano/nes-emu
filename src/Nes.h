@@ -25,6 +25,11 @@ public:
 		m_ppu.OnCpuMemoryWrite(address);
 	}
 
+	void SignalCpuNmi()
+	{
+		m_cpu.Nmi();
+	}
+
 private:
 	friend class DebuggerImpl;
 
