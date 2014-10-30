@@ -39,10 +39,25 @@ public:
 	}
 
 	template <typename T>
-	bool Read(T* pDestBuffer, int count = 1)
+	size_t Read(T* pDestBuffer, int count = 1)
 	{
 		return fread(pDestBuffer, sizeof(T), count, m_pFile) == (sizeof(T) * count);
 	}
+
+	template <typename T>
+	size_t Write(T value)
+	{
+		return fwrite(&value, sizeof(T), 1, m_pFile);
+	}
+
+	template <typename T>
+	size_t Write(T* pBuffer, int count = 1)
+	{
+		//return fread(pDestBuffer, sizeof(T), count, m_pFile) == (sizeof(T) * count);
+		return fwrite(pBuffer, sizeof(T), count, m_pFile);
+	}
+
+	void Printf(const char* format, ...);
 
 private:
 	FILE* m_pFile;

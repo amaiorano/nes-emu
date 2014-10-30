@@ -69,5 +69,8 @@
     <ClCompile Include="src\OpCodeTable.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\FileStream.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
