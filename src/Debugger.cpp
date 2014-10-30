@@ -28,28 +28,63 @@ public:
 	}
 
 	template <typename T>
-	void MemoryDump(T& memory, const char* file, uint32 from = 0x0000, uint32 to = 0x0000)
+	void MemoryDump(T& memory, FileStream& fs, uint16 start = 0x0000, size_t size = 0, size_t bytesPerLine = 16)
 	{
-		FileStream fs(file, "w");
+		if (size == 0)
+			size = memory.MemorySize();
 
-		if (to == 0x0000)
-			to = uint32((memory.MemorySize()) - 1);
-
-		const size_t bytesPerLine = 16;
+		const uint32 from = start;
+		const uint32 to = from + size - 1;
+		const uint8* pmem = memory.UnsafePtr(0);
 		size_t bytesPerLineCount = 0;
-
-		uint8* pmem = memory.UnsafePtr((uint16)from);
 
 		for (uint32 curr = from; curr <= to; ++curr)
 		{
 			if (bytesPerLineCount == 0)
 			{
-				fs.Printf("\n"ADDR_16": ", curr);
+				if (curr != from)
+					fs.Printf("\n");
+				fs.Printf(ADDR_16": ", curr);
 			}
-
 			fs.Printf("%02X ", pmem[curr]);
-
 			bytesPerLineCount = (bytesPerLineCount + 1) % bytesPerLine;
+		}		
+		fs.Printf("\n");
+	}
+
+	template <typename T>
+	void MemoryDump(T& memory, const char* file, uint16 start = 0x0000, size_t size = 0)
+	{
+		FileStream fs(file, "w");
+		MemoryDump(memory, fs, start, size);
+	}
+
+	void MemoryDumpPpuRam(PpuRam& ppuRam)
+	{
+		// Dump full memory
+		const char* file = "PpuRam.dmp";
+		printf("Dumping: %s\n", file);
+		MemoryDump(ppuRam, "PpuRam.dmp");
+		
+		// Dump detailed break down
+		file = "PpuRam-detail.dmp";
+		printf("Dumping: %s\n", file);
+
+		FileStream fs(file, "w");
+
+		for (size_t i = 0; i < PpuRam::kNumPatternTables; ++i)
+		{
+			fs.Printf("Pattern Table %d\n\n", i);
+			MemoryDump(ppuRam, fs, PpuRam::GetPatternTableAddress(i), PpuRam::kPatternTableSize, 32*2);
+		}
+
+		for (size_t i = 0; i < PpuRam::kNumMaxNameTables; ++i)
+		{
+			fs.Printf("\nName Table %d\n\n", i);
+			MemoryDump(ppuRam, fs, PpuRam::GetNameTableAddress(i), PpuRam::kNameTableSize, 32);
+
+			fs.Printf("\nAttribute Table %d\n\n", i);
+			MemoryDump(ppuRam, fs, PpuRam::GetAttributeTableAddress(i), PpuRam::kAttributeTableSize, 32);
 		}
 	}
 
@@ -95,12 +130,14 @@ public:
 
 				case 'd':
 					{
-						printf("Dumping: PpuRam.dmp\n");
-						MemoryDump(m_nes->m_ppuRam, "PpuRam.dmp");
+						MemoryDumpPpuRam(m_nes->m_ppuRam);						
+						
 						printf("Dumping: CpuRam.dmp\n");
 						MemoryDump(m_nes->m_cpuRam, "CpuRam.dmp");
+						
 						printf("Dumping: SpriteRam.dmp\n");
 						MemoryDump(m_nes->m_spriteRam, "SpriteRam.dmp");
+						
 						showPrompt = true;
 					}
 					break;

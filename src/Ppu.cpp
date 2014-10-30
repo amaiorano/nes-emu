@@ -153,7 +153,7 @@ void Ppu::HACK_DrawPatternTables()
 	Renderer renderer;
 	renderer.Create();
 
-	const uint8* chrRom = m_ppuRam->UnsafePtr(0);
+	const uint8* chrRom = m_ppuRam->UnsafePtr(PpuRam::kPatternTable0);
 
 	static auto ReadTile = [&chrRom] (int tileIndex, uint8 tile[8][8])
 	{

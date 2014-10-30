@@ -124,6 +124,7 @@ public:
 	}
 
 	static const uint16 kChrRomSize = KB(8); // Half the memory is CHR-ROM (2 pattern tables of 4kb each)
+	static const uint16 kNumPatternTables = 2;
 	static const uint16 kPatternTableSize = KB(4);
 	static const uint16 kPatternTable0 = 0x0000;
 	static const uint16 kPatternTable1 = 0x1000;
@@ -131,16 +132,42 @@ public:
 	// There are up to 4 Name/Attribute tables, each pair is 1 KB.
 	// In fact, NES only has 2 KB total for name tables; the other 2 KB are mirrored off the first
 	// two, either horizontally or vertically, or the cart supplies and extra 2 KB memory for 4 screen.
-	static const uint16 kNameTableSize = 1024; // Size of name + attribute table
+	// Also, a "name table" includes the attribute table, which are in the last 64 bytes.
+	static const uint16 kNameTableSize = 960;
+	static const uint16 kAttributeTableSize = 64;
+	static const uint16 kNameAttributeTableSize = kNameTableSize + kAttributeTableSize;
+
+	static const uint16 kNumMaxNameTables = 4;
 	static const uint16 kNameTable0 = 0x2000;
-	static const uint16 kNameTable1 = kNameTable0 + kNameTableSize;
-	static const uint16 kNameTablesEnd = kNameTable0 + kNameTableSize * 4;
+	static const uint16 kNameTable1 = kNameTable0 + kNameAttributeTableSize;
+	static const uint16 kNameTablesEnd = kNameTable0 + kNameAttributeTableSize * 4;
+
+	static const uint16 kNumMaxAttributeTables = 4;
+	static const uint16 kAttributeTable0 = kNameTable0 + kNameTableSize;
 
 	// This is not actually the palette, but the palette lookup table (indices into actual palette)
 	static const uint16 kPaletteSize = 16;
 	static const uint16 kImagePalette = 0x3F00;
 	static const uint16 kSpritePalette = 0x3F10;
 	static const uint16 kPalettesEnd = kImagePalette + kPaletteSize * 2;
+
+	static uint16 GetPatternTableAddress(size_t index)
+	{
+		assert(index < kNumPatternTables);
+		return static_cast<uint16>(kPatternTable0 + kPatternTableSize * index);
+	}
+
+	static uint16 GetNameTableAddress(size_t index)
+	{
+		assert(index < kNumMaxNameTables);
+		return static_cast<uint16>(kNameTable0 + kNameAttributeTableSize * index);
+	}
+
+	static uint16 GetAttributeTableAddress(size_t index)
+	{
+		assert(index < kNumMaxAttributeTables);
+		return static_cast<uint16>(kAttributeTable0 + kNameAttributeTableSize * index);
+	}
 
 	static uint16 WrapMirroredAddress(uint16 address)
 	{
