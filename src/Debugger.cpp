@@ -6,6 +6,7 @@
 #include "Nes.h"
 #include "OpCodeTable.h"
 #include "System.h"
+#include "FileStream.h"
 #include <cstdio>
 #include <cassert>
 #include <stdexcept>
@@ -26,22 +27,84 @@ public:
 		m_nes = &nes;
 	}
 
+	template <typename T>
+	void MemoryDump(T& memory, const char* file, uint32 from = 0x0000, uint32 to = 0x0000)
+	{
+		FileStream fs(file, "w");
+
+		if (to == 0x0000)
+			to = uint32((memory.MemorySize()) - 1);
+
+		const size_t bytesPerLine = 16;
+		size_t bytesPerLineCount = 0;
+
+		uint8* pmem = memory.UnsafePtr((uint16)from);
+
+		for (uint32 curr = from; curr <= to; ++curr)
+		{
+			if (bytesPerLineCount == 0)
+			{
+				fs.Printf("\n"ADDR_16": ", curr);
+			}
+
+			fs.Printf("%02X ", pmem[curr]);
+
+			bytesPerLineCount = (bytesPerLineCount + 1) % bytesPerLine;
+		}
+	}
+
 	void Update()
 	{
+		const char KEY_SPACE = 32;
+		const char KEY_ENTER = 13;
+
 		static bool stepMode = true;
+
 		char key;
 		if (stepMode)
 		{
-			key = System::WaitForKeyPress();
-			switch (tolower(key))
+			bool done = false;
+			bool showPrompt = true;
+			
+			while (!done)
 			{
-			case 'q':
-				throw std::exception("User quit from debugger");
-				break;
+				if (showPrompt)
+				{
+					printf("> ");
+					showPrompt = false;
+				}
 
-			case 'g':
-				stepMode = false;
-				break;
+				key = (char)tolower(System::WaitForKeyPress());
+				//printf("key pressed: %c (%d)\n", key, key);
+
+				switch (key)
+				{
+				case KEY_SPACE:
+				case KEY_ENTER:
+					done = true;
+					break;
+
+				case 'q':
+					throw std::exception("User quit from debugger");
+					break;
+
+				case 'g':
+					stepMode = false;
+					done = true;
+					break;
+
+				case 'd':
+					{
+						printf("Dumping: PpuRam.dmp\n");
+						MemoryDump(m_nes->m_ppuRam, "PpuRam.dmp");
+						printf("Dumping: CpuRam.dmp\n");
+						MemoryDump(m_nes->m_cpuRam, "CpuRam.dmp");
+						printf("Dumping: SpriteRam.dmp\n");
+						MemoryDump(m_nes->m_spriteRam, "SpriteRam.dmp");
+						showPrompt = true;
+					}
+					break;
+				}
 			}
 		}
 		else if (System::GetKeyPress(key))

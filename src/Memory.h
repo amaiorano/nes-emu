@@ -66,6 +66,8 @@ template <typename Derived, size_t memorySize>
 class MemoryBase
 {
 public:
+	static size_t MemorySize() { return memorySize; }
+
 	MemoryBase()
 	{
 		Reset();

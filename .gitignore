@@ -30,3 +30,4 @@ ipch/
 
 # Project-specific
 temp/
+*.dmp
