@@ -195,7 +195,7 @@ public:
 #define HILO(v) (cpu.P.Test(v) ? StatusFlagNames[BitFlagToPos<v>::Result-1] : tolower(StatusFlagNames[BitFlagToPos<v>::Result-1]))
 
 		printf("  SP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c] ("ADDR_16")="ADDR_8"\n",
-			cpu.SP, cpu.A, cpu.X, cpu.Y, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(InterruptsOff), HILO(Zero), HILO(Carry),
+			cpu.SP, cpu.A, cpu.X, cpu.Y, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(IrqDisabled), HILO(Zero), HILO(Carry),
 			cpu.m_operandAddress, cpuRam.Read8(cpu.m_operandAddress));
 
 #undef HILO

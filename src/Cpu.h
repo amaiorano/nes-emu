@@ -13,20 +13,24 @@ namespace StatusFlag
 	{
 		Carry			= 0x01,
 		Zero			= 0x02,
-		InterruptsOff	= 0x04, // Interrupt (IRQ) disabled
-		Decimal			= 0x08,
-		BrkExecuted		= 0x10, // BRK executed (IRQ/software interupt)
-		Unused			= 0x20,
+		IrqDisabled		= 0x04, // Interrupt (IRQ) disabled
+		Decimal			= 0x08, // *NOTE: Present in P, but Decimal mode not supported by NES CPU
+		BrkExecuted		= 0x10, // BRK executed (IRQ/software interupt) *NOTE: Not actually a bit in P, only set on stack for s/w interrupts
+		Unused			= 0x20, // *NOTE: Never set in P, but always set on stack
 		Overflow		= 0x40, // 'V'
 		Negative		= 0x80, // aka Sign flag
-	};		
+	};
 }
 
 class Cpu
 {
 public:
 	void Initialize(Nes& nes, CpuRam& cpuRam);
+
 	void Reset();
+	void Nmi();
+	void Irq();
+
 	void Run();
 
 private:
@@ -54,6 +58,8 @@ private:
 	void Push16(uint16 value);
 	uint8 Pop8();
 	uint16 Pop16();
+	void PushProcessorStatus(bool softwareInterrupt);
+	void PopProcessorStatus();
 
 	// Data members
 

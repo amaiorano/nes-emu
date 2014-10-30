@@ -65,12 +65,31 @@ void Cpu::Reset()
 	SP = 0x0FD;
 	
 	P.ClearAll();
-	P.Set(StatusFlag::Unused);
-	P.Set(StatusFlag::BrkExecuted);
-	P.Set(StatusFlag::InterruptsOff);
+	P.Set(StatusFlag::IrqDisabled);
 
 	// Entry point is located at the Reset interrupt location
 	PC = m_pRam->Read16(CpuRam::kResetVector);
+}
+
+void Cpu::Nmi()
+{
+	Push16(PC);
+	PushProcessorStatus(false);
+	P.Clear(StatusFlag::BrkExecuted);
+	P.Set(StatusFlag::IrqDisabled);
+	PC = m_pRam->Read16(CpuRam::kNmiVector);
+}
+
+void Cpu::Irq()
+{
+	if ( !P.Test(StatusFlag::IrqDisabled) )
+	{
+		Push16(PC);
+		PushProcessorStatus(false);
+		P.Clear(StatusFlag::BrkExecuted);
+		P.Set(StatusFlag::IrqDisabled);
+		PC = m_pRam->Read16(CpuRam::kIrqVector);
+	}
 }
 
 void Cpu::Run()
@@ -261,9 +280,8 @@ void Cpu::ExecuteInstruction()
 		{
 			uint16 returnAddr = PC + m_pEntry->numBytes;
 			Push16(returnAddr);
-			P.Set(BrkExecuted); // Set break flag before pushing status register (signifies s/w interrupt)
-			Push8(P.Value());
-			P.Set(InterruptsOff); // Disable hardware IRQs
+			PushProcessorStatus(true);
+			P.Set(IrqDisabled); // Disable hardware IRQs
 			PC = m_pRam->Read16(CpuRam::kIrqVector);
 		}
 		break;
@@ -287,7 +305,7 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case CLI: // CLI Clear interrupt disable bit
-		P.Clear(InterruptsOff);
+		P.Clear(IrqDisabled);
 		break;
 
 	case CLV: // CLV Clear overflow flag
@@ -408,6 +426,7 @@ void Cpu::ExecuteInstruction()
 			P.Set(Carry, value & 0x01); // Will get shifted into carry
 			P.Set(Zero, CalcZeroFlag(result));
 			P.Clear(Negative); // 0 is shifted into sign bit position
+			SetAccumOrMemValue(result);
 		}		
 		break;
 
@@ -425,8 +444,7 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case PHP: // Push processor status on stack
-		P.Set(BrkExecuted); // Set break flag before pushing status register (signifies s/w interrupt)
-		Push8(P.Value());
+		PushProcessorStatus(true);
 		break;
 
 	case PLA: // Pull accumulator from stack
@@ -436,8 +454,7 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case PLP: // Pull processor status from stack
-		P.Set(Pop8());
-		assert(P.Test(BrkExecuted)); // Should be set since we set it on PHP
+		PopProcessorStatus();
 		break;
 
 	case ROL: // Rotate one bit left (memory or accumulator)
@@ -461,9 +478,9 @@ void Cpu::ExecuteInstruction()
 		}
 		break;
 
-	case RTI: // Return from interrupt (used with BRK)
+	case RTI: // Return from interrupt (used with BRK, Nmi or Irq)
 		{
-			P.Set(Pop8());
+			PopProcessorStatus();
 			PC = Pop16();
 		}
 		break;
@@ -496,7 +513,7 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case SEI: // Set interrupt disable status
-		P.Set(InterruptsOff);
+		P.Set(IrqDisabled);
 		break;
 
 	case STA: // Store accumulator in memory
@@ -620,4 +637,17 @@ uint8 Cpu::Pop8()
 uint16 Cpu::Pop16()
 {
 	return TO16(Pop8()) | TO16(Pop8()) << 8;
+}
+
+void Cpu::PushProcessorStatus(bool softwareInterrupt)
+{
+	assert(!P.Test(StatusFlag::Unused) && !P.Test(StatusFlag::BrkExecuted) && "P should never have these set, only on stack");
+	uint8 brkFlag = softwareInterrupt? StatusFlag::BrkExecuted : 0;
+	Push8(P.Value() & StatusFlag::Unused & brkFlag);
+}
+
+void Cpu::PopProcessorStatus()
+{
+	P.Set(Pop8() & ~StatusFlag::Unused & ~StatusFlag::BrkExecuted);
+	assert(!P.Test(StatusFlag::Unused) && !P.Test(StatusFlag::BrkExecuted) && "P should never have these set, only on stack");
 }
