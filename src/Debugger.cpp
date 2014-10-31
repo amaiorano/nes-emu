@@ -86,6 +86,12 @@ public:
 			fs.Printf("\nAttribute Table %d\n\n", i);
 			MemoryDump(ppuRam, fs, PpuRam::GetAttributeTableAddress(i), PpuRam::kAttributeTableSize, 32);
 		}
+
+		fs.Printf("\nImage Palette\n\n");
+		MemoryDump(ppuRam, fs, PpuRam::kImagePalette, PpuRam::kPaletteSize);
+
+		fs.Printf("\nSprite Palette\n\n");
+		MemoryDump(ppuRam, fs, PpuRam::kImagePalette, PpuRam::kPaletteSize);
 	}
 
 	void Update()
