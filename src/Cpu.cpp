@@ -314,28 +314,31 @@ void Cpu::ExecuteInstruction()
 
 	case CMP: // CMP Compare memory and accumulator
 		{
-			const uint16 result = TO16(A) - TO16(GetMemValue());
+			const uint8 memValue = GetMemValue();
+			const uint8 result = A - memValue;
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
-			P.Set(Carry, CalcCarryFlag(result));
+			P.Set(Carry, A >= memValue); // Carry set if result positive or 0
 		}
 		break;
 
 	case CPX: // CPX Compare Memory and Index X
 		{
-			uint16 result = TO16(X) - TO16(GetMemValue());
+			const uint8 memValue = GetMemValue();
+			const uint8 result = X - memValue;
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
-			P.Set(Carry, CalcCarryFlag(result));
+			P.Set(Carry, A >= memValue); // Carry set if result positive or 0
 		}
 		break;
 
 	case CPY: // CPY Compare memory and index Y
 		{
-			const uint16 result = TO16(Y) - TO16(GetMemValue());
+			const uint8 memValue = GetMemValue();
+			const uint8 result = Y - memValue;
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
-			P.Set(Carry, CalcCarryFlag(result));
+			P.Set(Carry, A >= memValue); // Carry set if result positive or 0
 		}
 		break;
 
@@ -470,7 +473,7 @@ void Cpu::ExecuteInstruction()
 	case ROR: // Rotate one bit right (memory or accumulator)
 		{
 			const uint8 value = GetAccumOrMemValue();
-			const uint8 result = (value >> 1) & (P.Test(Carry) << 7);
+			const uint8 result = (value >> 1) | (P.Test(Carry) << 7);
 			P.Set(Carry, value & 0x01);
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
