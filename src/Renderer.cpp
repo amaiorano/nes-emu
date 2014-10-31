@@ -44,13 +44,13 @@ void Renderer::Create()
 
 void Renderer::Destroy()
 {
-	SDL_DestroyRenderer(m_impl->m_renderer);
-	SDL_DestroyWindow(m_impl->m_window);
-	delete m_impl;
-
-	m_impl = nullptr;
-	m_impl->m_window = nullptr;
-	m_impl->m_renderer = nullptr;
+	if (m_impl)
+	{
+		SDL_DestroyRenderer(m_impl->m_renderer);
+		SDL_DestroyWindow(m_impl->m_window);
+		delete m_impl;
+		m_impl = nullptr;
+	}
 }
 
 void Renderer::Clear()

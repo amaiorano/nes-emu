@@ -65,10 +65,12 @@ namespace PpuStatus // $2002 (R)
 }
 
 Ppu::Ppu()
-	: m_cpuRam(nullptr)
+	: m_renderer(new Renderer())
+	, m_cpuRam(nullptr)
 	, m_ppuRam(nullptr)
 	, m_spriteRam(nullptr)
 {
+	m_renderer->Create();
 }
 
 void Ppu::Initialize(Nes& nes, CpuRam& cpuRam, PpuRam& ppuRam, SpriteRam& spriteRam)
@@ -91,7 +93,7 @@ void Ppu::Reset()
 
 void Ppu::Run()
 {
-	printf("Ppu cycle\n");
+	static bool startRendering = false;
 
 	if (m_ppuControl1->Test(PpuControl1::NmiOnVBlank))
 	{
@@ -101,8 +103,12 @@ void Ppu::Run()
 			printf("NmiOnVBlank allowed! Signalling NMI\n");
 			once = false;
 			m_nes->SignalCpuNmi();
+			startRendering = true;
 		}
 	}
+
+	if (startRendering)
+		Render();
 }
 
 void Ppu::OnCpuMemoryRead(uint16 address)
@@ -148,20 +154,15 @@ void Ppu::OnCpuMemoryWrite(uint16 address)
 	}
 }
 
-void Ppu::HACK_DrawPatternTables()
+void Ppu::Render()
 {
-	Renderer renderer;
-	renderer.Create();
-
-	const uint8* chrRom = m_ppuRam->UnsafePtr(PpuRam::kPatternTable0);
-
-	static auto ReadTile = [&chrRom] (int tileIndex, uint8 tile[8][8])
+	static auto ReadTile = [] (const uint8* patternTable, int tileIndex, uint8 tile[8][8])
 	{
 		// Every 16 bytes is 1 8x8 tile
 		const int tileOffset = tileIndex * 16;
-		assert(tileOffset+16<KB(16));
-		Bitfield8* pByte1 = (Bitfield8*)&chrRom[tileOffset + 0];
-		Bitfield8* pByte2 = (Bitfield8*)&chrRom[tileOffset + 8];
+		assert(tileOffset+16 < KB(16));
+		Bitfield8* pByte1 = (Bitfield8*)&patternTable[tileOffset + 0];
+		Bitfield8* pByte2 = (Bitfield8*)&patternTable[tileOffset + 8];
 
 		for (size_t y = 0; y < 8; ++y)
 		{
@@ -179,7 +180,7 @@ void Ppu::HACK_DrawPatternTables()
 		}
 	};
 
-	static auto DrawTile = [&renderer] (int x, int y, uint8 tile[8][8])
+	static auto DrawTile = [] (Renderer& renderer, int x, int y, uint8 tile[8][8])
 	{
 		Color4 color;
 
@@ -199,11 +200,37 @@ void Ppu::HACK_DrawPatternTables()
 				renderer.DrawPixel(x + tx, y + ty, color);
 			}
 		}
-	};			
+	};
+	
+#if 1 // Name Tables...
 
-	for ( ; ; )
+	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControl1->Value());
+	const uint8* patternTable = m_ppuRam->UnsafePtr(currBgPatternTableAddress);
+
+	const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControl1->Value());
+	const uint8* nameTable = m_ppuRam->UnsafePtr(currNameTableAddress); 
+
+	m_renderer->Clear();
+
+	uint8 tile[8][8] = {0};
+	for (int y = 0; y < 30; ++y)
 	{
-		renderer.Clear();
+		for (int x = 0; x < 32; ++x)
+		{
+			int tileIndex = nameTable[y*32 + x];
+			ReadTile(patternTable, tileIndex, tile);
+			DrawTile(*m_renderer, x*8, y*8, tile);
+		}
+	}
+
+	m_renderer->Render();
+
+#else // Pattern tables...
+
+	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(0);
+	const uint8* patternTable = m_ppuRam->UnsafePtr(currBgPatternTableAddress);
+
+		m_renderer->Clear();
 
 		// Render Pattern Table #0: [$0000,$1000[ (4 kb) = 256 tiles
 		// Render Pattern Table #1: [$1000,$2000[ (4 kb) = 256 tiles
@@ -214,12 +241,13 @@ void Ppu::HACK_DrawPatternTables()
 		{
 			for (int x = 0; x < 16; ++x)
 			{
-				ReadTile(tileIndex, tile);
-				DrawTile(x*8, y*8, tile);
+				ReadTile(patternTable, tileIndex, tile);
+				DrawTile(*m_renderer, x*8, y*8, tile);
 				++tileIndex;
 			}
 		}
 
-		renderer.Render();
-	}
+		m_renderer->Render();
+
+#endif
 }

@@ -1,7 +1,9 @@
 #pragma once
 #include "Base.h"
 #include "Bitfield.h"
+#include <memory>
 
+class Renderer;
 class Nes;
 class CpuRam;
 class PpuRam;
@@ -19,7 +21,9 @@ public:
 	void OnCpuMemoryWrite(uint16 address);
 
 private:
-	void HACK_DrawPatternTables();
+	void Render();
+
+	std::shared_ptr<Renderer> m_renderer;
 
 	Nes* m_nes;
 	CpuRam* m_cpuRam;

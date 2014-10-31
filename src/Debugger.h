@@ -3,7 +3,7 @@
 #include "Base.h"
 
 // If set, debugging features are enabled for the emulator (slower)
-#define DEBUGGING_ENABLED 1
+#define DEBUGGING_ENABLED 0
 
 class Nes;
 
