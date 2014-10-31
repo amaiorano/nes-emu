@@ -14,6 +14,22 @@
 #define ADDR_8 "$%02X"
 #define ADDR_16 "$%04X"
 
+namespace
+{
+	bool g_logOpsEnabled = true;
+
+	void LogOp(const char* format, ...)
+	{
+		if (g_logOpsEnabled)
+		{
+			va_list args;
+			va_start(args, format);
+			vprintf(format, args);
+			va_end(args);
+		}
+	}
+}
+
 class DebuggerImpl
 {
 public:
@@ -122,6 +138,7 @@ public:
 				{
 				case KEY_SPACE:
 				case KEY_ENTER:
+					printf("\n");
 					done = true;
 					break;
 
@@ -132,6 +149,12 @@ public:
 				case 'g':
 					stepMode = false;
 					done = true;
+					break;
+
+				case 'l':
+					g_logOpsEnabled = !g_logOpsEnabled;
+					printf("Logging operations: %s\n", g_logOpsEnabled? "on" : "off");
+					showPrompt = true;
 					break;
 
 				case 'd':
@@ -164,20 +187,20 @@ public:
 		const uint16 PC = cpu.PC;
 
 		// Print PC
-		printf(ADDR_16 "\t", PC);
+		LogOp(ADDR_16 "\t", PC);
 
 		// Print instruction in hex
 		for (uint16 i = 0; i < 4; ++i)
 		{
 			if (i < opCodeEntry.numBytes)
-				printf("%02X", cpuRam.Read8(PC + i));
+				LogOp("%02X", cpuRam.Read8(PC + i));
 			else
-				printf(" ");
+				LogOp(" ");
 		}
-		printf("\t");
+		LogOp("\t");
 
 		// Print opcode name
-		printf("%s ", OpCodeName::String[opCodeEntry.opCodeName]);
+		LogOp("%s ", OpCodeName::String[opCodeEntry.opCodeName]);
 
 		// Print operand
 		switch (opCodeEntry.addrMode)
@@ -185,7 +208,7 @@ public:
 		case AddressMode::Immedt:
 			{
 				const uint8 address = cpuRam.Read8(PC+1);
-				printf("#" ADDR_8, address);
+				LogOp("#" ADDR_8, address);
 			}
 			break;
 
@@ -195,7 +218,7 @@ public:
 
 		case AddressMode::Accumu:
 			{
-				printf("A");
+				LogOp("A");
 			}
 			break;
 
@@ -204,70 +227,70 @@ public:
 				// For branch instructions, resolve the target address and print it in comments
 				const int8 offset = cpuRam.Read8(PC+1); // Signed offset in [-128,127]
 				const uint16 target = PC + opCodeEntry.numBytes + offset;
-				printf(ADDR_8 " ; " ADDR_16 " (%d)", (uint8)offset, target, offset);
+				LogOp(ADDR_8 " ; " ADDR_16 " (%d)", (uint8)offset, target, offset);
 			}
 			break;
 
 		case AddressMode::ZeroPg:
 			{
 				const uint8 address = cpuRam.Read8(PC+1);
-				printf(ADDR_8, address);
+				LogOp(ADDR_8, address);
 			}
 			break;
 
 		case AddressMode::ZPIdxX:
 			{
 				const uint8 address = cpuRam.Read8(PC+1);
-				printf(ADDR_8 ",X", address);
+				LogOp(ADDR_8 ",X", address);
 			}
 			break;
 
 		case AddressMode::ZPIdxY:
 			{
 				const uint8 address = cpuRam.Read8(PC+1);
-				printf(ADDR_8 ",Y", address);
+				LogOp(ADDR_8 ",Y", address);
 			}
 			break;
 
 		case AddressMode::Absolu:
 			{
 				uint16 address = cpuRam.Read16(PC+1);
-				printf(ADDR_16, address);
+				LogOp(ADDR_16, address);
 			}
 			break;
 
 		case AddressMode::AbIdxX:
 			{
 				uint16 address = cpuRam.Read16(PC+1);
-				printf(ADDR_16 ",X", address);
+				LogOp(ADDR_16 ",X", address);
 			}
 			break;
 
 		case AddressMode::AbIdxY:
 			{
 				uint16 address = cpuRam.Read16(PC+1);
-				printf(ADDR_16 ",Y", address);
+				LogOp(ADDR_16 ",Y", address);
 			}
 			break;
 
 		case AddressMode::Indrct:
 			{
 				uint16 address = cpuRam.Read16(PC+1);
-				printf("(" ADDR_16 ")", address);
+				LogOp("(" ADDR_16 ")", address);
 			}
 			break;
 
 		case AddressMode::IdxInd:
 			{
 				const uint8 address = cpuRam.Read8(PC+1);
-				printf("(" ADDR_8 ",X)", address);
+				LogOp("(" ADDR_8 ",X)", address);
 			}
 			break;
 
 		case AddressMode::IndIdx:
 			{
 				const uint8 address = cpuRam.Read8(PC+1);
-				printf("(" ADDR_8 "),Y", address);
+				LogOp("(" ADDR_8 "),Y", address);
 			}
 			break;
 
@@ -276,7 +299,7 @@ public:
 			break;
 		}
 
-		printf("\n");
+		LogOp("\n");
 	}
 
 	void PostCpuInstruction()
@@ -300,11 +323,30 @@ public:
 
 #define HILO(v) (cpu.P.Test(v) ? StatusFlagNames[BitFlagToPos<v>::Result-1] : tolower(StatusFlagNames[BitFlagToPos<v>::Result-1]))
 
-		printf("  SP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c] ("ADDR_16")="ADDR_8"\n",
+		LogOp("  SP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c] ("ADDR_16")="ADDR_8"\n",
 			cpu.SP, cpu.A, cpu.X, cpu.Y, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(IrqDisabled), HILO(Zero), HILO(Carry),
 			cpu.m_operandAddress, cpuRam.Read8(cpu.m_operandAddress));
-
 #undef HILO
+
+		// Some debugging facilities
+
+		// Hardware breakpoints (on memory r/w)
+		{
+			static uint16 watchAddresses[10] = {0};
+			auto iter = std::find(std::begin(watchAddresses), std::end(watchAddresses), cpu.m_operandAddress);
+			if (*iter != 0 && iter != std::end(watchAddresses))
+				System::DebugBreak();
+		}
+
+		// Regular breakpoints (on instruction just executed)
+		{
+			static uint16 breakpoints[10] = {0};
+			auto iter = std::find(std::begin(breakpoints), std::end(breakpoints), cpu.m_lastPC);
+			if (*iter != 0 && iter != std::end(breakpoints))
+			{
+				System::DebugBreak();
+			}
+		}
 	}
 
 private:

@@ -204,7 +204,7 @@ void Cpu::ExecuteInstruction()
 	using namespace OpCodeName;
 	using namespace StatusFlag;
 
-	const uint16 startPC = PC;
+	m_lastPC = PC;
 
 	switch (m_pEntry->opCodeName)
 	{
@@ -567,7 +567,7 @@ void Cpu::ExecuteInstruction()
 	}
 
 	// If instruction hasn't modified PC, move it to next instruction
-	if (startPC == PC)
+	if (m_lastPC == PC)
 		PC += m_pEntry->numBytes;
 }
 

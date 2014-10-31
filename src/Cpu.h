@@ -76,6 +76,8 @@ private:
 	uint8 Y;		// Y register
 	Bitfield8 P;	// Processor status (flags)
 
+	uint16 m_lastPC; // Useful for debugging purposes
+
 	// Operand address is either the operand's memory location, or the target for a branch or jmp
 	uint16 m_operandAddress;
 };
