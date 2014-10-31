@@ -2,6 +2,9 @@
 
 #include "Base.h"
 
+const size_t kScreenWidth = 256;
+const size_t kScreenHeight = 240;
+
 struct Color4
 {
 	Color4() {}

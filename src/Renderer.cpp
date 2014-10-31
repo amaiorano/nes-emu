@@ -32,14 +32,20 @@ void Renderer::Create()
 
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
 		throw std::exception("SDL_Init failed");
+
+	const float windowScale = 3.0f;
+	const size_t windowWidth = static_cast<size_t>(kScreenWidth * windowScale);
+	const size_t windowHeight = static_cast<size_t>(kScreenHeight * windowScale);
 	
-	m_impl->m_window = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1024, 768, SDL_WINDOW_SHOWN );
+	m_impl->m_window = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN );
 	if (!m_impl->m_window)
 		throw std::exception("SDL_CreateWindow failed");
 
 	m_impl->m_renderer = SDL_CreateRenderer(m_impl->m_window, -1, SDL_RENDERER_ACCELERATED);
 	if (!m_impl->m_renderer)
 		throw std::exception("SDL_CreateRenderer failed");
+
+	SDL_RenderSetScale(m_impl->m_renderer, windowScale, windowScale);
 }
 
 void Renderer::Destroy()
