@@ -12,6 +12,7 @@ public:
 	Bitfield() { ClearAll(); }
 
 	FORCEINLINE T Value() const { return m_field; }
+	FORCEINLINE T SetValue(T value) { return m_field = value; }
 
 	FORCEINLINE void ClearAll() { m_field = 0; }
 	FORCEINLINE void SetAll() { m_field = static_cast<T>(~0); }

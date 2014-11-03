@@ -168,28 +168,31 @@ void Cpu::UpdateOperand()
 
 	case AddressMode::Indrct: // for JMP only
 		{
-			uint16 indirectAddress1 = m_pRam->Read16(PC+1);
+			uint16 low = m_pRam->Read16(PC+1);
 
 			// Handle the 6502 bug for when the low-byte of the effective address is FF,
 			// in which case the 2nd byte read does not correctly cross page boundaries.
 			// The bug is that the high byte does not change.
-			uint16 indirectAddress2 = (indirectAddress1 & 0xFF00) | ((indirectAddress1 + 1) & 0x00FF);
+			uint16 high = (low & 0xFF00) | ((low + 1) & 0x00FF);
 
-			m_operandAddress = TO16(m_pRam->Read8(indirectAddress1)) | TO16(m_pRam->Read8(indirectAddress2)) << 8;
+			m_operandAddress = TO16(m_pRam->Read8(low)) | TO16(m_pRam->Read8(high)) << 8;
 		}
 		break;
 
 	case AddressMode::IdxInd:
 		{
-			uint16 indirectAddress = TO16((m_pRam->Read8(PC+1) + X)) & 0x00FF; // Get zero page address of bytes holding address of operand
-			m_operandAddress = m_pRam->Read16(indirectAddress); // Get operand address
+			uint16 low = TO16((m_pRam->Read8(PC+1) + X)) & 0x00FF; // Zero page low byte of operand address, wrap around zero page
+			uint16 high = TO16(low + 1) & 0x00FF; // Wrap high byte around zero page
+			m_operandAddress = TO16(m_pRam->Read8(low)) | TO16(m_pRam->Read8(high)) << 8;
 		}
 		break;
 
 	case AddressMode::IndIdx:
 		{
-			const uint16 indirectAddress = TO16(m_pRam->Read8(PC+1)); // Get zero page address of bytes holding address of operand
-			m_operandAddress = m_pRam->Read16(indirectAddress) + Y; // Get operand address
+			const uint16 low = TO16(m_pRam->Read8(PC+1)); // Zero page low byte of operand address
+			const uint16 high = TO16(low + 1) & 0x00FF; // Wrap high byte around zero page
+			//@TODO: potential penalty if + Y crosses page boundary here
+			m_operandAddress = (TO16(m_pRam->Read8(low)) | TO16(m_pRam->Read8(high)) << 8) + TO16(Y);
 		}
 		break;
 
@@ -254,9 +257,9 @@ void Cpu::ExecuteInstruction()
 
 	case BIT: // Test bits in memory with accumulator
 		{
+			uint8 memValue = GetMemValue();
 			uint8 result = A & GetMemValue();
-			P.Set(Negative, result & 0x80); // Bit 7
-			P.Set(Overflow, result & 0x40); // Bit 6
+			P.SetValue( (P.Value() & 0x3F) | (memValue & 0xC0) ); // Copy bits 6 and 7 of mem value to status register
 			P.Set(Zero, CalcZeroFlag(result));
 		}
 		break;
@@ -328,7 +331,7 @@ void Cpu::ExecuteInstruction()
 			const uint8 result = X - memValue;
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
-			P.Set(Carry, A >= memValue); // Carry set if result positive or 0
+			P.Set(Carry, X >= memValue); // Carry set if result positive or 0
 		}
 		break;
 
@@ -338,7 +341,7 @@ void Cpu::ExecuteInstruction()
 			const uint8 result = Y - memValue;
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
-			P.Set(Carry, A >= memValue); // Carry set if result positive or 0
+			P.Set(Carry, Y >= memValue); // Carry set if result positive or 0
 		}
 		break;
 
@@ -497,7 +500,11 @@ void Cpu::ExecuteInstruction()
 	case SBC: // Subtract memory from accumulator with borrow
 		{
 			// Operation:  A - M - C -> A
-			const uint8 value = -GetMemValue(); // We negate the value so we can add. This works because the carry is set when borrowing.
+
+			// Can't simply negate mem value because that results in two's complement
+			// and we want to perform the bitwise add ourself
+			const uint8 value = GetMemValue() ^ 0XFF;
+
 			const uint16 result = TO16(A) + TO16(value) + TO16(P.Test(Carry));
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
@@ -646,11 +653,11 @@ void Cpu::PushProcessorStatus(bool softwareInterrupt)
 {
 	assert(!P.Test(StatusFlag::Unused) && !P.Test(StatusFlag::BrkExecuted) && "P should never have these set, only on stack");
 	uint8 brkFlag = softwareInterrupt? StatusFlag::BrkExecuted : 0;
-	Push8(P.Value() & StatusFlag::Unused & brkFlag);
+	Push8(P.Value() | StatusFlag::Unused | brkFlag);
 }
 
 void Cpu::PopProcessorStatus()
 {
-	P.Set(Pop8() & ~StatusFlag::Unused & ~StatusFlag::BrkExecuted);
+	P.SetValue(Pop8() & ~StatusFlag::Unused & ~StatusFlag::BrkExecuted);
 	assert(!P.Test(StatusFlag::Unused) && !P.Test(StatusFlag::BrkExecuted) && "P should never have these set, only on stack");
 }
