@@ -97,18 +97,23 @@ void Ppu::Run()
 
 	if (m_ppuControl1->Test(PpuControl1::NmiOnVBlank))
 	{
-		static bool once = true;
-		if (once)
+		//@HACK: For now render every 10th frame while NMI is enabled (this is wrong, we should always render)
+		static int count = 1;
+		if (--count == 0)
 		{
-			printf("NmiOnVBlank allowed! Signalling NMI\n");
-			once = false;
+			//printf("NmiOnVBlank allowed! Signalling NMI\n");
+			count = 50;
 			m_nes->SignalCpuNmi();
 			startRendering = true;
+
+			m_ppuStatus->Set(PpuStatus::InVBlank);
+			Render();
+			m_ppuStatus->Clear(PpuStatus::InVBlank);
 		}
 	}
 
-	if (startRendering)
-		Render();
+	//if (startRendering)
+	//	Render();
 }
 
 void Ppu::OnCpuMemoryRead(uint16 address)
@@ -202,8 +207,6 @@ void Ppu::Render()
 		}
 	};
 	
-#if 1 // Name Tables...
-
 	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControl1->Value());
 	const uint8* patternTable = m_ppuRam->UnsafePtr(currBgPatternTableAddress);
 
@@ -224,30 +227,4 @@ void Ppu::Render()
 	}
 
 	m_renderer->Render();
-
-#else // Pattern tables...
-
-	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(0);
-	const uint8* patternTable = m_ppuRam->UnsafePtr(currBgPatternTableAddress);
-
-		m_renderer->Clear();
-
-		// Render Pattern Table #0: [$0000,$1000[ (4 kb) = 256 tiles
-		// Render Pattern Table #1: [$1000,$2000[ (4 kb) = 256 tiles
-
-		int tileIndex = 0;
-		uint8 tile[8][8] = {0};
-		for (int y = 0; y < 32; ++y)
-		{
-			for (int x = 0; x < 16; ++x)
-			{
-				ReadTile(patternTable, tileIndex, tile);
-				DrawTile(*m_renderer, x*8, y*8, tile);
-				++tileIndex;
-			}
-		}
-
-		m_renderer->Render();
-
-#endif
 }

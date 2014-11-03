@@ -37,7 +37,7 @@ void Renderer::Create()
 	const size_t windowWidth = static_cast<size_t>(kScreenWidth * windowScale);
 	const size_t windowHeight = static_cast<size_t>(kScreenHeight * windowScale);
 	
-	m_impl->m_window = SDL_CreateWindow( "SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN );
+	m_impl->m_window = SDL_CreateWindow("nes-emu", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
 	if (!m_impl->m_window)
 		throw std::exception("SDL_CreateWindow failed");
 
