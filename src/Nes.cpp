@@ -58,7 +58,6 @@ void Nes::Run()
 		for (size_t i = 0; i < 1; ++i)
 		{
 			m_cpu.Run();
-			Debugger::Update();
 		}
 		m_ppu.Run();
 	}

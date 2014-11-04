@@ -62,7 +62,7 @@ void Cpu::Reset()
 	// See http://wiki.nesdev.com/w/index.php/CPU_power_up_state
 
 	A = X = Y = 0;
-	SP = 0x0FD;
+	SP = 0xFF; // Should be FD, but for improved compatibility set to FF
 	
 	P.ClearAll();
 	P.Set(StatusFlag::IrqDisabled);
@@ -102,8 +102,9 @@ void Cpu::Run()
 		assert(false && "Unknown opcode");
 	}
 
-	Debugger::PreCpuInstruction();
 	UpdateOperand();
+	
+	Debugger::PreCpuInstruction();
 	ExecuteInstruction();
 	Debugger::PostCpuInstruction();
 }

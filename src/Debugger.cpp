@@ -14,21 +14,16 @@
 #define ADDR_8 "$%02X"
 #define ADDR_16 "$%04X"
 
+#define FCEUX_OUTPUT 0
+
 namespace
 {
-	bool g_logOpsEnabled = true;
-
-	void LogOp(const char* format, ...)
-	{
-		if (g_logOpsEnabled)
-		{
-			va_list args;
-			va_start(args, format);
-			vprintf(format, args);
-			va_end(args);
-		}
-	}
+	bool g_trace = true;
+	bool g_stepMode = false;
+	uint16 g_instructionBreakpoints[10] = {0};
+	uint16 g_dataBreakpoints[10] = {0};
 }
+#define TRACE printf
 
 class DebuggerImpl
 {
@@ -43,6 +38,48 @@ public:
 		m_nes = &nes;
 	}
 
+	void DumpMemory()
+	{
+		MemoryDumpPpuRam(m_nes->m_ppuRam);
+
+		printf("Dumping: CpuRam.dmp\n");
+		MemoryDump(m_nes->m_cpuRam, "CpuRam.dmp");
+
+		printf("Dumping: SpriteRam.dmp\n");
+		MemoryDump(m_nes->m_spriteRam, "SpriteRam.dmp");
+	}
+
+	void PreCpuInstruction()
+	{
+		if (g_trace)
+		{
+			PrintInstruction();
+			PrintRegisters();
+		#if !FCEUX_OUTPUT
+			PrintOperandValue();
+		#endif
+			TRACE("\n");
+		}
+
+		ProcessBreakpoints();
+
+		ProcessInput();
+	}
+
+	void PostCpuInstruction()
+	{
+	#if !FCEUX_OUTPUT
+		if (g_trace)
+		{
+			TRACE("  Post: ");
+			//PrintRegisters();
+			PrintOperandValue();
+			TRACE("\n");
+		}
+	#endif
+	}
+
+private:
 	template <typename T>
 	void MemoryDump(T& memory, FileStream& fs, uint16 start = 0x0000, size_t size = 0, size_t bytesPerLine = 16)
 	{
@@ -110,27 +147,18 @@ public:
 		MemoryDump(ppuRam, fs, PpuRam::kImagePalette, PpuRam::kPaletteSize);
 	}
 
-	void Update()
+	void ProcessInput()
 	{
 		const char KEY_SPACE = 32;
 		const char KEY_ENTER = 13;
 
-		static bool stepMode = true;
-
 		char key;
-		if (stepMode)
+		if (g_stepMode)
 		{
 			bool done = false;
-			bool showPrompt = true;
 			
 			while (!done)
 			{
-				if (showPrompt)
-				{
-					printf("> ");
-					showPrompt = false;
-				}
-
 				key = (char)tolower(System::WaitForKeyPress());
 				//printf("key pressed: %c (%d)\n", key, key);
 
@@ -138,174 +166,50 @@ public:
 				{
 				case KEY_SPACE:
 				case KEY_ENTER:
-					printf("\n");
 					done = true;
+					if (!g_trace)
+					{
+						g_trace = true; // Turn back on in case it's off
+						printf("[Trace on]\n");
+					}
 					break;
 
 				case 'q':
+					printf("[User Quit]\n");
 					throw std::exception("User quit from debugger");
 					break;
 
 				case 'g':
-					stepMode = false;
+					g_stepMode = false;					
+					if (!g_trace)
+						printf("[Running]\n");
 					done = true;
 					break;
 
-				case 'l':
-					g_logOpsEnabled = !g_logOpsEnabled;
-					printf("Logging operations: %s\n", g_logOpsEnabled? "on" : "off");
-					showPrompt = true;
+				case 't':
+					g_trace = !g_trace;
+					printf("[Trace: %s]\n", g_trace? "on" : "off");
 					break;
 
 				case 'd':
-					{
-						MemoryDumpPpuRam(m_nes->m_ppuRam);						
-						
-						printf("Dumping: CpuRam.dmp\n");
-						MemoryDump(m_nes->m_cpuRam, "CpuRam.dmp");
-						
-						printf("Dumping: SpriteRam.dmp\n");
-						MemoryDump(m_nes->m_spriteRam, "SpriteRam.dmp");
-						
-						showPrompt = true;
-					}
+					printf("[Dump Memory]\n");
+					DumpMemory();
 					break;
 				}
 			}
 		}
 		else if (System::GetKeyPress(key))
 		{
-			stepMode = true;
+			g_stepMode = true;
+
+			if (!g_trace)
+				printf("[Stopped]\n");
 		}
 	}
 
-	void PreCpuInstruction()
+	void PrintRegisters()
 	{
 		Cpu& cpu = m_nes->m_cpu;
-		OpCodeEntry& opCodeEntry = *cpu.m_pEntry;
-		CpuRam& cpuRam = m_nes->m_cpuRam;
-		const uint16 PC = cpu.PC;
-
-		// Print PC
-		LogOp(ADDR_16 "\t", PC);
-
-		// Print instruction in hex
-		for (uint16 i = 0; i < 4; ++i)
-		{
-			if (i < opCodeEntry.numBytes)
-				LogOp("%02X", cpuRam.Read8(PC + i));
-			else
-				LogOp(" ");
-		}
-		LogOp("\t");
-
-		// Print opcode name
-		LogOp("%s ", OpCodeName::String[opCodeEntry.opCodeName]);
-
-		// Print operand
-		switch (opCodeEntry.addrMode)
-		{
-		case AddressMode::Immedt:
-			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				LogOp("#" ADDR_8, address);
-			}
-			break;
-
-		case AddressMode::Implid:
-			// No operand to output
-			break;
-
-		case AddressMode::Accumu:
-			{
-				LogOp("A");
-			}
-			break;
-
-		case AddressMode::Relatv:
-			{
-				// For branch instructions, resolve the target address and print it in comments
-				const int8 offset = cpuRam.Read8(PC+1); // Signed offset in [-128,127]
-				const uint16 target = PC + opCodeEntry.numBytes + offset;
-				LogOp(ADDR_8 " ; " ADDR_16 " (%d)", (uint8)offset, target, offset);
-			}
-			break;
-
-		case AddressMode::ZeroPg:
-			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				LogOp(ADDR_8, address);
-			}
-			break;
-
-		case AddressMode::ZPIdxX:
-			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				LogOp(ADDR_8 ",X", address);
-			}
-			break;
-
-		case AddressMode::ZPIdxY:
-			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				LogOp(ADDR_8 ",Y", address);
-			}
-			break;
-
-		case AddressMode::Absolu:
-			{
-				uint16 address = cpuRam.Read16(PC+1);
-				LogOp(ADDR_16, address);
-			}
-			break;
-
-		case AddressMode::AbIdxX:
-			{
-				uint16 address = cpuRam.Read16(PC+1);
-				LogOp(ADDR_16 ",X", address);
-			}
-			break;
-
-		case AddressMode::AbIdxY:
-			{
-				uint16 address = cpuRam.Read16(PC+1);
-				LogOp(ADDR_16 ",Y", address);
-			}
-			break;
-
-		case AddressMode::Indrct:
-			{
-				uint16 address = cpuRam.Read16(PC+1);
-				LogOp("(" ADDR_16 ")", address);
-			}
-			break;
-
-		case AddressMode::IdxInd:
-			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				LogOp("(" ADDR_8 ",X)", address);
-			}
-			break;
-
-		case AddressMode::IndIdx:
-			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				LogOp("(" ADDR_8 "),Y", address);
-			}
-			break;
-
-		default:
-			assert(false && "Invalid addressing mode");
-			break;
-		}
-
-		LogOp("\n");
-	}
-
-	void PostCpuInstruction()
-	{
-		Cpu& cpu = m_nes->m_cpu;
-		CpuRam& cpuRam = m_nes->m_cpuRam;
 
 		static const char StatusFlagNames[] =
 		{
@@ -321,35 +225,187 @@ public:
 
 		using namespace StatusFlag;
 
-#define HILO(v) (cpu.P.Test(v) ? StatusFlagNames[BitFlagToPos<v>::Result-1] : tolower(StatusFlagNames[BitFlagToPos<v>::Result-1]))
+		#define HILO(v) (cpu.P.Test(v) ? StatusFlagNames[BitFlagToPos<v>::Result-1] : tolower(StatusFlagNames[BitFlagToPos<v>::Result-1]))
+		#define ADDR_8_NO$ "%02X"
 
-		LogOp("  SP="ADDR_8" A="ADDR_8" X="ADDR_8" Y="ADDR_8" P=[%c%c%c%c%c%c%c%c] ("ADDR_16")="ADDR_8"\n",
-			cpu.SP, cpu.A, cpu.X, cpu.Y, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(IrqDisabled), HILO(Zero), HILO(Carry),
-			cpu.m_operandAddress, cpuRam.Read8(cpu.m_operandAddress));
-#undef HILO
+		TRACE("A:" ADDR_8_NO$ " X:" ADDR_8_NO$ " Y:" ADDR_8_NO$ " S:" ADDR_8_NO$ " P:%c%c%c%c%c%c%c%c",
+			cpu.A, cpu.X, cpu.Y, cpu.SP, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(IrqDisabled), HILO(Zero), HILO(Carry) );
 
-		// Some debugging facilities
+		#undef HILO
+		#undef ADDR_8_NO$
+	}
 
-		// Hardware breakpoints (on memory r/w)
+	void PrintOperandValue()
+	{
+		Cpu& cpu = m_nes->m_cpu;
+		CpuRam& cpuRam = m_nes->m_cpuRam;
+		TRACE(" (" ADDR_16 ")=" ADDR_8, cpu.m_operandAddress, cpuRam.Read8(cpu.m_operandAddress));
+	}
+
+	void PrintInstruction()
+	{
+		Cpu& cpu = m_nes->m_cpu;
+		OpCodeEntry& opCodeEntry = *cpu.m_pEntry;
+		CpuRam& cpuRam = m_nes->m_cpuRam;
+		const uint16 PC = cpu.PC;
+		const uint16 operandAddress = cpu.m_operandAddress; // Expected to be updated for current instruction
+
+		// Print PC
+		TRACE(ADDR_16 ":", PC);
+
+		// Print instruction in hex
+		for (uint16 i = 0; i < 3; ++i)
 		{
-			static uint16 watchAddresses[10] = {0};
-			auto iter = std::find(std::begin(watchAddresses), std::end(watchAddresses), cpu.m_operandAddress);
-			if (*iter != 0 && iter != std::end(watchAddresses))
-				System::DebugBreak();
+			if (i < opCodeEntry.numBytes)
+				TRACE("%02X ", cpuRam.Read8(PC + i));
+			else
+				TRACE("   ");
+		}
+		TRACE(" ");
+
+		// Print opcode name
+		TRACE("%s ", OpCodeName::String[opCodeEntry.opCodeName]);
+
+		// Print operand
+		char operandText[64] = {0};
+		switch (opCodeEntry.addrMode)
+		{
+		case AddressMode::Immedt:
+			{
+				sprintf(operandText, "#" ADDR_8, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::Implid:
+			// No operand to output
+			break;
+
+		case AddressMode::Accumu:
+			{
+			#if !FCEUX_OUTPUT
+				sprintf(operandText, "A");
+			#endif
+			}
+			break;
+
+		case AddressMode::Relatv:
+			{
+				// For branch instructions, resolve the target address and print it in comments
+			#if !FCEUX_OUTPUT
+				const int8 offset = cpuRam.Read8(PC+1); // Signed offset in [-128,127]
+				sprintf(operandText, ADDR_8 " ; " ADDR_16 " (%d)", (uint8)offset, operandAddress, offset);
+			#else				
+				sprintf(operandText, ADDR_16, operandAddress);
+			#endif
+			}
+			break;
+
+		case AddressMode::ZeroPg:
+			{
+				//@TODO: Do zero-page instructions really specify a 16 bit address: $00xx? This is what fceux outputs...
+				sprintf(operandText, ADDR_16 " = #" ADDR_8, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::ZPIdxX:
+			{
+				const uint8 address = cpuRam.Read8(PC+1);
+				sprintf(operandText, ADDR_8 ",X @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::ZPIdxY:
+			{
+				const uint8 address = cpuRam.Read8(PC+1);
+				sprintf(operandText, ADDR_8 ",Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::Absolu:
+			{
+				const bool isJump = OpCodeName::String[opCodeEntry.opCodeName][0] == 'J';
+				if (isJump)
+					sprintf(operandText, ADDR_16, operandAddress);
+				else
+					sprintf(operandText, ADDR_16 " = #" ADDR_8, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::AbIdxX:
+			{
+				const uint16 address = cpuRam.Read16(PC+1);
+				sprintf(operandText, ADDR_16 ",X @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::AbIdxY:
+			{
+				const uint16 address = cpuRam.Read16(PC+1);
+				sprintf(operandText, ADDR_16 ",Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::Indrct:
+			{
+				const uint16 address = cpuRam.Read16(PC+1);
+				sprintf(operandText, "(" ADDR_16 ") @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::IdxInd:
+			{
+				const uint8 address = cpuRam.Read8(PC+1);
+				sprintf(operandText, "(" ADDR_8 ",X) @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		case AddressMode::IndIdx:
+			{
+				const uint8 address = cpuRam.Read8(PC+1);
+				sprintf(operandText, "(" ADDR_8 "),Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+			}
+			break;
+
+		default:
+			assert(false && "Invalid addressing mode");
+			break;
+		}
+		TRACE("%-41s", operandText);
+	}
+
+	void ProcessBreakpoints()
+	{
+		Cpu& cpu = m_nes->m_cpu;
+
+		// Instruction breakpoints (before instruction executes)
+		{
+			auto iter = std::find(std::begin(g_instructionBreakpoints), std::end(g_instructionBreakpoints), cpu.PC);
+			if (iter != std::end(g_instructionBreakpoints) && *iter != 0)
+			{
+				printf("[Instruction Breakpoint @ " ADDR_16 "]\n", *iter);
+				if (!g_stepMode)
+				{
+					System::DebugBreak();
+					g_stepMode = true;
+				}
+			}
 		}
 
-		// Regular breakpoints (on instruction just executed)
+		// Data breakpoints (on memory r/w)
 		{
-			static uint16 breakpoints[10] = {0};
-			auto iter = std::find(std::begin(breakpoints), std::end(breakpoints), cpu.m_lastPC);
-			if (*iter != 0 && iter != std::end(breakpoints))
+			auto iter = std::find(std::begin(g_dataBreakpoints), std::end(g_dataBreakpoints), cpu.m_operandAddress);
+			if (iter != std::end(g_dataBreakpoints) && *iter != 0)
 			{
-				System::DebugBreak();
+				printf("[Data breakpoint @ " ADDR_16 "]\n", *iter);
+				if (!g_stepMode)
+				{
+					System::DebugBreak();
+					g_stepMode = true;
+				}
 			}
 		}
 	}
 
-private:
 	Nes* m_nes;
 };
 
@@ -358,7 +414,7 @@ namespace Debugger
 	static DebuggerImpl g_debugger;
 
 	void Initialize(Nes& nes) { g_debugger.Initialize(nes); }
-	void Update() { g_debugger.Update(); }
+	void DumpMemory() { g_debugger.DumpMemory(); }
 	void PreCpuInstruction() { g_debugger.PreCpuInstruction(); }
 	void PostCpuInstruction() { g_debugger.PostCpuInstruction(); }
 }
