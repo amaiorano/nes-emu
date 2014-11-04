@@ -5,7 +5,7 @@
 
 namespace
 {
-	OpCodeEntry** g_ppOpCodeTable = GetOpCodeTable();
+	OpCodeEntry** g_opCodeTable = GetOpCodeTable();
 
 	FORCEINLINE uint8 CalcNegativeFlag(uint16 v)
 	{
@@ -53,8 +53,8 @@ namespace
 
 void Cpu::Initialize(Nes& nes, CpuRam& cpuRam)
 {
-	m_pNes = &nes;
-	m_pRam = &cpuRam;
+	m_nes = &nes;
+	m_cpuRam = &cpuRam;
 }
 
 void Cpu::Reset()
@@ -68,7 +68,7 @@ void Cpu::Reset()
 	P.Set(StatusFlag::IrqDisabled);
 
 	// Entry point is located at the Reset interrupt location
-	PC = m_pRam->Read16(CpuRam::kResetVector);
+	PC = m_cpuRam->Read16(CpuRam::kResetVector);
 }
 
 void Cpu::Nmi()
@@ -77,7 +77,7 @@ void Cpu::Nmi()
 	PushProcessorStatus(false);
 	P.Clear(StatusFlag::BrkExecuted);
 	P.Set(StatusFlag::IrqDisabled);
-	PC = m_pRam->Read16(CpuRam::kNmiVector);
+	PC = m_cpuRam->Read16(CpuRam::kNmiVector);
 }
 
 void Cpu::Irq()
@@ -88,16 +88,16 @@ void Cpu::Irq()
 		PushProcessorStatus(false);
 		P.Clear(StatusFlag::BrkExecuted);
 		P.Set(StatusFlag::IrqDisabled);
-		PC = m_pRam->Read16(CpuRam::kIrqVector);
+		PC = m_cpuRam->Read16(CpuRam::kIrqVector);
 	}
 }
 
 void Cpu::Run()
 {
-	uint8 opCode = m_pRam->Read8(PC);
-	m_pEntry = g_ppOpCodeTable[opCode];
+	uint8 opCode = m_cpuRam->Read8(PC);
+	m_opCodeEntry = g_opCodeTable[opCode];
 
-	if (m_pEntry == nullptr)
+	if (m_opCodeEntry == nullptr)
 	{
 		assert(false && "Unknown opcode");
 	}
@@ -121,7 +121,7 @@ void Cpu::UpdateOperand()
 	m_operandAddress = 0; // Reset to help find bugs
 #endif
 
-	switch (m_pEntry->addrMode)
+	switch (m_opCodeEntry->addrMode)
 	{
 	case AddressMode::Immedt:
 		m_operandAddress = PC + 1; // Set to address of immediate value in code segment
@@ -138,62 +138,62 @@ void Cpu::UpdateOperand()
 			//@OPT: Lazily compute if branch condition succeeds
 
 			// For branch instructions, resolve the target address
-			const int8 offset = m_pRam->Read8(PC+1); // Signed offset in [-128,127]
-			m_operandAddress = PC + m_pEntry->numBytes + offset;
+			const int8 offset = m_cpuRam->Read8(PC+1); // Signed offset in [-128,127]
+			m_operandAddress = PC + m_opCodeEntry->numBytes + offset;
 		}
 		break;
 
 	case AddressMode::ZeroPg:
-		m_operandAddress = TO16(m_pRam->Read8(PC+1));
+		m_operandAddress = TO16(m_cpuRam->Read8(PC+1));
 		break;
 
 	case AddressMode::ZPIdxX:
-		m_operandAddress = TO16((m_pRam->Read8(PC+1) + X)) & 0x00FF; // Wrap around zero-page boundary
+		m_operandAddress = TO16((m_cpuRam->Read8(PC+1) + X)) & 0x00FF; // Wrap around zero-page boundary
 		break;
 
 	case AddressMode::ZPIdxY:
-		m_operandAddress = TO16((m_pRam->Read8(PC+1) + Y)) & 0x00FF; // Wrap around zero-page boundary
+		m_operandAddress = TO16((m_cpuRam->Read8(PC+1) + Y)) & 0x00FF; // Wrap around zero-page boundary
 		break;
 
 	case AddressMode::Absolu:
-		m_operandAddress = m_pRam->Read16(PC+1);
+		m_operandAddress = m_cpuRam->Read16(PC+1);
 		break;
 
 	case AddressMode::AbIdxX:
-		m_operandAddress = m_pRam->Read16(PC+1) + X;
+		m_operandAddress = m_cpuRam->Read16(PC+1) + X;
 		break;
 
 	case AddressMode::AbIdxY:
-		m_operandAddress = m_pRam->Read16(PC+1) + Y;
+		m_operandAddress = m_cpuRam->Read16(PC+1) + Y;
 		break;
 
 	case AddressMode::Indrct: // for JMP only
 		{
-			uint16 low = m_pRam->Read16(PC+1);
+			uint16 low = m_cpuRam->Read16(PC+1);
 
 			// Handle the 6502 bug for when the low-byte of the effective address is FF,
 			// in which case the 2nd byte read does not correctly cross page boundaries.
 			// The bug is that the high byte does not change.
 			uint16 high = (low & 0xFF00) | ((low + 1) & 0x00FF);
 
-			m_operandAddress = TO16(m_pRam->Read8(low)) | TO16(m_pRam->Read8(high)) << 8;
+			m_operandAddress = TO16(m_cpuRam->Read8(low)) | TO16(m_cpuRam->Read8(high)) << 8;
 		}
 		break;
 
 	case AddressMode::IdxInd:
 		{
-			uint16 low = TO16((m_pRam->Read8(PC+1) + X)) & 0x00FF; // Zero page low byte of operand address, wrap around zero page
+			uint16 low = TO16((m_cpuRam->Read8(PC+1) + X)) & 0x00FF; // Zero page low byte of operand address, wrap around zero page
 			uint16 high = TO16(low + 1) & 0x00FF; // Wrap high byte around zero page
-			m_operandAddress = TO16(m_pRam->Read8(low)) | TO16(m_pRam->Read8(high)) << 8;
+			m_operandAddress = TO16(m_cpuRam->Read8(low)) | TO16(m_cpuRam->Read8(high)) << 8;
 		}
 		break;
 
 	case AddressMode::IndIdx:
 		{
-			const uint16 low = TO16(m_pRam->Read8(PC+1)); // Zero page low byte of operand address
+			const uint16 low = TO16(m_cpuRam->Read8(PC+1)); // Zero page low byte of operand address
 			const uint16 high = TO16(low + 1) & 0x00FF; // Wrap high byte around zero page
 			//@TODO: potential penalty if + Y crosses page boundary here
-			m_operandAddress = (TO16(m_pRam->Read8(low)) | TO16(m_pRam->Read8(high)) << 8) + TO16(Y);
+			m_operandAddress = (TO16(m_cpuRam->Read8(low)) | TO16(m_cpuRam->Read8(high)) << 8) + TO16(Y);
 		}
 		break;
 
@@ -210,7 +210,7 @@ void Cpu::ExecuteInstruction()
 
 	m_lastPC = PC;
 
-	switch (m_pEntry->opCodeName)
+	switch (m_opCodeEntry->opCodeName)
 	{
 	case ADC: // Add memory to accumulator with carry
 		{
@@ -282,11 +282,11 @@ void Cpu::ExecuteInstruction()
 
 	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS) (used with RTI)
 		{
-			uint16 returnAddr = PC + m_pEntry->numBytes;
+			uint16 returnAddr = PC + m_opCodeEntry->numBytes;
 			Push16(returnAddr);
 			PushProcessorStatus(true);
 			P.Set(IrqDisabled); // Disable hardware IRQs
-			PC = m_pRam->Read16(CpuRam::kIrqVector);
+			PC = m_cpuRam->Read16(CpuRam::kIrqVector);
 		}
 		break;
 
@@ -402,7 +402,7 @@ void Cpu::ExecuteInstruction()
 		{
 			// JSR actually pushes address of the next instruction - 1.
 			// RTS jumps to popped value + 1.
-			const uint16 returnAddr = PC + m_pEntry->numBytes - 1;
+			const uint16 returnAddr = PC + m_opCodeEntry->numBytes - 1;
 			Push16(returnAddr);
 			PC = GetBranchOrJmpLocation();
 		}
@@ -576,60 +576,60 @@ void Cpu::ExecuteInstruction()
 
 	// If instruction hasn't modified PC, move it to next instruction
 	if (m_lastPC == PC)
-		PC += m_pEntry->numBytes;
+		PC += m_opCodeEntry->numBytes;
 }
 
 uint8 Cpu::GetAccumOrMemValue() const
 {
-	assert(m_pEntry->addrMode == AddressMode::Accumu || m_pEntry->addrMode & AddressMode::MemoryValueOperand);
+	assert(m_opCodeEntry->addrMode == AddressMode::Accumu || m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
 
-	if (m_pEntry->addrMode == AddressMode::Accumu)
+	if (m_opCodeEntry->addrMode == AddressMode::Accumu)
 		return A;
 	
-	uint8 result = m_pRam->Read8(m_operandAddress);
-	m_pNes->OnCpuMemoryRead(result);
+	uint8 result = m_cpuRam->Read8(m_operandAddress);
+	m_nes->OnCpuMemoryRead(result);
 	return result;
 }
 
 void Cpu::SetAccumOrMemValue(uint8 value)
 {
-	assert(m_pEntry->addrMode == AddressMode::Accumu || m_pEntry->addrMode & AddressMode::MemoryValueOperand);
+	assert(m_opCodeEntry->addrMode == AddressMode::Accumu || m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
 
-	if (m_pEntry->addrMode == AddressMode::Accumu)
+	if (m_opCodeEntry->addrMode == AddressMode::Accumu)
 	{
 		A = value;
 	}
 	else
 	{
-		m_pRam->Write8(m_operandAddress, value);
-		m_pNes->OnCpuMemoryWrite(m_operandAddress);
+		m_cpuRam->Write8(m_operandAddress, value);
+		m_nes->OnCpuMemoryWrite(m_operandAddress);
 	}
 }
 
 uint8 Cpu::GetMemValue() const
 {
-	assert(m_pEntry->addrMode & AddressMode::MemoryValueOperand);
-	uint8 result = m_pRam->Read8(m_operandAddress);
-	m_pNes->OnCpuMemoryRead(result);
+	assert(m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
+	uint8 result = m_cpuRam->Read8(m_operandAddress);
+	m_nes->OnCpuMemoryRead(result);
 	return result;
 }
 
 void Cpu::SetMemValue(uint8 value)
 {
-	assert(m_pEntry->addrMode & AddressMode::MemoryValueOperand);
-	m_pRam->Write8(m_operandAddress, value);
-	m_pNes->OnCpuMemoryWrite(m_operandAddress);
+	assert(m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
+	m_cpuRam->Write8(m_operandAddress, value);
+	m_nes->OnCpuMemoryWrite(m_operandAddress);
 }
 
 uint16 Cpu::GetBranchOrJmpLocation() const
 {
-	assert(m_pEntry->addrMode & AddressMode::JmpOrBranchOperand);
+	assert(m_opCodeEntry->addrMode & AddressMode::JmpOrBranchOperand);
 	return m_operandAddress;
 }
 
 void Cpu::Push8(uint8 value)
 {
-	m_pRam->Write8(CpuRam::kStackBase + SP, value);
+	m_cpuRam->Write8(CpuRam::kStackBase + SP, value);
 	--SP;
 }
 
@@ -642,7 +642,7 @@ void Cpu::Push16(uint16 value)
 uint8 Cpu::Pop8()
 {
 	++SP;
-	return m_pRam->Read8(CpuRam::kStackBase + SP);
+	return m_cpuRam->Read8(CpuRam::kStackBase + SP);
 }
 
 uint16 Cpu::Pop16()

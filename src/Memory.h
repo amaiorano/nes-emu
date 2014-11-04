@@ -81,17 +81,17 @@ public:
 	static const uint16 kPpuVRamAddress2	= 0x2006; // (W2) \_
 	static const uint16 kPpuVRamIO			= 0x2007; // (RW) /
 
-	void LoadPrgRom(uint8* pPrgRom, size_t size)
+	void LoadPrgRom(uint8* prgRom, size_t size)
 	{
 		switch (size)
 		{
 		case KB(16):
-			memcpy(&m_memory[kPrgRomLowBase], pPrgRom, size);
-			memcpy(&m_memory[kPrgRomHighBase], pPrgRom, size);
+			memcpy(&m_memory[kPrgRomLowBase], prgRom, size);
+			memcpy(&m_memory[kPrgRomHighBase], prgRom, size);
 			break;
 		
 		case KB(32):
-			memcpy(&m_memory[kPrgRomLowBase], pPrgRom, size);
+			memcpy(&m_memory[kPrgRomLowBase], prgRom, size);
 			break;
 		
 		default:
@@ -117,10 +117,10 @@ public:
 class PpuRam : public MemoryBase<PpuRam, KB(16)>
 {
 public:
-	void LoadChrRom(uint8* pChrRom, size_t size)
+	void LoadChrRom(uint8* chrRom, size_t size)
 	{
 		assert(size == KB(8));
-		memcpy(&m_memory[0], pChrRom, size);
+		memcpy(&m_memory[0], chrRom, size);
 	}
 
 	static const uint16 kChrRomSize = KB(8); // Half the memory is CHR-ROM (2 pattern tables of 4kb each)

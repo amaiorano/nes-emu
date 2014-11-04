@@ -7,7 +7,7 @@
 class FileStream
 {
 public:
-	FileStream() : m_pFile(nullptr)
+	FileStream() : m_file(nullptr)
 	{
 	}
 	
@@ -16,7 +16,7 @@ public:
 		Close();
 	}
 
-	FileStream(const char* name, const char* mode) : m_pFile(nullptr)
+	FileStream(const char* name, const char* mode) : m_file(nullptr)
 	{
 		if (!Open(name, mode))
 			throw std::exception(FormattedString<>("Failed to open file: %s", name));
@@ -25,40 +25,40 @@ public:
 	bool Open(const char* name, const char* mode)
 	{
 		Close();
-		m_pFile = fopen(name, mode);
-		return m_pFile != nullptr;
+		m_file = fopen(name, mode);
+		return m_file != nullptr;
 	}
 
 	void Close()
 	{
-		if (m_pFile)
+		if (m_file)
 		{
-			fclose(m_pFile);
-			m_pFile = nullptr;
+			fclose(m_file);
+			m_file = nullptr;
 		}
 	}
 
 	template <typename T>
-	size_t Read(T* pDestBuffer, int count = 1)
+	size_t Read(T* destBuffer, int count = 1)
 	{
-		return fread(pDestBuffer, sizeof(T), count, m_pFile) == (sizeof(T) * count);
+		return fread(destBuffer, sizeof(T), count, m_file) == (sizeof(T) * count);
 	}
 
 	template <typename T>
 	size_t Write(T value)
 	{
-		return fwrite(&value, sizeof(T), 1, m_pFile);
+		return fwrite(&value, sizeof(T), 1, m_file);
 	}
 
 	template <typename T>
-	size_t Write(T* pBuffer, int count = 1)
+	size_t Write(T* srcBuffer, int count = 1)
 	{
-		//return fread(pDestBuffer, sizeof(T), count, m_pFile) == (sizeof(T) * count);
-		return fwrite(pBuffer, sizeof(T), count, m_pFile);
+		//return fread(destBuffer, sizeof(T), count, m_file) == (sizeof(T) * count);
+		return fwrite(srcBuffer, sizeof(T), count, m_file);
 	}
 
 	void Printf(const char* format, ...);
 
 private:
-	FILE* m_pFile;
+	FILE* m_file;
 };

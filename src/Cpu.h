@@ -63,9 +63,9 @@ private:
 
 	// Data members
 
-	Nes* m_pNes;
-	CpuRam* m_pRam;
-	OpCodeEntry* m_pEntry; // Current opcode entry
+	Nes* m_nes;
+	CpuRam* m_cpuRam;
+	OpCodeEntry* m_opCodeEntry; // Current opcode entry
 	
 	// Registers - not using the usual m_ prefix because I find the code looks
 	// more straightfoward when using the typical register names

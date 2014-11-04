@@ -50,7 +50,7 @@ template <size_t N> struct __CTPrintSize;
 template <typename T> struct CTPrintSize : __CTPrintSize<sizeof(T)> {};
 
 // Use with std::shared_ptr that manage array allocations.
-// Example: std::shared_ptr<uint8> pData(new uint8[10], ArrayDeleter<uint8>); 
+// Example: std::shared_ptr<uint8> data(new uint8[10], ArrayDeleter<uint8>); 
 template <typename T> void ArrayDeleter(T* p) { delete [] p; }
 
 // Utility for creating a temporary formatted string

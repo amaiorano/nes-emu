@@ -245,7 +245,7 @@ private:
 	void PrintInstruction()
 	{
 		Cpu& cpu = m_nes->m_cpu;
-		OpCodeEntry& opCodeEntry = *cpu.m_pEntry;
+		OpCodeEntry& opCodeEntry = *cpu.m_opCodeEntry;
 		CpuRam& cpuRam = m_nes->m_cpuRam;
 		const uint16 PC = cpu.PC;
 		const uint16 operandAddress = cpu.m_operandAddress; // Expected to be updated for current instruction

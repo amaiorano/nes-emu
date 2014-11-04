@@ -11,5 +11,5 @@ void FileStream::Printf(const char* format, ...)
 
 	assert(bytesWritten < sizeof(buffer));
 
-	fwrite(buffer, bytesWritten, 1, m_pFile);
+	fwrite(buffer, bytesWritten, 1, m_file);
 }
