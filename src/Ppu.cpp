@@ -8,13 +8,13 @@ namespace PpuControl1 // $2000 (W)
 {
 	enum Type : uint8
 	{
-		NameTableAddressMask			= 0x03,
-		PpuAddressIncrement				= 0x04, // 0 = 1 byte, 1 = 32 bytes
-		SpritePatternTableAddress		= 0x08, // 0 = $0000, 1 = $1000 in VRAM
-		BackgroundPatternTableAddress	= 0x10, // 0 = $0000, 1 = $1000 in VRAM
-		SpriteSize						= 0x20, // 0 = 8x8, 1 = 8x16
-		PpuMasterSlaveSelect			= 0x40, // 0 = Master, 1 = Slave (Unused)
-		NmiOnVBlank						= 0x80, // 0 = Disabled, 1 = Enabled
+		NameTableAddressMask			= BIT(0)|BIT(1),
+		PpuAddressIncrement				= BIT(2), // 0 = 1 byte, 1 = 32 bytes
+		SpritePatternTableAddress		= BIT(3), // 0 = $0000, 1 = $1000 in VRAM
+		BackgroundPatternTableAddress	= BIT(4), // 0 = $0000, 1 = $1000 in VRAM
+		SpriteSize						= BIT(5), // 0 = 8x8, 1 = 8x16
+		PpuMasterSlaveSelect			= BIT(6), // 0 = Master, 1 = Slave (Unused)
+		NmiOnVBlank						= BIT(7), // 0 = Disabled, 1 = Enabled
 	};
 
 	// Returns current name table address in VRAM ($2000, $2400, $2800, or $2C00)
@@ -43,13 +43,13 @@ namespace PpuControl2 // $2001 (W)
 {
 	enum Type : uint8
 	{
-		DisplayType = 0x01, // 0 = Color, 1 = Monochrome
-		BackgroundClipping = 0x02, // 0 = BG invisible in left 8-pixel column, 1 = No clipping
-		SpriteClipping = 0x04, // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
-		BackgroundVisible = 0x08, // 0 = Background not displayed, 1 = Background visible
-		SpriteVisible = 0x10, // 0 = Sprites not displayed, 1 = Sprites visible		
-		ColorIntensityMask = 0xE0, // High 3 bits if DisplayType == 0
-		FullBackgroundColorMask = 0xE0, // High 3 bits if DisplayType == 1
+		DisplayType				= BIT(0), // 0 = Color, 1 = Monochrome
+		BackgroundClipping		= BIT(1), // 0 = BG invisible in left 8-pixel column, 1 = No clipping
+		SpriteClipping			= BIT(2), // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
+		BackgroundVisible		= BIT(3), // 0 = Background not displayed, 1 = Background visible
+		SpriteVisible			= BIT(4), // 0 = Sprites not displayed, 1 = Sprites visible		
+		ColorIntensityMask		= BIT(5)|BIT(6)|BIT(7), // High 3 bits if DisplayType == 0
+		FullBackgroundColorMask	= BIT(5)|BIT(6)|BIT(7), // High 3 bits if DisplayType == 1
 	};
 }
 
@@ -57,10 +57,10 @@ namespace PpuStatus // $2002 (R)
 {
 	enum Type : uint8
 	{
-		VRAMWritesIgnored	= 0x10,
-		ScanlineSpritesGt8	= 0x20,
-		PpuHitSprite0		= 0x40,
-		InVBlank			= 0x80,
+		VRAMWritesIgnored	= BIT(4),
+		ScanlineSpritesGt8	= BIT(5),
+		PpuHitSprite0		= BIT(6),
+		InVBlank			= BIT(7),
 	};
 }
 
@@ -80,22 +80,31 @@ void Ppu::Initialize(Nes& nes, CpuRam& cpuRam, PpuRam& ppuRam, SpriteRam& sprite
 	m_ppuRam = &ppuRam;
 	m_spriteRam = &spriteRam;
 
-	m_ppuControl1 = m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControl1);
-	m_ppuControl2 = m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControl2);
-	m_ppuStatus = m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuStatus);
+	m_ppuControlReg1	= m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControlReg1);
+	m_ppuControlReg2	= m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControlReg2);
+	m_ppuStatusReg		= m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuStatusReg);
+	m_sprRamAddressReg	= m_cpuRam->UnsafePtr(CpuRam::kPpuSprRamAddressReg);
+	m_sprRamIoReg		= m_cpuRam->UnsafePtr(CpuRam::kPpuSprRamIoReg);
+	m_vramAddressReg1	= m_cpuRam->UnsafePtr(CpuRam::kPpuVRamAddressReg1);
+	m_vramAddressReg2	= m_cpuRam->UnsafePtr(CpuRam::kPpuVRamAddressReg2);
+	m_vramIoReg			= m_cpuRam->UnsafePtr(CpuRam::kPpuVRamIoReg);
 }
 
 void Ppu::Reset()
 {
 	// Fake a first vblank
-	m_ppuStatus->Set(PpuStatus::InVBlank);
+	m_ppuStatusReg->Set(PpuStatus::InVBlank);
+
+	m_vramAddressReg2High = true;
+	m_vramAddress = 0xDDDD;
+	m_vramBufferedValue = 0xDD;
 }
 
 void Ppu::Run()
 {
 	static bool startRendering = false;
 
-	if (m_ppuControl1->Test(PpuControl1::NmiOnVBlank))
+	if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
 	{
 		//@HACK: For now render every 10th frame while NMI is enabled (this is wrong, we should always render)
 		static int count = 1;
@@ -106,9 +115,9 @@ void Ppu::Run()
 			m_nes->SignalCpuNmi();
 			startRendering = true;
 
-			m_ppuStatus->Set(PpuStatus::InVBlank);
+			m_ppuStatusReg->Set(PpuStatus::InVBlank);
 			Render();
-			m_ppuStatus->Clear(PpuStatus::InVBlank);
+			m_ppuStatusReg->Clear(PpuStatus::InVBlank);
 		}
 	}
 
@@ -116,44 +125,66 @@ void Ppu::Run()
 	//	Render();
 }
 
-void Ppu::OnCpuMemoryRead(uint16 address)
+void Ppu::OnCpuMemoryPreRead(uint16 address)
 {
 	switch (address)
 	{
-	case CpuRam::kPpuStatus: // $2002
-		m_ppuStatus->Clear(PpuStatus::InVBlank);
+		case CpuRam::kPpuVRamIoReg: // $2007
+			assert(m_vramIoReg == m_cpuRam->UnsafePtr(address));
+			assert(m_vramAddressReg2High && "User code error: trying to read from $2007 when VRAM address not yet set correct via $2006");
+			
+			// About to read $2007, so update it from buffered value in CIRAM or palette RAM value
+			*m_vramIoReg = m_vramAddress < PpuRam::kImagePalette? m_vramBufferedValue : m_cpuRam->Read8(m_vramAddress);
+
+			// Update buffered value with current vram value
+			m_vramBufferedValue = m_cpuRam->Read8( PpuRam::kNameTable0 + (m_vramAddress & (KB(4)-1)) ); // Wrap into 4K address space of CIRAM
+
+			// Advance VRAM pointer
+			m_vramAddress += PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
+
+			break;
+	}
+}
+
+void Ppu::OnCpuMemoryPostRead(uint16 address)
+{
+	switch (address)
+	{
+	case CpuRam::kPpuStatusReg: // $2002
+		m_ppuStatusReg->Clear(PpuStatus::InVBlank);
 		//@TODO: After a read occurs, $2005 is reset, hence the next write to $2005 will be Horizontal.
 
 		// After a read occurs, $2006 is reset, hence the next write to $2006 will be the high byte portion.
-		m_vramAddress.high = true;
-
+		m_vramAddressReg2High = true;
 		break;
 	}
 }
 
-void Ppu::OnCpuMemoryWrite(uint16 address)
+void Ppu::OnCpuMemoryPostWrite(uint16 address)
 {
 	switch (address)
 	{
-	case CpuRam::kPpuVRamAddress2: // $2006
+	case CpuRam::kPpuVRamAddressReg2: // $2006
 		{
 			// Implement double write (alternate between writing high byte and low byte)
-			uint16 value = TO16(m_cpuRam->Read8(address));
-			if (m_vramAddress.high)
-				m_vramAddress.address = (value << 8) | (m_vramAddress.address & 0x00FF);
+			assert(m_vramAddressReg2 == m_cpuRam->UnsafePtr(address));
+			const uint16 halfAddress = TO16(*m_vramAddressReg2);
+			if (m_vramAddressReg2High)
+				m_vramAddress = (halfAddress << 8) | (m_vramAddress & 0x00FF);
 			else
-				m_vramAddress.address = value | (m_vramAddress.address & 0xFF00);
-			
-			m_vramAddress.high = !m_vramAddress.high;
+				m_vramAddress = halfAddress | (m_vramAddress & 0xFF00);
+
+			m_vramAddressReg2High = !m_vramAddressReg2High; // Toggle high/low
 		}
 		break;
 
-	case CpuRam::kPpuVRamIO: // $2007
+	case CpuRam::kPpuVRamIoReg: // $2007
 		{
-			// Write value to VRAM and increment address
-			uint8 value = m_cpuRam->Read8(address);
-			m_ppuRam->Write8(m_vramAddress.address, value);
-			m_vramAddress.address += PpuControl1::GetPpuAddressIncrementSize( m_ppuControl1->Value() );
+			// Write value to VRAM and advance VRAM pointer
+			assert(m_vramIoReg == m_cpuRam->UnsafePtr(address));
+			uint8 value = *m_vramIoReg;
+			m_ppuRam->Write8(m_vramAddress, value);
+			m_vramAddress += PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
 		}
 		break;
 	}
@@ -207,10 +238,10 @@ void Ppu::Render()
 		}
 	};
 	
-	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControl1->Value());
+	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
 	const uint8* patternTable = m_ppuRam->UnsafePtr(currBgPatternTableAddress);
 
-	const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControl1->Value());
+	const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
 	const uint8* nameTable = m_ppuRam->UnsafePtr(currNameTableAddress); 
 
 	m_renderer->Clear();

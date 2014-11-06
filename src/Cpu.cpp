@@ -586,8 +586,9 @@ uint8 Cpu::GetAccumOrMemValue() const
 	if (m_opCodeEntry->addrMode == AddressMode::Accumu)
 		return A;
 	
+	m_nes->OnCpuMemoryPreRead(m_operandAddress);
 	uint8 result = m_cpuRam->Read8(m_operandAddress);
-	m_nes->OnCpuMemoryRead(result);
+	m_nes->OnCpuMemoryPostRead(m_operandAddress);
 	return result;
 }
 
@@ -602,7 +603,7 @@ void Cpu::SetAccumOrMemValue(uint8 value)
 	else
 	{
 		m_cpuRam->Write8(m_operandAddress, value);
-		m_nes->OnCpuMemoryWrite(m_operandAddress);
+		m_nes->OnCpuMemoryPostWrite(m_operandAddress);
 	}
 }
 
@@ -610,7 +611,7 @@ uint8 Cpu::GetMemValue() const
 {
 	assert(m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
 	uint8 result = m_cpuRam->Read8(m_operandAddress);
-	m_nes->OnCpuMemoryRead(result);
+	m_nes->OnCpuMemoryPostRead(result);
 	return result;
 }
 
@@ -618,7 +619,7 @@ void Cpu::SetMemValue(uint8 value)
 {
 	assert(m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
 	m_cpuRam->Write8(m_operandAddress, value);
-	m_nes->OnCpuMemoryWrite(m_operandAddress);
+	m_nes->OnCpuMemoryPostWrite(m_operandAddress);
 }
 
 uint16 Cpu::GetBranchOrJmpLocation() const

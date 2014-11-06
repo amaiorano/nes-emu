@@ -63,23 +63,27 @@ protected:
 class CpuRam : public MemoryBase<CpuRam, KB(64)>
 {
 public:
-	static const uint16 kPrgRomMaxSize	= KB(32);
-	static const uint16 kPrgRomLowBase	= 0x8000;
-	static const uint16 kPrgRomHighBase	= 0xC000;
-	static const uint16 kStackBase		= 0x0100; // Range [$0100,$01FF]
-	static const uint16 kNmiVector		= 0xFFFA; // and 0xFFFB
-	static const uint16 kResetVector	= 0xFFFC; // and 0xFFFD
-	static const uint16 kIrqVector		= 0xFFFE; // and 0xFFFF
+	static const uint16 kStackBase				= 0x0100; // Range [$0100,$01FF] (page 1)
 
 	// PPU memory-mapped registers
-	static const uint16 kPpuControl1		= 0x2000; // (W)
-	static const uint16 kPpuControl2		= 0x2001; // (W)
-	static const uint16 kPpuStatus			= 0x2002; // (R)
-	static const uint16 kPpuSprRamAddress	= 0x2003; // (W) \_
-	static const uint16 kPpuSprRamIO		= 0x2004; // (W) /
-	static const uint16 kPpuVRamAddress1	= 0x2005; // (W2)
-	static const uint16 kPpuVRamAddress2	= 0x2006; // (W2) \_
-	static const uint16 kPpuVRamIO			= 0x2007; // (RW) /
+	static const uint16 kPpuControlReg1			= 0x2000; // (W)
+	static const uint16 kPpuControlReg2			= 0x2001; // (W)
+	static const uint16 kPpuStatusReg			= 0x2002; // (R)
+	static const uint16 kPpuSprRamAddressReg	= 0x2003; // (W) \_
+	static const uint16 kPpuSprRamIoReg			= 0x2004; // (W) /
+	static const uint16 kPpuVRamAddressReg1		= 0x2005; // (W2)
+	static const uint16 kPpuVRamAddressReg2		= 0x2006; // (W2) \_
+	static const uint16 kPpuVRamIoReg			= 0x2007; // (RW) /
+
+	static const uint16 kSaveRamSize			= KB(8);
+	static const uint16 kSaveRamBase			= 0x6000;
+
+	static const uint16 kPrgRomMaxSize			= KB(32);
+	static const uint16 kPrgRomLowBase			= 0x8000;
+	static const uint16 kPrgRomHighBase			= 0xC000;
+	static const uint16 kNmiVector				= 0xFFFA; // and 0xFFFB
+	static const uint16 kResetVector			= 0xFFFC; // and 0xFFFD
+	static const uint16 kIrqVector				= 0xFFFE; // and 0xFFFF
 
 	void LoadPrgRom(uint8* prgRom, size_t size)
 	{

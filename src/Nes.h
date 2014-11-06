@@ -15,14 +15,19 @@ public:
 
 	const RomHeader& GetRomHeader() const { return m_romHeader; }
 
-	void OnCpuMemoryRead(uint16 address)
+	void OnCpuMemoryPreRead(uint16 address)
 	{
-		m_ppu.OnCpuMemoryRead(address);
+		m_ppu.OnCpuMemoryPreRead(address);
 	}
 
-	void OnCpuMemoryWrite(uint16 address)
+	void OnCpuMemoryPostRead(uint16 address)
 	{
-		m_ppu.OnCpuMemoryWrite(address);
+		m_ppu.OnCpuMemoryPostRead(address);
+	}
+
+	void OnCpuMemoryPostWrite(uint16 address)
+	{
+		m_ppu.OnCpuMemoryPostWrite(address);
 	}
 
 	void SignalCpuNmi()
