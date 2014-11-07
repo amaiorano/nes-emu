@@ -137,7 +137,7 @@ void Ppu::OnCpuMemoryPreRead(uint16 address)
 			*m_vramIoReg = m_vramAddress < PpuRam::kImagePalette? m_vramBufferedValue : m_cpuRam->Read8(m_vramAddress);
 
 			// Update buffered value with current vram value
-			m_vramBufferedValue = m_cpuRam->Read8( PpuRam::kNameTable0 + (m_vramAddress & (KB(4)-1)) ); // Wrap into 4K address space of CIRAM
+			m_vramBufferedValue = m_ppuRam->Read8( PpuRam::kNameTable0 + (m_vramAddress & (KB(4)-1)) ); // Wrap into 4K address space of CIRAM
 
 			// Advance VRAM pointer
 			m_vramAddress += PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
