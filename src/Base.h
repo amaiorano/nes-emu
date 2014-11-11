@@ -41,7 +41,7 @@ static_assert(sizeof(int32)==4, "Invalid type size");
 #define TO16(v8) ((uint16)(v8))
 #define TO8(v16) ((uint8)(v16 & 0x00FF))
 
-#define BIT(n) ((uint8)(1<<n))
+#define BIT(n) (1<<n)
 
 #define ARRAYSIZE(arr) (sizeof(arr)/sizeof(arr[0]))
 

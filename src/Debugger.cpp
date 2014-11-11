@@ -18,7 +18,7 @@
 
 namespace
 {
-	bool g_trace = true;
+	bool g_trace = false;
 	bool g_stepMode = false;
 	uint16 g_instructionBreakpoints[10] = {0};
 	uint16 g_dataBreakpoints[10] = {0};
@@ -40,13 +40,8 @@ public:
 
 	void DumpMemory()
 	{
-		MemoryDumpPpuRam(m_nes->m_ppuRam);
-
-		printf("Dumping: CpuRam.dmp\n");
-		MemoryDump(m_nes->m_cpuRam, "CpuRam.dmp");
-
-		printf("Dumping: SpriteRam.dmp\n");
-		MemoryDump(m_nes->m_spriteRam, "SpriteRam.dmp");
+		MemoryDumpPpu(m_nes->m_ppuMemoryBus);
+		MemoryDumpCpu(m_nes->m_cpuMemoryBus);
 	}
 
 	void PreCpuInstruction()
@@ -81,14 +76,13 @@ public:
 
 private:
 	template <typename T>
-	void MemoryDump(T& memory, FileStream& fs, uint16 start = 0x0000, size_t size = 0, size_t bytesPerLine = 16)
+	void MemoryDump(T& memoryBus, FileStream& fs, uint16 start = 0x0000, size_t size = 0, size_t bytesPerLine = 16)
 	{
 		if (size == 0)
-			size = memory.MemorySize();
+			size = KB(64);
 
 		const uint32 from = start;
 		const uint32 to = from + size - 1;
-		const uint8* pmem = memory.UnsafePtr(0);
 		size_t bytesPerLineCount = 0;
 
 		for (uint32 curr = from; curr <= to; ++curr)
@@ -99,52 +93,61 @@ private:
 					fs.Printf("\n");
 				fs.Printf(ADDR_16": ", curr);
 			}
-			fs.Printf("%02X ", pmem[curr]);
+			fs.Printf("%02X ", memoryBus.Read(static_cast<uint16>(curr)));
 			bytesPerLineCount = (bytesPerLineCount + 1) % bytesPerLine;
 		}		
 		fs.Printf("\n");
 	}
 
 	template <typename T>
-	void MemoryDump(T& memory, const char* file, uint16 start = 0x0000, size_t size = 0)
+	void MemoryDump(T& memoryBus, const char* file, uint16 start = 0x0000, size_t size = 0)
 	{
 		FileStream fs(file, "w");
-		MemoryDump(memory, fs, start, size);
+		MemoryDump(memoryBus, fs, start, size);
 	}
 
-	void MemoryDumpPpuRam(PpuRam& ppuRam)
+	void MemoryDumpPpu(PpuMemoryBus& ppuMemoryBus)
 	{
 		// Dump full memory
-		const char* file = "PpuRam.dmp";
+		const char* file = "PpuMemory.dmp";
 		printf("Dumping: %s\n", file);
-		MemoryDump(ppuRam, "PpuRam.dmp");
+		MemoryDump(ppuMemoryBus, "PpuRam.dmp");
 		
 		// Dump detailed break down
-		file = "PpuRam-detail.dmp";
+		file = "PpuMemory-detail.dmp";
 		printf("Dumping: %s\n", file);
 
 		FileStream fs(file, "w");
 
-		for (size_t i = 0; i < PpuRam::kNumPatternTables; ++i)
+		for (size_t i = 0; i < PpuMemory::kNumPatternTables; ++i)
 		{
-			fs.Printf("Pattern Table %d\n\n", i);
-			MemoryDump(ppuRam, fs, PpuRam::GetPatternTableAddress(i), PpuRam::kPatternTableSize, 32*2);
+			if (i > 0)
+				fs.Printf("\n");
+			fs.Printf("Pattern Table %d (%d bytes)\n\n", i, PpuMemory::kPatternTableSize);
+			MemoryDump(ppuMemoryBus, fs, PpuMemory::GetPatternTableAddress(i), PpuMemory::kPatternTableSize, 32*2);
 		}
 
-		for (size_t i = 0; i < PpuRam::kNumMaxNameTables; ++i)
+		for (size_t i = 0; i < PpuMemory::kNumMaxNameTables; ++i)
 		{
-			fs.Printf("\nName Table %d\n\n", i);
-			MemoryDump(ppuRam, fs, PpuRam::GetNameTableAddress(i), PpuRam::kNameTableSize, 32);
+			fs.Printf("\nName Table %d (%d bytes)\n\n", i, PpuMemory::kNameTableSize);
+			MemoryDump(ppuMemoryBus, fs, PpuMemory::GetNameTableAddress(i), PpuMemory::kNameTableSize, 32);
 
-			fs.Printf("\nAttribute Table %d\n\n", i);
-			MemoryDump(ppuRam, fs, PpuRam::GetAttributeTableAddress(i), PpuRam::kAttributeTableSize, 32);
+			fs.Printf("\nAttribute Table %d (%d bytes)\n\n", i, PpuMemory::kAttributeTableSize);
+			MemoryDump(ppuMemoryBus, fs, PpuMemory::GetAttributeTableAddress(i), PpuMemory::kAttributeTableSize, 32);
 		}
 
-		fs.Printf("\nImage Palette\n\n");
-		MemoryDump(ppuRam, fs, PpuRam::kImagePalette, PpuRam::kPaletteSize);
+		fs.Printf("\nImage Palette (%d bytes)\n\n", PpuMemory::kSinglePaletteSize);
+		MemoryDump(ppuMemoryBus, fs, PpuMemory::kImagePalette, PpuMemory::kSinglePaletteSize);
 
-		fs.Printf("\nSprite Palette\n\n");
-		MemoryDump(ppuRam, fs, PpuRam::kImagePalette, PpuRam::kPaletteSize);
+		fs.Printf("\nSprite Palette (%d bytes)\n\n", PpuMemory::kSinglePaletteSize);
+		MemoryDump(ppuMemoryBus, fs, PpuMemory::kImagePalette, PpuMemory::kSinglePaletteSize);
+	}
+
+	void MemoryDumpCpu(CpuMemoryBus& cpuMemoryBus)
+	{
+		const char* file = "CpuMemory.dmp";
+		printf("Dumping: %s\n", file);
+		MemoryDump(cpuMemoryBus, "PpuRam.dmp");
 	}
 
 	void ProcessInput()
@@ -238,15 +241,13 @@ private:
 	void PrintOperandValue()
 	{
 		Cpu& cpu = m_nes->m_cpu;
-		CpuRam& cpuRam = m_nes->m_cpuRam;
-		TRACE(" (" ADDR_16 ")=" ADDR_8, cpu.m_operandAddress, cpuRam.Read8(cpu.m_operandAddress));
+		TRACE(" (" ADDR_16 ")=" ADDR_8, cpu.m_operandAddress, cpu.Read8(cpu.m_operandAddress));
 	}
 
 	void PrintInstruction()
 	{
 		Cpu& cpu = m_nes->m_cpu;
 		OpCodeEntry& opCodeEntry = *cpu.m_opCodeEntry;
-		CpuRam& cpuRam = m_nes->m_cpuRam;
 		const uint16 PC = cpu.PC;
 		const uint16 operandAddress = cpu.m_operandAddress; // Expected to be updated for current instruction
 
@@ -257,7 +258,7 @@ private:
 		for (uint16 i = 0; i < 3; ++i)
 		{
 			if (i < opCodeEntry.numBytes)
-				TRACE("%02X ", cpuRam.Read8(PC + i));
+				TRACE("%02X ", cpu.Read8(PC + i));
 			else
 				TRACE("   ");
 		}
@@ -272,7 +273,7 @@ private:
 		{
 		case AddressMode::Immedt:
 			{
-				sprintf(operandText, "#" ADDR_8, cpuRam.Read8(operandAddress));
+				sprintf(operandText, "#" ADDR_8, cpu.Read8(operandAddress));
 			}
 			break;
 
@@ -292,7 +293,7 @@ private:
 			{
 				// For branch instructions, resolve the target address and print it in comments
 			#if !FCEUX_OUTPUT
-				const int8 offset = cpuRam.Read8(PC+1); // Signed offset in [-128,127]
+				const int8 offset = cpu.Read8(PC+1); // Signed offset in [-128,127]
 				sprintf(operandText, ADDR_8 " ; " ADDR_16 " (%d)", (uint8)offset, operandAddress, offset);
 			#else				
 				sprintf(operandText, ADDR_16, operandAddress);
@@ -303,21 +304,21 @@ private:
 		case AddressMode::ZeroPg:
 			{
 				//@TODO: Do zero-page instructions really specify a 16 bit address: $00xx? This is what fceux outputs...
-				sprintf(operandText, ADDR_16 " = #" ADDR_8, operandAddress, cpuRam.Read8(operandAddress));
+				sprintf(operandText, ADDR_16 " = #" ADDR_8, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
 		case AddressMode::ZPIdxX:
 			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				sprintf(operandText, ADDR_8 ",X @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+				const uint8 address = cpu.Read8(PC+1);
+				sprintf(operandText, ADDR_8 ",X @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
 		case AddressMode::ZPIdxY:
 			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				sprintf(operandText, ADDR_8 ",Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+				const uint8 address = cpu.Read8(PC+1);
+				sprintf(operandText, ADDR_8 ",Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
@@ -327,42 +328,42 @@ private:
 				if (isJump)
 					sprintf(operandText, ADDR_16, operandAddress);
 				else
-					sprintf(operandText, ADDR_16 " = #" ADDR_8, operandAddress, cpuRam.Read8(operandAddress));
+					sprintf(operandText, ADDR_16 " = #" ADDR_8, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
 		case AddressMode::AbIdxX:
 			{
-				const uint16 address = cpuRam.Read16(PC+1);
-				sprintf(operandText, ADDR_16 ",X @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+				const uint16 address = cpu.Read16(PC+1);
+				sprintf(operandText, ADDR_16 ",X @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
 		case AddressMode::AbIdxY:
 			{
-				const uint16 address = cpuRam.Read16(PC+1);
-				sprintf(operandText, ADDR_16 ",Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+				const uint16 address = cpu.Read16(PC+1);
+				sprintf(operandText, ADDR_16 ",Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
 		case AddressMode::Indrct:
 			{
-				const uint16 address = cpuRam.Read16(PC+1);
-				sprintf(operandText, "(" ADDR_16 ") @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+				const uint16 address = cpu.Read16(PC+1);
+				sprintf(operandText, "(" ADDR_16 ") @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
 		case AddressMode::IdxInd:
 			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				sprintf(operandText, "(" ADDR_8 ",X) @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+				const uint8 address = cpu.Read8(PC+1);
+				sprintf(operandText, "(" ADDR_8 ",X) @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 
 		case AddressMode::IndIdx:
 			{
-				const uint8 address = cpuRam.Read8(PC+1);
-				sprintf(operandText, "(" ADDR_8 "),Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpuRam.Read8(operandAddress));
+				const uint8 address = cpu.Read8(PC+1);
+				sprintf(operandText, "(" ADDR_8 "),Y @ " ADDR_16 " = #" ADDR_8, address, operandAddress, cpu.Read8(operandAddress));
 			}
 			break;
 

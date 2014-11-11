@@ -51,10 +51,15 @@ namespace
 	FORCEINLINE uint8 CalcOverflowFlag(uint8 a, uint8 b, uint8 r);
 }
 
-void Cpu::Initialize(Nes& nes, CpuRam& cpuRam)
+Cpu::Cpu()
+	: m_cpuMemoryBus(nullptr)
+	, m_opCodeEntry(nullptr)
 {
-	m_nes = &nes;
-	m_cpuRam = &cpuRam;
+}
+
+void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus)
+{
+	m_cpuMemoryBus = &cpuMemoryBus;
 }
 
 void Cpu::Reset()
@@ -68,7 +73,7 @@ void Cpu::Reset()
 	P.Set(StatusFlag::IrqDisabled);
 
 	// Entry point is located at the Reset interrupt location
-	PC = m_cpuRam->Read16(CpuRam::kResetVector);
+	PC = Read16(CpuMemory::kResetVector);
 }
 
 void Cpu::Nmi()
@@ -77,7 +82,7 @@ void Cpu::Nmi()
 	PushProcessorStatus(false);
 	P.Clear(StatusFlag::BrkExecuted);
 	P.Set(StatusFlag::IrqDisabled);
-	PC = m_cpuRam->Read16(CpuRam::kNmiVector);
+	PC = Read16(CpuMemory::kNmiVector);
 }
 
 void Cpu::Irq()
@@ -88,13 +93,13 @@ void Cpu::Irq()
 		PushProcessorStatus(false);
 		P.Clear(StatusFlag::BrkExecuted);
 		P.Set(StatusFlag::IrqDisabled);
-		PC = m_cpuRam->Read16(CpuRam::kIrqVector);
+		PC = Read16(CpuMemory::kIrqVector);
 	}
 }
 
 void Cpu::Run()
 {
-	uint8 opCode = m_cpuRam->Read8(PC);
+	uint8 opCode = Read8(PC);
 	m_opCodeEntry = g_opCodeTable[opCode];
 
 	if (m_opCodeEntry == nullptr)
@@ -102,21 +107,32 @@ void Cpu::Run()
 		assert(false && "Unknown opcode");
 	}
 
-	UpdateOperand();
+	UpdateOperandAddress();
 	
 	Debugger::PreCpuInstruction();
 	ExecuteInstruction();
 	Debugger::PostCpuInstruction();
 }
 
-void Cpu::UpdateOperand()
+uint8 Cpu::Read8(uint16 address) const
+{
+	return m_cpuMemoryBus->Read(address);
+}
+
+uint16 Cpu::Read16(uint16 address) const
+{
+	return TO16(m_cpuMemoryBus->Read(address)) | (TO16(m_cpuMemoryBus->Read(address + 1)) << 8);
+}
+
+void Cpu::Write8(uint16 address, uint8 value)
+{
+	m_cpuMemoryBus->Write(address, value);
+}
+
+void Cpu::UpdateOperandAddress()
 {
 	//@TODO: For all 2 byte reads, we need to compute potential page boundary penalty
 	
-	//@OPT: The first read from memory always reads from code segment, so there's no need to worry
-	// about mirroring. Either provide a faster CpuRam::Read func, or just get a pointer to the start
-	// of the code segment.
-
 #if CONFIG_DEBUG
 	m_operandAddress = 0; // Reset to help find bugs
 #endif
@@ -138,62 +154,62 @@ void Cpu::UpdateOperand()
 			//@OPT: Lazily compute if branch condition succeeds
 
 			// For branch instructions, resolve the target address
-			const int8 offset = m_cpuRam->Read8(PC+1); // Signed offset in [-128,127]
+			const int8 offset = Read8(PC+1); // Signed offset in [-128,127]
 			m_operandAddress = PC + m_opCodeEntry->numBytes + offset;
 		}
 		break;
 
 	case AddressMode::ZeroPg:
-		m_operandAddress = TO16(m_cpuRam->Read8(PC+1));
+		m_operandAddress = TO16(Read8(PC+1));
 		break;
 
 	case AddressMode::ZPIdxX:
-		m_operandAddress = TO16((m_cpuRam->Read8(PC+1) + X)) & 0x00FF; // Wrap around zero-page boundary
+		m_operandAddress = TO16((Read8(PC+1) + X)) & 0x00FF; // Wrap around zero-page boundary
 		break;
 
 	case AddressMode::ZPIdxY:
-		m_operandAddress = TO16((m_cpuRam->Read8(PC+1) + Y)) & 0x00FF; // Wrap around zero-page boundary
+		m_operandAddress = TO16((Read8(PC+1) + Y)) & 0x00FF; // Wrap around zero-page boundary
 		break;
 
 	case AddressMode::Absolu:
-		m_operandAddress = m_cpuRam->Read16(PC+1);
+		m_operandAddress = Read16(PC+1);
 		break;
 
 	case AddressMode::AbIdxX:
-		m_operandAddress = m_cpuRam->Read16(PC+1) + X;
+		m_operandAddress = Read16(PC+1) + X;
 		break;
 
 	case AddressMode::AbIdxY:
-		m_operandAddress = m_cpuRam->Read16(PC+1) + Y;
+		m_operandAddress = Read16(PC+1) + Y;
 		break;
 
 	case AddressMode::Indrct: // for JMP only
 		{
-			uint16 low = m_cpuRam->Read16(PC+1);
+			uint16 low = Read16(PC+1);
 
 			// Handle the 6502 bug for when the low-byte of the effective address is FF,
 			// in which case the 2nd byte read does not correctly cross page boundaries.
 			// The bug is that the high byte does not change.
 			uint16 high = (low & 0xFF00) | ((low + 1) & 0x00FF);
 
-			m_operandAddress = TO16(m_cpuRam->Read8(low)) | TO16(m_cpuRam->Read8(high)) << 8;
+			m_operandAddress = TO16(Read8(low)) | TO16(Read8(high)) << 8;
 		}
 		break;
 
 	case AddressMode::IdxInd:
 		{
-			uint16 low = TO16((m_cpuRam->Read8(PC+1) + X)) & 0x00FF; // Zero page low byte of operand address, wrap around zero page
+			uint16 low = TO16((Read8(PC+1) + X)) & 0x00FF; // Zero page low byte of operand address, wrap around zero page
 			uint16 high = TO16(low + 1) & 0x00FF; // Wrap high byte around zero page
-			m_operandAddress = TO16(m_cpuRam->Read8(low)) | TO16(m_cpuRam->Read8(high)) << 8;
+			m_operandAddress = TO16(Read8(low)) | TO16(Read8(high)) << 8;
 		}
 		break;
 
 	case AddressMode::IndIdx:
 		{
-			const uint16 low = TO16(m_cpuRam->Read8(PC+1)); // Zero page low byte of operand address
+			const uint16 low = TO16(Read8(PC+1)); // Zero page low byte of operand address
 			const uint16 high = TO16(low + 1) & 0x00FF; // Wrap high byte around zero page
 			//@TODO: potential penalty if + Y crosses page boundary here
-			m_operandAddress = (TO16(m_cpuRam->Read8(low)) | TO16(m_cpuRam->Read8(high)) << 8) + TO16(Y);
+			m_operandAddress = (TO16(Read8(low)) | TO16(Read8(high)) << 8) + TO16(Y);
 		}
 		break;
 
@@ -286,7 +302,7 @@ void Cpu::ExecuteInstruction()
 			Push16(returnAddr);
 			PushProcessorStatus(true);
 			P.Set(IrqDisabled); // Disable hardware IRQs
-			PC = m_cpuRam->Read16(CpuRam::kIrqVector);
+			PC = Read16(CpuMemory::kIrqVector);
 		}
 		break;
 
@@ -586,9 +602,7 @@ uint8 Cpu::GetAccumOrMemValue() const
 	if (m_opCodeEntry->addrMode == AddressMode::Accumu)
 		return A;
 	
-	m_nes->OnCpuMemoryPreRead(m_operandAddress);
-	uint8 result = m_cpuRam->Read8(m_operandAddress);
-	m_nes->OnCpuMemoryPostRead(m_operandAddress);
+	uint8 result = Read8(m_operandAddress);
 	return result;
 }
 
@@ -602,24 +616,21 @@ void Cpu::SetAccumOrMemValue(uint8 value)
 	}
 	else
 	{
-		m_cpuRam->Write8(m_operandAddress, value);
-		m_nes->OnCpuMemoryPostWrite(m_operandAddress);
+		Write8(m_operandAddress, value);
 	}
 }
 
 uint8 Cpu::GetMemValue() const
 {
 	assert(m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
-	uint8 result = m_cpuRam->Read8(m_operandAddress);
-	m_nes->OnCpuMemoryPostRead(result);
+	uint8 result = Read8(m_operandAddress);
 	return result;
 }
 
 void Cpu::SetMemValue(uint8 value)
 {
 	assert(m_opCodeEntry->addrMode & AddressMode::MemoryValueOperand);
-	m_cpuRam->Write8(m_operandAddress, value);
-	m_nes->OnCpuMemoryPostWrite(m_operandAddress);
+	Write8(m_operandAddress, value);
 }
 
 uint16 Cpu::GetBranchOrJmpLocation() const
@@ -630,7 +641,7 @@ uint16 Cpu::GetBranchOrJmpLocation() const
 
 void Cpu::Push8(uint8 value)
 {
-	m_cpuRam->Write8(CpuRam::kStackBase + SP, value);
+	Write8(CpuMemory::kStackBase + SP, value);
 	--SP;
 }
 
@@ -643,7 +654,7 @@ void Cpu::Push16(uint16 value)
 uint8 Cpu::Pop8()
 {
 	++SP;
-	return m_cpuRam->Read8(CpuRam::kStackBase + SP);
+	return Read8(CpuMemory::kStackBase + SP);
 }
 
 uint16 Cpu::Pop16()

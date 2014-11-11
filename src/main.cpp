@@ -48,8 +48,8 @@ int main(int argc, char* argv[])
 		Nes nes;
 		nes.Initialize();
 
-		nes.LoadRom(inputFile);
-		PrintRomInfo(inputFile, nes.GetRomHeader());
+		const RomHeader romHeader = nes.LoadRom(inputFile);
+		PrintRomInfo(inputFile, romHeader);
 		nes.Reset();
 		nes.Run();
 	}

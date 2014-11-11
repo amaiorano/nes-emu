@@ -43,6 +43,15 @@
     <ClInclude Include="src\Debugger.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Cartridge.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\MemoryBus.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CpuInternalRam.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
@@ -70,6 +79,12 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\FileStream.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Cartridge.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MemoryBus.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

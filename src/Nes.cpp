@@ -6,42 +6,18 @@
 void Nes::Initialize()
 {
 	Debugger::Initialize(*this);
+
+	m_cpu.Initialize(m_cpuMemoryBus);
+	m_ppu.Initialize(m_ppuMemoryBus, *this);
+	m_cartridge.Initialize();
+	m_cpuInternalRam.Initialize();
+	m_cpuMemoryBus.Initialize(m_ppu, m_cartridge, m_cpuInternalRam);
+	m_ppuMemoryBus.Initialize(m_ppu, m_cartridge);
 }
 
-void Nes::LoadRom(const char* file)
+RomHeader Nes::LoadRom(const char* file)
 {
-	FileStream fs(file, "rb");
-
-	fs.Read((uint8*)&m_romHeader, sizeof(RomHeader));
-
-	if ( !m_romHeader.IsValidHeader() )
-		throw std::exception("Invalid m_romHeader");
-
-	// Next is Trainer, if present (0 or 512 bytes)
-	if ( m_romHeader.HasTrainer() )
-		throw std::exception("Not supporting trainer roms");
-
-	if ( m_romHeader.IsPlayChoice10() || m_romHeader.IsVSUnisystem() )
-		throw std::exception("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
-
-	// Next is PRG-ROM data (16K or 32K)
-	const size_t prgRomSize = m_romHeader.GetPrgRomSizeBytes();
-	{
-		uint8 prgRom[CpuRam::kPrgRomMaxSize] = {0};
-		fs.Read(prgRom, prgRomSize);
-		m_cpuRam.LoadPrgRom(prgRom, prgRomSize);
-	}
-
-	// Next is CHR-ROM data (8K)
-	const size_t chrRomSize = m_romHeader.GetChrRomSizeBytes();
-	{
-		uint8 chrRom[PpuRam::kChrRomSize];
-		fs.Read(chrRom, chrRomSize);
-		m_ppuRam.LoadChrRom(chrRom, chrRomSize);
-	}
-
-	m_cpu.Initialize(*this, m_cpuRam);
-	m_ppu.Initialize(*this, m_cpuRam, m_ppuRam, m_spriteRam);
+	return m_cartridge.LoadRom(file);
 }
 
 void Nes::Reset()
@@ -62,3 +38,4 @@ void Nes::Run()
 		m_ppu.Run();
 	}
 }
+

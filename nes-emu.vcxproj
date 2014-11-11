@@ -13,10 +13,13 @@
   <ItemGroup>
     <ClInclude Include="src\Base.h" />
     <ClInclude Include="src\Bitfield.h" />
+    <ClInclude Include="src\Cartridge.h" />
     <ClInclude Include="src\Cpu.h" />
+    <ClInclude Include="src\CpuInternalRam.h" />
     <ClInclude Include="src\Debugger.h" />
     <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />
+    <ClInclude Include="src\MemoryBus.h" />
     <ClInclude Include="src\Nes.h" />
     <ClInclude Include="src\OpCodeTable.h" />
     <ClInclude Include="src\Ppu.h" />
@@ -25,10 +28,12 @@
     <ClInclude Include="src\System.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Cartridge.cpp" />
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\Debugger.cpp" />
     <ClCompile Include="src\FileStream.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\MemoryBus.cpp" />
     <ClCompile Include="src\Nes.cpp" />
     <ClCompile Include="src\OpCodeTable.cpp" />
     <ClCompile Include="src\Ppu.cpp" />

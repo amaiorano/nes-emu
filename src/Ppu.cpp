@@ -65,29 +65,25 @@ namespace PpuStatus // $2002 (R)
 }
 
 Ppu::Ppu()
-	: m_renderer(new Renderer())
-	, m_cpuRam(nullptr)
-	, m_ppuRam(nullptr)
-	, m_spriteRam(nullptr)
+	: m_ppuMemoryBus(nullptr)
+	, m_nes(nullptr)
+	, m_renderer(new Renderer())
 {
 	m_renderer->Create();
 }
 
-void Ppu::Initialize(Nes& nes, CpuRam& cpuRam, PpuRam& ppuRam, SpriteRam& spriteRam)
+void Ppu::Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes)
 {
+	m_ppuMemoryBus = &ppuMemoryBus;
 	m_nes = &nes;
-	m_cpuRam = &cpuRam;
-	m_ppuRam = &ppuRam;
-	m_spriteRam = &spriteRam;
 
-	m_ppuControlReg1	= m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControlReg1);
-	m_ppuControlReg2	= m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuControlReg2);
-	m_ppuStatusReg		= m_cpuRam->UnsafePtrAs<Bitfield8>(CpuRam::kPpuStatusReg);
-	m_sprRamAddressReg	= m_cpuRam->UnsafePtr(CpuRam::kPpuSprRamAddressReg);
-	m_sprRamIoReg		= m_cpuRam->UnsafePtr(CpuRam::kPpuSprRamIoReg);
-	m_vramAddressReg1	= m_cpuRam->UnsafePtr(CpuRam::kPpuVRamAddressReg1);
-	m_vramAddressReg2	= m_cpuRam->UnsafePtr(CpuRam::kPpuVRamAddressReg2);
-	m_vramIoReg			= m_cpuRam->UnsafePtr(CpuRam::kPpuVRamIoReg);
+	m_nameTables.Initialize();
+	m_palette.Initialize();
+	m_ppuRegisters.Initialize();
+
+	m_ppuControlReg1 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg1));
+	m_ppuControlReg2 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg2));
+	m_ppuStatusReg = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuStatusReg));
 }
 
 void Ppu::Reset()
@@ -95,7 +91,7 @@ void Ppu::Reset()
 	// Fake a first vblank
 	m_ppuStatusReg->Set(PpuStatus::InVBlank);
 
-	m_vramAddressReg2High = true;
+	m_vramAddressHigh = true;
 	m_vramAddress = 0xDDDD;
 	m_vramBufferedValue = 0xDD;
 }
@@ -125,94 +121,143 @@ void Ppu::Run()
 	//	Render();
 }
 
-void Ppu::OnCpuMemoryPreRead(uint16 address)
+uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 {
-	switch (address)
+	// CPU only has access to PPU memory-mapped registers
+	const uint16 ppuRegisterAddress = MapCpuToPpuRegister(cpuAddress);
+
+	switch (cpuAddress)
 	{
-		case CpuRam::kPpuVRamIoReg: // $2007
-			assert(m_vramIoReg == m_cpuRam->UnsafePtr(address));
-			assert(m_vramAddressReg2High && "User code error: trying to read from $2007 when VRAM address not yet set correct via $2006");
-			
-			// About to read $2007, so update it from buffered value in CIRAM or palette RAM value
-			*m_vramIoReg = m_vramAddress < PpuRam::kImagePalette? m_vramBufferedValue : m_cpuRam->Read8(m_vramAddress);
-
-			// Update buffered value with current vram value
-			m_vramBufferedValue = m_ppuRam->Read8( PpuRam::kNameTable0 + (m_vramAddress & (KB(4)-1)) ); // Wrap into 4K address space of CIRAM
-
-			// Advance VRAM pointer
-			m_vramAddress += PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
-
-			break;
-	}
-}
-
-void Ppu::OnCpuMemoryPostRead(uint16 address)
-{
-	switch (address)
-	{
-	case CpuRam::kPpuStatusReg: // $2002
-		m_ppuStatusReg->Clear(PpuStatus::InVBlank);
-		//@TODO: After a read occurs, $2005 is reset, hence the next write to $2005 will be Horizontal.
-
-		// After a read occurs, $2006 is reset, hence the next write to $2006 will be the high byte portion.
-		m_vramAddressReg2High = true;
-		break;
-	}
-}
-
-void Ppu::OnCpuMemoryPostWrite(uint16 address)
-{
-	switch (address)
-	{
-	case CpuRam::kPpuVRamAddressReg2: // $2006
+	case CpuMemory::kPpuVRamIoReg: // $2007
 		{
-			// Implement double write (alternate between writing high byte and low byte)
-			assert(m_vramAddressReg2 == m_cpuRam->UnsafePtr(address));
-			const uint16 halfAddress = TO16(*m_vramAddressReg2);
-			if (m_vramAddressReg2High)
+			assert(m_vramAddressHigh && "User code error: trying to read from $2007 when VRAM address not yet fully set via $2006");
+
+			// Read from palette or return buffered value
+			if (m_vramAddress >= PpuMemory::kPalettesBase)			
+			{
+				m_ppuRegisters.Write(ppuRegisterAddress, m_palette.Read(MapPpuToPalette(m_vramAddress)));
+			}
+			else
+			{
+				m_ppuRegisters.Write(ppuRegisterAddress, m_vramBufferedValue);
+			}
+
+			// Always update buffered value from current vram pointer before incrementing it.
+			// Note that we don't buffer palette values, we read "under it", which mirrors the name table memory (VRAM/CIRAM).
+			m_vramBufferedValue = m_ppuMemoryBus->Read(m_vramAddress);
+				
+			// Advance vram pointer
+			const uint16 advanceOffset = PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );				
+			m_vramAddress += advanceOffset;
+		}
+	}
+
+	return m_ppuRegisters.Read(ppuRegisterAddress);
+}
+
+void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
+{
+	switch (cpuAddress)
+	{
+	case CpuMemory::kPpuVRamAddressReg2: // $2006
+		{
+			const uint16 halfAddress = TO16(value);
+			if (m_vramAddressHigh)
 				m_vramAddress = (halfAddress << 8) | (m_vramAddress & 0x00FF);
 			else
 				m_vramAddress = halfAddress | (m_vramAddress & 0xFF00);
 
-			m_vramAddressReg2High = !m_vramAddressReg2High; // Toggle high/low
+			m_vramAddressHigh = !m_vramAddressHigh; // Toggle high/low
 		}
 		break;
 
-	case CpuRam::kPpuVRamIoReg: // $2007
+	case CpuMemory::kPpuVRamIoReg: // $2007
 		{
-			// Write value to VRAM and advance VRAM pointer
-			assert(m_vramIoReg == m_cpuRam->UnsafePtr(address));
-			uint8 value = *m_vramIoReg;
-			m_ppuRam->Write8(m_vramAddress, value);
-			m_vramAddress += PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
+			assert(m_vramAddressHigh && "User code error: trying to write to $2007 when VRAM address not yet fully set via $2006");
+
+			// Write to palette or memory bus
+			if (m_vramAddress >= PpuMemory::kPalettesBase)
+			{
+				m_palette.Write(MapPpuToPalette(m_vramAddress), value);
+			}
+			else
+			{
+				m_ppuMemoryBus->Write(m_vramAddress, value);
+			}
+				
+			const uint16 advanceOffset = PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
+			m_vramAddress += advanceOffset;
 		}
 		break;
 	}
+
+	// Update register value
+	m_ppuRegisters.Write(MapCpuToPpuRegister(cpuAddress), value);
+}
+
+uint8 Ppu::HandlePpuRead(uint16 ppuAddress)
+{
+	//@NOTE: The palette can only be accessed directly by the PPU (no address lines go out to Cartridge)
+	return m_nameTables.Read(MapPpuToVRam(ppuAddress));
+}
+
+void Ppu::HandlePpuWrite(uint16 ppuAddress, uint8 value)
+{
+	m_nameTables.Write(MapPpuToVRam(ppuAddress), value);
+}
+
+uint16 Ppu::MapCpuToPpuRegister(uint16 cpuAddress)
+{
+	assert(cpuAddress >= CpuMemory::kPpuRegistersBase && cpuAddress < CpuMemory::kPpuRegistersEnd);
+	return (cpuAddress - CpuMemory::kPpuRegistersBase ) % CpuMemory::kPpuRegistersSize;
+}
+
+uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
+{
+	assert(ppuAddress >= PpuMemory::kVRamBase); // Address may go into palettes (vram pointer)
+	const uint16 virtualVRamAddress = (ppuAddress - PpuMemory::kVRamBase) % PpuMemory::kVRamSize;
+	
+	//@TODO: Map according to nametable mirroring (4K -> 2K). For now, we assume vertical mirroring (horizontal scrolling).
+	const uint16 physicalVRamAddress = virtualVRamAddress % NameTableMemory::Size;
+	
+	return physicalVRamAddress;
+}
+
+uint16 Ppu::MapPpuToPalette(uint16 ppuAddress)
+{
+	assert(ppuAddress >= PpuMemory::kPalettesBase && ppuAddress < PpuMemory::kPalettesEnd);
+	return (ppuAddress - PpuMemory::kPalettesBase) % PpuMemory::kPalettesSize;
 }
 
 void Ppu::Render()
 {
-	static auto ReadTile = [] (const uint8* patternTable, int tileIndex, uint8 tile[8][8])
+	static auto ReadTile = [&] (uint16 patternTableAddress, uint8 tileIndex, uint8 tile[8][8])
 	{
 		// Every 16 bytes is 1 8x8 tile
-		const int tileOffset = tileIndex * 16;
+		const uint16 tileOffset = TO16(tileIndex) * 16;
 		assert(tileOffset+16 < KB(16));
-		Bitfield8* pByte1 = (Bitfield8*)&patternTable[tileOffset + 0];
-		Bitfield8* pByte2 = (Bitfield8*)&patternTable[tileOffset + 8];
 
-		for (size_t y = 0; y < 8; ++y)
+		uint16 byte1Address = patternTableAddress + tileOffset + 0;
+		uint16 byte2Address = patternTableAddress + tileOffset + 8;
+
+		for (uint16 y = 0; y < 8; ++y)
 		{
-			tile[0][y] = pByte1->TestPos(7) | (pByte2->TestPos(7) << 1);
-			tile[1][y] = pByte1->TestPos(6) | (pByte2->TestPos(6) << 1);
-			tile[2][y] = pByte1->TestPos(5) | (pByte2->TestPos(5) << 1);
-			tile[3][y] = pByte1->TestPos(4) | (pByte2->TestPos(4) << 1);
-			tile[4][y] = pByte1->TestPos(3) | (pByte2->TestPos(3) << 1);
-			tile[5][y] = pByte1->TestPos(2) | (pByte2->TestPos(2) << 1);
-			tile[6][y] = pByte1->TestPos(1) | (pByte2->TestPos(1) << 1);
-			tile[7][y] = pByte1->TestPos(0) | (pByte2->TestPos(0) << 1);
+			const uint8 b1 = m_ppuMemoryBus->Read(byte1Address);
+			const uint8 b2 = m_ppuMemoryBus->Read(byte2Address);
+			const Bitfield8& byte1 = reinterpret_cast<const Bitfield8&>(b1);
+			const Bitfield8& byte2 = reinterpret_cast<const Bitfield8&>(b2);
 
-			++pByte1;
-			++pByte2;
+			tile[0][y] = byte1.TestPos(7) | (byte2.TestPos(7) << 1);
+			tile[1][y] = byte1.TestPos(6) | (byte2.TestPos(6) << 1);
+			tile[2][y] = byte1.TestPos(5) | (byte2.TestPos(5) << 1);
+			tile[3][y] = byte1.TestPos(4) | (byte2.TestPos(4) << 1);
+			tile[4][y] = byte1.TestPos(3) | (byte2.TestPos(3) << 1);
+			tile[5][y] = byte1.TestPos(2) | (byte2.TestPos(2) << 1);
+			tile[6][y] = byte1.TestPos(1) | (byte2.TestPos(1) << 1);
+			tile[7][y] = byte1.TestPos(0) | (byte2.TestPos(0) << 1);
+
+			++byte1Address;
+			++byte2Address;
 		}
 	};
 
@@ -220,7 +265,7 @@ void Ppu::Render()
 	{
 		Color4 color;
 
-		for (size_t ty = 0; ty < 8; ++ty)
+		for (uint16 ty = 0; ty < 8; ++ty)
 		{
 			for (size_t tx = 0; tx < 8; ++tx)
 			{
@@ -239,20 +284,18 @@ void Ppu::Render()
 	};
 	
 	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-	const uint8* patternTable = m_ppuRam->UnsafePtr(currBgPatternTableAddress);
-
 	const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
-	const uint8* nameTable = m_ppuRam->UnsafePtr(currNameTableAddress); 
 
 	m_renderer->Clear();
 
 	uint8 tile[8][8] = {0};
-	for (int y = 0; y < 30; ++y)
+	for (uint16 y = 0; y < 30; ++y)
 	{
-		for (int x = 0; x < 32; ++x)
+		for (uint16 x = 0; x < 32; ++x)
 		{
-			int tileIndex = nameTable[y*32 + x];
-			ReadTile(patternTable, tileIndex, tile);
+			const uint16 tileIndexAddress = currNameTableAddress + y*32 + x;
+			const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+			ReadTile(currBgPatternTableAddress, tileIndex, tile);
 			DrawTile(*m_renderer, x*8, y*8, tile);
 		}
 	}

@@ -3,8 +3,7 @@
 #include "Base.h"
 #include "Bitfield.h"
 
-class Nes;
-class CpuRam;
+class CpuMemoryBus;
 struct OpCodeEntry;
 
 namespace StatusFlag
@@ -25,7 +24,8 @@ namespace StatusFlag
 class Cpu
 {
 public:
-	void Initialize(Nes& nes, CpuRam& cpuRam);
+	Cpu();
+	void Initialize(CpuMemoryBus& cpuMemoryBus);
 
 	void Reset();
 	void Nmi();
@@ -36,8 +36,12 @@ public:
 private:
 	friend class DebuggerImpl;
 
+	uint8 Read8(uint16 address) const;
+	uint16 Read16(uint16 address) const;
+	void Write8(uint16 address, uint8 value);
+
 	// Updates m_operandAddress for current instruction based on addressing mode. Operand data is assumed to be at PC + 1 if it exists.
-	void UpdateOperand();
+	void UpdateOperandAddress();
 
 	// Executes current instruction, updates PC
 	void ExecuteInstruction();
@@ -63,8 +67,7 @@ private:
 
 	// Data members
 
-	Nes* m_nes;
-	CpuRam* m_cpuRam;
+	CpuMemoryBus* m_cpuMemoryBus;
 	OpCodeEntry* m_opCodeEntry; // Current opcode entry
 	
 	// Registers - not using the usual m_ prefix because I find the code looks
