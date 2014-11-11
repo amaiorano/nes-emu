@@ -98,27 +98,75 @@ void Ppu::Reset()
 
 void Ppu::Run()
 {
-	static bool startRendering = false;
+	enum State { InitialVBlanks, WaitForInitialNmiEnable, Rendering, VBlanking };
 
-	if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
+	static State currState = InitialVBlanks;
+
+	const int NumCpuInstructionsForRender = 700;
+	const int NumCpuInstructionsForVBlank = (int)(NumCpuInstructionsForRender * 0.05f);
+
+	switch (currState)
 	{
-		//@HACK: For now render every 10th frame while NMI is enabled (this is wrong, we should always render)
-		static int count = 1;
-		if (--count == 0)
+	case InitialVBlanks:
 		{
-			//printf("NmiOnVBlank allowed! Signalling NMI\n");
-			count = 50;
-			m_nes->SignalCpuNmi();
-			startRendering = true;
+			m_renderer->Clear();
+			m_renderer->Render();
 
+			static int frames = 4;
+			if (frames == 4 || frames == 2)
+				m_ppuStatusReg->Clear(PpuStatus::InVBlank);
+			else
+				m_ppuStatusReg->Set(PpuStatus::InVBlank);
+
+			if (--frames == 0)
+			{
+				currState = VBlanking;
+			}
+		}
+		break;
+
+	case WaitForInitialNmiEnable:
+		m_renderer->Clear();
+		m_renderer->Render();
+
+		if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
+			currState = VBlanking;
+		break;
+
+	case Rendering:
+		{
+			static int numCpuInstructions = NumCpuInstructionsForRender;
+			if (--numCpuInstructions > 0)
+				break;
+			numCpuInstructions = NumCpuInstructionsForRender;
+
+
+			if (m_ppuControlReg2->Test(PpuControl2::BackgroundVisible))
+				Render();
+
+			currState = VBlanking;
+			// VBlanking::OnEnter
 			m_ppuStatusReg->Set(PpuStatus::InVBlank);
-			Render();
+			if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
+				m_nes->SignalCpuNmi();
+		}
+		break;
+
+	case VBlanking:
+		{
+			m_renderer->Render();
+
+			static int numCpuInstructions = NumCpuInstructionsForVBlank;
+			if (--numCpuInstructions > 0)
+				break;
+			numCpuInstructions = NumCpuInstructionsForVBlank;
+
+			currState = Rendering;
+			// Rendering::OnEnter
 			m_ppuStatusReg->Clear(PpuStatus::InVBlank);
 		}
+		break;
 	}
-
-	//if (startRendering)
-	//	Render();
 }
 
 uint8 Ppu::HandleCpuRead(uint16 cpuAddress)

@@ -30,11 +30,7 @@ void Nes::Run()
 {
 	for (;;)
 	{
-		//@TODO: For now, run a bunch of CPU instructions for every PPU update. Eventually need to make it cycle based.
-		for (size_t i = 0; i < 1; ++i)
-		{
-			m_cpu.Run();
-		}
+		m_cpu.Run();
 		m_ppu.Run();
 	}
 }
