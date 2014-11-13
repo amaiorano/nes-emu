@@ -89,67 +89,42 @@ void Ppu::Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes)
 
 void Ppu::Reset()
 {
-	// Fake a first vblank
-	m_ppuStatusReg->Set(PpuStatus::InVBlank);
+	// See http://wiki.nesdev.com/w/index.php/PPU_power_up_state
 
+	WritePpuRegister(CpuMemory::kPpuControlReg1, 0);
+	WritePpuRegister(CpuMemory::kPpuControlReg2, 0);
+	WritePpuRegister(CpuMemory::kPpuVRamAddressReg1, 0);
+	WritePpuRegister(CpuMemory::kPpuVRamIoReg, 0);
 	m_vramAddressHigh = true;
 	m_vramAddress = 0xDDDD;
 	m_vramBufferedValue = 0xDD;
 }
 
-void Ppu::Run()
+void Ppu::Execute(uint32& numCpuCyclesToExecute)
 {
-	enum State { InitialVBlanks, WaitForInitialNmiEnable, Rendering, VBlanking };
+	const uint32 kNumVBlankCycles = 2273; // 20 scanlines
+	const uint32 kNumRenderCycles = 27507; // 242 scanlines (1 prerender + 240 render + 1 postrender)
 
-	static State currState = InitialVBlanks;
+	enum State { Rendering, VBlanking };
+	static State currState;
+	static State nextState = VBlanking;
 
-	const int NumCpuInstructionsForRender = 700;
-	const int NumCpuInstructionsForVBlank = (int)(NumCpuInstructionsForRender * 0.05f);
+	currState = nextState;
 
 	switch (currState)
-	{
-	case InitialVBlanks:
-		{
-			m_renderer->Clear();
-			m_renderer->Render();
-
-			static int frames = 4;
-			if (frames == 4 || frames == 2)
-				m_ppuStatusReg->Clear(PpuStatus::InVBlank);
-			else
-				m_ppuStatusReg->Set(PpuStatus::InVBlank);
-
-			if (--frames == 0)
-			{
-				currState = VBlanking;
-			}
-		}
-		break;
-
-	case WaitForInitialNmiEnable:
-		m_renderer->Clear();
-		m_renderer->Render();
-
-		if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
-			currState = VBlanking;
-		break;
-
+	{	
 	case Rendering:
 		{
-			static int numCpuInstructions = NumCpuInstructionsForRender;
-			if (--numCpuInstructions > 0)
-				break;
-			numCpuInstructions = NumCpuInstructionsForRender;
-
+			m_ppuStatusReg->Clear(PpuStatus::InVBlank); // cleared at dot 1 of line 261 (start of pre-render line)
 
 			if (m_ppuControlReg2->Test(PpuControl2::BackgroundVisible))
+			{
 				Render();
+			}
 
-			currState = VBlanking;
-			// VBlanking::OnEnter
-			m_ppuStatusReg->Set(PpuStatus::InVBlank);
-			if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
-				m_nes->SignalCpuNmi();
+			numCpuCyclesToExecute = kNumRenderCycles;
+
+			nextState = VBlanking;
 		}
 		break;
 
@@ -157,14 +132,14 @@ void Ppu::Run()
 		{
 			m_renderer->Render();
 
-			static int numCpuInstructions = NumCpuInstructionsForVBlank;
-			if (--numCpuInstructions > 0)
-				break;
-			numCpuInstructions = NumCpuInstructionsForVBlank;
+			m_ppuStatusReg->Set(PpuStatus::InVBlank); // set at dot 1 of line 241 (line *after* post-render line)
 
-			currState = Rendering;
-			// Rendering::OnEnter
-			m_ppuStatusReg->Clear(PpuStatus::InVBlank);
+			if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
+				m_nes->SignalCpuNmi();
+
+			numCpuCyclesToExecute = kNumVBlankCycles;
+
+			nextState = Rendering;
 		}
 		break;
 	}
@@ -173,16 +148,30 @@ void Ppu::Run()
 uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 {
 	// CPU only has access to PPU memory-mapped registers
-	const uint16 ppuRegisterAddress = MapCpuToPpuRegister(cpuAddress);
+	assert(cpuAddress >= CpuMemory::kPpuRegistersBase && cpuAddress < CpuMemory::kPpuRegistersEnd);
 
 	// If debugger is reading, we don't want any register side-effects, so just return the value
 	if ( Debugger::IsExecuting() )
 	{
-		return m_ppuRegisters.Read(ppuRegisterAddress);
+		return ReadPpuRegister(cpuAddress);
 	}
-	
+
+	uint8 result = 0;
+
 	switch (cpuAddress)
 	{
+	case CpuMemory::kPpuStatusReg: // $2002
+		{
+			result = ReadPpuRegister(cpuAddress);
+
+			m_ppuStatusReg->Clear(PpuStatus::InVBlank);
+			WritePpuRegister(CpuMemory::kPpuVRamAddressReg1, 0);
+			WritePpuRegister(CpuMemory::kPpuVRamAddressReg2, 0);
+			m_vramAddress = 0;
+			m_vramAddressHigh = true;
+		}
+		break;
+
 	case CpuMemory::kPpuVRamIoReg: // $2007
 		{
 			assert(m_vramAddressHigh && "User code error: trying to read from $2007 when VRAM address not yet fully set via $2006");
@@ -190,12 +179,15 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 			// Read from palette or return buffered value
 			if (m_vramAddress >= PpuMemory::kPalettesBase)			
 			{
-				m_ppuRegisters.Write(ppuRegisterAddress, m_palette.Read(MapPpuToPalette(m_vramAddress)));
+				result = m_palette.Read(MapPpuToPalette(m_vramAddress));
 			}
 			else
 			{
-				m_ppuRegisters.Write(ppuRegisterAddress, m_vramBufferedValue);
+				result = m_vramBufferedValue;
 			}
+
+			// Write to register memory for debugging (not actually required)
+			WritePpuRegister(cpuAddress, result);
 
 			// Always update buffered value from current vram pointer before incrementing it.
 			// Note that we don't buffer palette values, we read "under it", which mirrors the name table memory (VRAM/CIRAM).
@@ -205,9 +197,13 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 			const uint16 advanceOffset = PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );				
 			m_vramAddress += advanceOffset;
 		}
+		break;
+
+	default:
+		result = ReadPpuRegister(cpuAddress);
 	}
 
-	return m_ppuRegisters.Read(ppuRegisterAddress);
+	return result;
 }
 
 void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
@@ -282,6 +278,16 @@ uint16 Ppu::MapPpuToPalette(uint16 ppuAddress)
 {
 	assert(ppuAddress >= PpuMemory::kPalettesBase && ppuAddress < PpuMemory::kPalettesEnd);
 	return (ppuAddress - PpuMemory::kPalettesBase) % PpuMemory::kPalettesSize;
+}
+
+uint8 Ppu::ReadPpuRegister(uint16 cpuAddress)
+{
+	return m_ppuRegisters.Read(MapCpuToPpuRegister(cpuAddress));
+}
+
+void Ppu::WritePpuRegister(uint16 cpuAddress, uint8 value)
+{
+	m_ppuRegisters.Write(MapCpuToPpuRegister(cpuAddress), value);
 }
 
 void Ppu::Render()

@@ -97,21 +97,25 @@ void Cpu::Irq()
 	}
 }
 
-void Cpu::Run()
+void Cpu::Execute(uint32 cycles, uint32& actualCycles)
 {
-	uint8 opCode = Read8(PC);
-	m_opCodeEntry = g_opCodeTable[opCode];
-
-	if (m_opCodeEntry == nullptr)
+	actualCycles = 0;
+	while (actualCycles < cycles)
 	{
-		assert(false && "Unknown opcode");
-	}
+		const uint8 opCode = Read8(PC);
+		m_opCodeEntry = g_opCodeTable[opCode];
 
-	UpdateOperandAddress();
+		if (m_opCodeEntry == nullptr)
+		{
+			assert(false && "Unknown opcode");
+		}
+
+		UpdateOperandAddress();
 	
-	Debugger::PreCpuInstruction();
-	ExecuteInstruction();
-	Debugger::PostCpuInstruction();
+		Debugger::PreCpuInstruction();
+		actualCycles += ExecuteInstruction();
+		Debugger::PostCpuInstruction();
+	}
 }
 
 uint8 Cpu::Read8(uint16 address) const
@@ -219,7 +223,7 @@ void Cpu::UpdateOperandAddress()
 	}
 }
 
-void Cpu::ExecuteInstruction()
+uint32 Cpu::ExecuteInstruction()
 {
 	using namespace OpCodeName;
 	using namespace StatusFlag;
@@ -593,6 +597,10 @@ void Cpu::ExecuteInstruction()
 	// If instruction hasn't modified PC, move it to next instruction
 	if (m_lastPC == PC)
 		PC += m_opCodeEntry->numBytes;
+
+	//@TODO: For now just return approx number of cycles for the instruction; however, we need to compute
+	// actual cycles taken for branches taken or not, and for page crossing penalties.
+	return m_opCodeEntry->numCycles;
 }
 
 uint8 Cpu::GetAccumOrMemValue() const

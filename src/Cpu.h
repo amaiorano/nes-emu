@@ -31,7 +31,7 @@ public:
 	void Nmi();
 	void Irq();
 
-	void Run();
+	void Execute(uint32 cycles, uint32& actualCycles);
 
 private:
 	friend class DebuggerImpl;
@@ -43,8 +43,8 @@ private:
 	// Updates m_operandAddress for current instruction based on addressing mode. Operand data is assumed to be at PC + 1 if it exists.
 	void UpdateOperandAddress();
 
-	// Executes current instruction, updates PC
-	void ExecuteInstruction();
+	// Executes current instruction, updates PC and returns number of cycles
+	uint32 ExecuteInstruction();
 
 	// For instructions that work on accumulator (A) or memory location
 	uint8 GetAccumOrMemValue() const;

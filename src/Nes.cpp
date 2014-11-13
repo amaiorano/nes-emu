@@ -28,10 +28,19 @@ void Nes::Reset()
 
 void Nes::Run()
 {
+	int32 numCpuCyclesLeft = 0;
+
 	for (;;)
 	{
-		m_cpu.Run();
-		m_ppu.Run();
+		uint32 numCpuCyclesToExecute = 0;
+		m_ppu.Execute(numCpuCyclesToExecute);
+
+		numCpuCyclesLeft += numCpuCyclesToExecute;
+
+		assert(numCpuCyclesLeft > 0);
+
+		uint32 actualCpuCycles = 0;
+		m_cpu.Execute(numCpuCyclesLeft, actualCpuCycles);
+		numCpuCyclesLeft -= actualCpuCycles; // Usually negative
 	}
 }
-

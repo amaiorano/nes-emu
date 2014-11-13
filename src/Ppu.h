@@ -14,7 +14,7 @@ public:
 	Ppu();
 	void Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes);
 	void Reset();
-	void Run();
+	void Execute(uint32& numCpuCyclesToExecute);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
@@ -25,6 +25,9 @@ private:
 	uint16 MapCpuToPpuRegister(uint16 cpuAddress);
 	uint16 MapPpuToVRam(uint16 ppuAddress);
 	uint16 MapPpuToPalette(uint16 ppuAddress);
+
+	uint8 ReadPpuRegister(uint16 cpuAddress);
+	void WritePpuRegister(uint16 cpuAddress, uint8 value);
 
 	void Render();
 
@@ -44,9 +47,8 @@ private:
 	PpuRegisterMemory m_ppuRegisters;
 
 	// Internal registers for handling the "vram pointer" controlled via $2006/$2007 in CPU memory space.
-	// The "vram" is a bit of a misnomer, as it can be used to address all PPU memory.
-	bool m_vramAddressHigh;
-	uint16 m_vramAddress; // In PPU address space
+	bool m_vramAddressHigh; // $2006 latch (T)
+	uint16 m_vramAddress; // (V) - in PPU address space
 	uint8 m_vramBufferedValue;
 
 	// Memory-mapped registers
