@@ -14,10 +14,12 @@ namespace Debugger
 	void DumpMemory();
 	void PreCpuInstruction();
 	void PostCpuInstruction();
+	bool IsExecuting();
 #else
 	FORCEINLINE void Initialize(Nes&) {}
 	FORCEINLINE void DumpMemory() {}
 	FORCEINLINE void PreCpuInstruction() {}
 	FORCEINLINE void PostCpuInstruction() {}
+	FORCEINLINE bool IsExecuting() { return false; }
 #endif
 }

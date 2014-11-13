@@ -23,6 +23,7 @@ namespace
 	uint16 g_instructionBreakpoints[10] = {0};
 	uint16 g_dataBreakpoints[10] = {0};
 }
+
 #define TRACE printf
 
 class DebuggerImpl
@@ -413,11 +414,19 @@ private:
 namespace Debugger
 {
 	static DebuggerImpl g_debugger;
+	static bool g_isExecuting;
+
+	struct ScopedExecuting
+	{
+		ScopedExecuting() { g_isExecuting = true; }
+		~ScopedExecuting() { g_isExecuting = false; }
+	};
 
 	void Initialize(Nes& nes) { g_debugger.Initialize(nes); }
-	void DumpMemory() { g_debugger.DumpMemory(); }
-	void PreCpuInstruction() { g_debugger.PreCpuInstruction(); }
-	void PostCpuInstruction() { g_debugger.PostCpuInstruction(); }
+	void DumpMemory() { ScopedExecuting se; g_debugger.DumpMemory(); }
+	void PreCpuInstruction() { ScopedExecuting se; g_debugger.PreCpuInstruction(); }
+	void PostCpuInstruction() { ScopedExecuting se; g_debugger.PostCpuInstruction(); }
+	bool IsExecuting() { return g_isExecuting; }
 }
 
 #endif // DEBUGGING_ENABLED

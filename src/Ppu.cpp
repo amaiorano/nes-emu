@@ -3,6 +3,7 @@
 #include "Memory.h"
 #include "Renderer.h"
 #include "Bitfield.h"
+#include "Debugger.h"
 
 namespace PpuControl1 // $2000 (W)
 {
@@ -174,6 +175,12 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 	// CPU only has access to PPU memory-mapped registers
 	const uint16 ppuRegisterAddress = MapCpuToPpuRegister(cpuAddress);
 
+	// If debugger is reading, we don't want any register side-effects, so just return the value
+	if ( Debugger::IsExecuting() )
+	{
+		return m_ppuRegisters.Read(ppuRegisterAddress);
+	}
+	
 	switch (cpuAddress)
 	{
 	case CpuMemory::kPpuVRamIoReg: // $2007
