@@ -7,22 +7,21 @@ const size_t kScreenHeight = 240;
 
 struct Color4
 {
+	uint32 argb;
+
 	Color4() {}
+	Color4(uint32 argb) : argb(argb) {}
+	Color4(uint8 r, uint8 g, uint8 b, uint8 a) { SetRGBA(r, g, b, a); }
 
-	Color4(uint32 rgba)
-		: r(uint8((rgba & 0xFF000000)>>24))
-		, g(uint8((rgba & 0x00FF0000)>>16))
-		, b(uint8((rgba & 0x0000FF00)>>8))
-		, a(uint8((rgba & 0x000000FF)))
+	void SetRGBA(uint8 r, uint8 g, uint8 b, uint8 a)
 	{
+		argb = (a << 24) | (r << 16) | (g << 8) | b;
 	}
 
-	Color4(uint8 r, uint8 g, uint8 b, uint8 a)
-		: r(r), g(g), b(b), a(a)
-	{
-	}
-
-	uint8 r, g, b, a;
+	uint8 A() const { return uint8((argb & 0xFF000000)>>24); }
+	uint8 R() const { return uint8((argb & 0x00FF0000)>>16); }
+	uint8 G() const { return uint8((argb & 0x0000FF00)>>8); }
+	uint8 B() const { return uint8((argb & 0x000000FF)); }
 
 	static Color4& Black()	{ static Color4 c(0x00, 0x00, 0x00, 0xFF); return c; }
 	static Color4& White()	{ static Color4 c(0xFF, 0xFF, 0xFF, 0xFF); return c; }

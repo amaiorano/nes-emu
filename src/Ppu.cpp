@@ -347,8 +347,6 @@ void Ppu::Render()
 	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
 	const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
 
-	m_renderer->Clear();
-
 	uint8 tile[8][8] = {0};
 	for (uint16 y = 0; y < 30; ++y)
 	{
