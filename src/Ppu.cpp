@@ -214,8 +214,31 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 
 void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 {
+	// Read old value
+	const uint16 registerAddress = MapCpuToPpuRegister(cpuAddress);
+	const uint8 oldValue = m_ppuRegisters.Read(registerAddress);
+
+	// Update register value
+	m_ppuRegisters.Write(registerAddress, value);
+
 	switch (cpuAddress)
 	{
+	case CpuMemory::kPpuControlReg1: // $2000
+		{
+			const Bitfield8* oldPpuControlReg1 = reinterpret_cast<const Bitfield8*>(&oldValue);
+
+			// The PPU pulls /NMI low if and only if both NMI_occurred and NMI_output are true. By toggling NMI_output ($2000 bit 7)
+			// during vertical blank without reading $2002, a program can cause /NMI to be pulled low multiple times, causing multiple
+			// NMIs to be generated. (http://wiki.nesdev.com/w/index.php/NMI)
+			if ( !oldPpuControlReg1->Test(PpuControl1::NmiOnVBlank)
+				&& m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank) // NmiOnVBlank toggled
+				&& m_ppuStatusReg->Test(PpuStatus::InVBlank) ) // In vblank (and $2002 not read yet, which resets this bit)
+			{
+				m_nes->SignalCpuNmi();
+			}
+		}
+		break;
+
 	case CpuMemory::kPpuVRamAddressReg2: // $2006
 		{
 			const uint16 halfAddress = TO16(value);
@@ -247,9 +270,6 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		}
 		break;
 	}
-
-	// Update register value
-	m_ppuRegisters.Write(MapCpuToPpuRegister(cpuAddress), value);
 }
 
 uint8 Ppu::HandlePpuRead(uint16 ppuAddress)

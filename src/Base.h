@@ -103,6 +103,12 @@ FORCEINLINE T ReadBits(T& target, U value)
 	return target & value;
 }
 
+template <typename T, typename U>
+FORCEINLINE bool TestBits(T& target, U value)
+{
+	return ReadBits(target, value) != 0;
+}
+
 // Metafunction that returns position of single bit in bit flag
 // (in fact, returns the position of the most significant bit, or 0)
 template <size_t Value>
