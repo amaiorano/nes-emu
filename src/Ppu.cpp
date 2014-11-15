@@ -100,8 +100,10 @@ void Ppu::Reset()
 	m_vramBufferedValue = 0xDD;
 }
 
-void Ppu::Execute(uint32& numCpuCyclesToExecute)
+void Ppu::Execute(bool& finishedRender, uint32& numCpuCyclesToExecute)
 {
+	finishedRender = false;
+	
 	const uint32 kNumVBlankCycles = 2273; // 20 scanlines
 	const uint32 kNumRenderCycles = 27507; // 242 scanlines (1 prerender + 240 render + 1 postrender)
 
@@ -121,7 +123,13 @@ void Ppu::Execute(uint32& numCpuCyclesToExecute)
 			{
 				Render();
 			}
+			else
+			{
+				m_renderer->Clear();
+				m_renderer->Render();
+			}
 
+			finishedRender = true;
 			numCpuCyclesToExecute = kNumRenderCycles;
 
 			nextState = VBlanking;
@@ -130,8 +138,6 @@ void Ppu::Execute(uint32& numCpuCyclesToExecute)
 
 	case VBlanking:
 		{
-			m_renderer->Render();
-
 			m_ppuStatusReg->Set(PpuStatus::InVBlank); // set at dot 1 of line 241 (line *after* post-render line)
 
 			if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))

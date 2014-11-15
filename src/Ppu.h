@@ -14,7 +14,7 @@ public:
 	Ppu();
 	void Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes);
 	void Reset();
-	void Execute(uint32& numCpuCyclesToExecute);
+	void Execute(bool& finishedRender, uint32& numCpuCyclesToExecute);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);

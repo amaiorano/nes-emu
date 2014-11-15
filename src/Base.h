@@ -28,12 +28,21 @@ typedef unsigned short uint16;
 typedef short int16;
 typedef unsigned int uint32;
 typedef int int32;
+typedef unsigned long long uint64;
+typedef long long int64;
+typedef float float32;
+typedef double float64;
+
 static_assert(sizeof(uint8)==1, "Invalid type size");
 static_assert(sizeof(int8)==1, "Invalid type size");
 static_assert(sizeof(uint16)==2, "Invalid type size");
 static_assert(sizeof(int16)==2, "Invalid type size");
 static_assert(sizeof(uint32)==4, "Invalid type size");
 static_assert(sizeof(int32)==4, "Invalid type size");
+static_assert(sizeof(uint64)==8, "Invalid type size");
+static_assert(sizeof(int64)==8, "Invalid type size");
+static_assert(sizeof(float32)==4, "Invalid type size");
+static_assert(sizeof(float64)==8, "Invalid type size");
 
 #define KB(n) (n*1024)
 #define MB(n) (n*1024*1024)

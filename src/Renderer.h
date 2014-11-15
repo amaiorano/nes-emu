@@ -37,6 +37,8 @@ public:
 	Renderer();
 	~Renderer();
 
+	static void SetWindowTitle(const char* title);
+
 	void Create();
 	void Destroy();
 

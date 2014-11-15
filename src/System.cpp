@@ -45,6 +45,26 @@ namespace System
 	{
 		::DebugBreak();
 	}
+
+	static float64 GetPerfCountTicksPerSec()
+	{
+		LARGE_INTEGER freq;
+		::QueryPerformanceFrequency(&freq);
+		return static_cast<float64>(freq.QuadPart);
+	}
+
+	Ticks GetTicks()
+	{
+		LARGE_INTEGER li;
+		::QueryPerformanceCounter(&li);
+		return li.QuadPart;
+	}
+
+	float64 TicksToSec(Ticks t1)
+	{
+		static float64 ticksPerSec = GetPerfCountTicksPerSec();
+		return static_cast<float64>(t1)/ ticksPerSec;
+	}
 }
 
 
