@@ -5,6 +5,33 @@
 #include "Bitfield.h"
 #include "Debugger.h"
 
+namespace
+{
+	const size_t kNumPaletteColors = 56;
+
+	Color4 g_paletteColors[kNumPaletteColors] = {0};
+
+	void InitPaletteColors()
+	{
+		// 2C03 and 2C05 palettes (http://wiki.nesdev.com/w/index.php/PPU_palettes#2C03_and_2C05)
+		struct DAC3 { uint8 r, g, b; };
+		DAC3 dac3Palette[] =
+		{
+			{3,3,3},{0,1,4},{0,0,6},{3,2,6},{4,0,3},{5,0,3},{5,1,0},{4,2,0},{3,2,0},{1,2,0},{0,3,1},{0,4,0},{0,2,2},{0,0,0},{0,0,0},{0,0,0},
+			{5,5,5},{0,3,6},{0,2,7},{4,0,7},{5,0,7},{7,0,4},{7,0,0},{6,3,0},{4,3,0},{1,4,0},{0,4,0},{0,5,3},{0,4,4},{0,0,0},{0,0,0},{0,0,0},
+			{7,7,7},{3,5,7},{4,4,7},{6,3,7},{7,0,7},{7,3,7},{7,4,0},{7,5,0},{6,6,0},{3,6,0},{0,7,0},{2,7,6},{0,7,7},{0,0,0},{0,0,0},{0,0,0},
+			{7,7,7},{5,6,7},{6,5,7},{7,5,7},{7,4,7},{7,5,5},{7,6,4},{7,7,2},{7,7,3},{5,7,2},{4,7,3},{2,7,6},{4,6,7},{0,0,0},{0,0,0},{0,0,0}
+		};
+		//static_assert(ARRAYSIZE(dac3Palette)==kNumPaletteColors, "Invalid palette size");
+
+		for (uint8 i = 0; i < kNumPaletteColors; ++i)
+		{
+			const DAC3& c = dac3Palette[i];
+			g_paletteColors[i].SetRGBA((uint8(c.r/7.f*255.f)), ((uint8)(c.g/7.f*255.f)), ((uint8)(c.b/7.f*255.f)), 0xFF);
+		}
+	}
+}
+
 namespace PpuControl1 // $2000 (W)
 {
 	enum Type : uint8
@@ -21,7 +48,12 @@ namespace PpuControl1 // $2000 (W)
 	// Returns current name table address in VRAM ($2000, $2400, $2800, or $2C00)
 	inline uint16 GetNameTableAddress(uint16 ppuControl1)
 	{
-		return 0x2000 + ((uint16)(ppuControl1 & NameTableAddressMask)) * 0x0400;
+		return PpuMemory::kNameTable0 + ((uint16)(ppuControl1 & NameTableAddressMask)) * PpuMemory::kNameAttributeTableSize;
+	}
+
+	inline uint16 GetAttributeTableAddress(uint16 ppuControl1)
+	{
+		return GetNameTableAddress(ppuControl1) + PpuMemory::kNameTableSize; // Follows name table
 	}
 
 	inline uint16 GetSpritePatternTableAddress(uint16 ppuControl1)
@@ -70,6 +102,7 @@ Ppu::Ppu()
 	, m_nes(nullptr)
 	, m_renderer(new Renderer())
 {
+	InitPaletteColors();
 	m_renderer->Create();
 }
 
@@ -303,7 +336,17 @@ uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 uint16 Ppu::MapPpuToPalette(uint16 ppuAddress)
 {
 	assert(ppuAddress >= PpuMemory::kPalettesBase && ppuAddress < PpuMemory::kPalettesEnd);
-	return (ppuAddress - PpuMemory::kPalettesBase) % PpuMemory::kPalettesSize;
+
+	uint16 paletteAddress = (ppuAddress - PpuMemory::kPalettesBase) % PpuMemory::kPalettesSize;
+
+	// Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+	// If least 2 bits are unset, it's one of the 8 mirrored addresses, so clear bit 4 to mirror
+	if ( !TestBits(paletteAddress, (BIT(1)|BIT(0))) )
+	{
+		ClearBits(paletteAddress, BIT(4));
+	}
+
+	return paletteAddress;
 }
 
 uint8 Ppu::ReadPpuRegister(uint16 cpuAddress)
@@ -317,12 +360,37 @@ void Ppu::WritePpuRegister(uint16 cpuAddress, uint8 value)
 }
 
 void Ppu::Render()
-{
-	static auto ReadTile = [&] (uint16 patternTableAddress, uint8 tileIndex, uint8 tile[8][8])
+{	
+	static auto GetTilePaletteUpperBits = [&] (uint16 attributeTableAddress, uint8 x, uint8 y)
+	{
+		const uint8 groupsPerScreenX = 8;
+		const uint8 tilesPerGroupAxis = 4; // 4x4 = 16 tiles per group
+		const uint8 tilesPerSquareAxis = 2; // 2x2 = 4 tiles per square (and 4x4 squares per group)
+		const uint8 squaresPerGroupAxis = 2;
+
+		// Get attribute byte for current group
+		const uint8 groupX = x / tilesPerGroupAxis; assert(groupX < 8);
+		const uint8 groupY = y / tilesPerGroupAxis; assert(groupY < 8);
+		const uint8 groupIndex = groupY * groupsPerScreenX + groupX; assert(groupIndex < 64);
+		const uint8 attributeByte = m_ppuMemoryBus->Read(attributeTableAddress + groupIndex);
+
+		// Get square x,y relative to current group
+		const uint8 squareX = (x - (groupX * tilesPerGroupAxis)) / squaresPerGroupAxis; assert(squareX < 2);
+		const uint8 squareY = (y - (groupY * tilesPerGroupAxis))  / squaresPerGroupAxis; assert(squareY < 2);
+		const uint8 squareIndex = squareY * tilesPerSquareAxis + squareX; assert(squareIndex < 4);
+
+		// Compute tile's upper 2 palette bits (lower 2 bits are in tile data itself)
+		const uint8 paletteUpperBits = (attributeByte >> (squareIndex*2)) & 0x3;
+		assert(paletteUpperBits < 4);
+
+		return paletteUpperBits;
+	};
+
+	static auto ReadTile = [&] (uint16 patternTableAddress, uint8 tileIndex, uint8 paletteUpperBits, uint8 tile[8][8])
 	{
 		// Every 16 bytes is 1 8x8 tile
 		const uint16 tileOffset = TO16(tileIndex) * 16;
-		assert(tileOffset+16 < KB(16));
+		assert(tileOffset+16 < KB(16) && "Indexing outside of current pattern table");
 
 		uint16 byte1Address = patternTableAddress + tileOffset + 0;
 		uint16 byte2Address = patternTableAddress + tileOffset + 8;
@@ -334,21 +402,21 @@ void Ppu::Render()
 			const Bitfield8& byte1 = reinterpret_cast<const Bitfield8&>(b1);
 			const Bitfield8& byte2 = reinterpret_cast<const Bitfield8&>(b2);
 
-			tile[0][y] = byte1.TestPos(7) | (byte2.TestPos(7) << 1);
-			tile[1][y] = byte1.TestPos(6) | (byte2.TestPos(6) << 1);
-			tile[2][y] = byte1.TestPos(5) | (byte2.TestPos(5) << 1);
-			tile[3][y] = byte1.TestPos(4) | (byte2.TestPos(4) << 1);
-			tile[4][y] = byte1.TestPos(3) | (byte2.TestPos(3) << 1);
-			tile[5][y] = byte1.TestPos(2) | (byte2.TestPos(2) << 1);
-			tile[6][y] = byte1.TestPos(1) | (byte2.TestPos(1) << 1);
-			tile[7][y] = byte1.TestPos(0) | (byte2.TestPos(0) << 1);
+			tile[0][y] = (paletteUpperBits << 2) | (byte1.TestPos(7) | (byte2.TestPos(7) << 1));
+			tile[1][y] = (paletteUpperBits << 2) | (byte1.TestPos(6) | (byte2.TestPos(6) << 1));
+			tile[2][y] = (paletteUpperBits << 2) | (byte1.TestPos(5) | (byte2.TestPos(5) << 1));
+			tile[3][y] = (paletteUpperBits << 2) | (byte1.TestPos(4) | (byte2.TestPos(4) << 1));
+			tile[4][y] = (paletteUpperBits << 2) | (byte1.TestPos(3) | (byte2.TestPos(3) << 1));
+			tile[5][y] = (paletteUpperBits << 2) | (byte1.TestPos(2) | (byte2.TestPos(2) << 1));
+			tile[6][y] = (paletteUpperBits << 2) | (byte1.TestPos(1) | (byte2.TestPos(1) << 1));
+			tile[7][y] = (paletteUpperBits << 2) | (byte1.TestPos(0) | (byte2.TestPos(0) << 1));
 
 			++byte1Address;
 			++byte2Address;
 		}
 	};
 
-	static auto DrawTile = [] (Renderer& renderer, int x, int y, uint8 tile[8][8])
+	static auto DrawTile = [&] (Renderer& renderer, int x, int y, uint8 tile[8][8])
 	{
 		Color4 color;
 
@@ -356,14 +424,12 @@ void Ppu::Render()
 		{
 			for (size_t tx = 0; tx < 8; ++tx)
 			{
-				switch (tile[tx][ty])
-				{
-				case 0: color = Color4::Black(); break;
-				case 1: color = Color4::Blue(); break;
-				case 2: color = Color4::Red(); break;
-				case 3: color = Color4::Green(); break;
-				default: assert(false); break;
-				}
+				const uint8 paletteOffset = tile[tx][ty];
+
+				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
+				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kPalettesBase + paletteOffset) );
+				assert(paletteIndex < kNumPaletteColors);
+				const Color4& color = g_paletteColors[paletteIndex];
 
 				renderer.DrawPixel(x + tx, y + ty, color);
 			}
@@ -372,15 +438,22 @@ void Ppu::Render()
 	
 	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
 	const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
+	const uint16 currAttributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
 
 	uint8 tile[8][8] = {0};
-	for (uint16 y = 0; y < 30; ++y)
+	for (uint8 y = 0; y < 30; ++y)
 	{
-		for (uint16 x = 0; x < 32; ++x)
+		for (uint8 x = 0; x < 32; ++x)
 		{
-			const uint16 tileIndexAddress = currNameTableAddress + y*32 + x;
+			// Name table is a table of 32x30 1 byte tile indices
+			const uint16 tileIndexAddress = currNameTableAddress + y * 32 + x;
 			const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
-			ReadTile(currBgPatternTableAddress, tileIndex, tile);
+
+			const uint8 paletteUpperBits = GetTilePaletteUpperBits(currAttributeTableAddress, x, y);
+
+			// Read in the tile data for tileIndex into the 8x8 tile from the pattern table (actual image data on the cart)
+			ReadTile(currBgPatternTableAddress, tileIndex, paletteUpperBits, tile);
+			
 			DrawTile(*m_renderer, x*8, y*8, tile);
 		}
 	}
