@@ -46,8 +46,8 @@ private:
 	// Updates m_operandAddress for current instruction based on addressing mode. Operand data is assumed to be at PC + 1 if it exists.
 	void UpdateOperandAddress();
 
-	// Executes current instruction, updates PC and returns number of cycles
-	uint32 ExecuteInstruction();
+	// Executes current instruction and updates PC
+	void ExecuteInstruction();
 
 	// For instructions that work on accumulator (A) or memory location
 	uint8 GetAccumOrMemValue() const;
@@ -82,6 +82,7 @@ private:
 	uint8 Y;		// Y register
 	Bitfield8 P;	// Processor status (flags)
 
+	uint16 m_cycles; // Elapsed cycles of each fetch and execute of an instruction
 	uint16 m_lastPC; // Useful for debugging purposes
 
 	// Operand address is either the operand's memory location, or the target for a branch or jmp

@@ -102,6 +102,8 @@ void Cpu::Execute(uint32 cycles, uint32& actualCycles)
 	actualCycles = 0;
 	while (actualCycles < cycles)
 	{
+		m_cycles = 0;
+
 		const uint8 opCode = Read8(PC);
 		m_opCodeEntry = g_opCodeTable[opCode];
 
@@ -111,10 +113,12 @@ void Cpu::Execute(uint32 cycles, uint32& actualCycles)
 		}
 
 		UpdateOperandAddress();
-	
+
 		Debugger::PreCpuInstruction();
-		actualCycles += ExecuteInstruction();
+		ExecuteInstruction();
 		Debugger::PostCpuInstruction();
+		
+		actualCycles += m_cycles;
 	}
 }
 
@@ -144,6 +148,9 @@ void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 					const uint8 value = m_cpuMemoryBus->Read(cpuAddress + i);
 					m_cpuMemoryBus->Write(CpuMemory::kPpuSprRamIoReg, value);
 				}
+
+				// While DMA transfer occurs, the memory bus is in use, preventing CPU from fetching memory
+				m_cycles += 512;
 			};
 
 			m_spriteDmaRegister = value;
@@ -268,7 +275,7 @@ void Cpu::UpdateOperandAddress()
 	}
 }
 
-uint32 Cpu::ExecuteInstruction()
+void Cpu::ExecuteInstruction()
 {
 	using namespace OpCodeName;
 	using namespace StatusFlag;
@@ -645,7 +652,7 @@ uint32 Cpu::ExecuteInstruction()
 
 	//@TODO: For now just return approx number of cycles for the instruction; however, we need to compute
 	// actual cycles taken for branches taken or not, and for page crossing penalties.
-	return m_opCodeEntry->numCycles;
+	m_cycles += m_opCodeEntry->numCycles;
 }
 
 uint8 Cpu::GetAccumOrMemValue() const
