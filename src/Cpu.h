@@ -33,6 +33,9 @@ public:
 
 	void Execute(uint32 cycles, uint32& actualCycles);
 
+	uint8 HandleCpuRead(uint16 cpuAddress);
+	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
+
 private:
 	friend class DebuggerImpl;
 
@@ -83,4 +86,6 @@ private:
 
 	// Operand address is either the operand's memory location, or the target for a branch or jmp
 	uint16 m_operandAddress;
+
+	uint8 m_spriteDmaRegister; // $4014
 };

@@ -1,4 +1,5 @@
 #include "MemoryBus.h"
+#include "Cpu.h"
 #include "Ppu.h"
 #include "Cartridge.h"
 #include "CpuInternalRam.h"
@@ -10,8 +11,9 @@ CpuMemoryBus::CpuMemoryBus()
 {
 }
 
-void CpuMemoryBus::Initialize(Ppu& ppu, Cartridge& cartridge, CpuInternalRam& cpuInternalRam)
+void CpuMemoryBus::Initialize(Cpu& cpu, Ppu& ppu, Cartridge& cartridge, CpuInternalRam& cpuInternalRam)
 {
+	m_cpu = &cpu;
 	m_ppu = &ppu;
 	m_cartridge = &cartridge;
 	m_cpuInternalRam = &cpuInternalRam;
@@ -23,10 +25,9 @@ uint8 CpuMemoryBus::Read(uint16 cpuAddress)
 	{
 		return m_cartridge->HandleCpuRead(cpuAddress);
 	}
-	else if (cpuAddress >= CpuMemory::kOtherRegistersBase)
+	else if (cpuAddress >= CpuMemory::kCpuRegistersBase)
 	{
-		//@TODO: Implement
-		return 0;
+		return m_cpu->HandleCpuRead(cpuAddress);
 	}
 	else if (cpuAddress >= CpuMemory::kPpuRegistersBase)
 	{
@@ -43,9 +44,9 @@ void CpuMemoryBus::Write(uint16 cpuAddress, uint8 value)
 		m_cartridge->HandleCpuWrite(cpuAddress, value);
 		return;
 	}
-	else if (cpuAddress >= CpuMemory::kOtherRegistersBase)
+	else if (cpuAddress >= CpuMemory::kCpuRegistersBase)
 	{
-		//@TODO: Implement
+		m_cpu->HandleCpuWrite(cpuAddress, value);
 		return;
 	}
 	else if (cpuAddress >= CpuMemory::kPpuRegistersBase)

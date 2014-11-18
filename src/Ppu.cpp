@@ -129,6 +129,8 @@ void Ppu::Reset()
 	WritePpuRegister(CpuMemory::kPpuVRamAddressReg1, 0);
 	WritePpuRegister(CpuMemory::kPpuVRamIoReg, 0);
 	m_vramAddressHigh = true;
+
+	// Not necessary but helps with debugging
 	m_vramAddress = 0xDDDD;
 	m_vramBufferedValue = 0xDD;
 }
@@ -269,6 +271,15 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 			{
 				m_nes->SignalCpuNmi();
 			}
+		}
+		break;
+
+	case CpuMemory::kPpuSprRamIoReg: // $2004
+		{
+			// Write value to sprite ram at address in $2003 (OAMADDR) and increment address
+			const uint8 spriteRamAddress = ReadPpuRegister(CpuMemory::kPpuSprRamAddressReg);
+			m_sprites.Write(spriteRamAddress, value);
+			WritePpuRegister(CpuMemory::kPpuSprRamAddressReg, spriteRamAddress + 1);
 		}
 		break;
 

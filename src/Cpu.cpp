@@ -118,6 +118,51 @@ void Cpu::Execute(uint32 cycles, uint32& actualCycles)
 	}
 }
 
+uint8 Cpu::HandleCpuRead(uint16 cpuAddress)
+{
+	if (cpuAddress == CpuMemory::kSpriteDmaReg)
+	{
+		return m_spriteDmaRegister;
+	}
+
+	//@TODO: Implement pAPU registers
+	return 0;
+}
+
+void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
+{
+	switch (cpuAddress)
+	{
+	case CpuMemory::kSpriteDmaReg: // $4014
+		{
+			// Initiate a DMA transfer from the input page to sprite ram.
+
+			static auto SpriteDmaTransfer = [&] (uint16 cpuAddress)
+			{
+				for (uint16 i = 0; i < 256; ++i)
+				{
+					const uint8 value = m_cpuMemoryBus->Read(cpuAddress + i);
+					m_cpuMemoryBus->Write(CpuMemory::kPpuSprRamIoReg, value);
+				}
+			};
+
+			m_spriteDmaRegister = value;
+			const uint16 srcCpuAddress = m_spriteDmaRegister * 0x100;
+
+			// Note: we perform the full DMA transfer right here instead of emulating the transfers over multiple frames.
+			// If we need to do it right, see http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#DMA
+			SpriteDmaTransfer(srcCpuAddress);
+
+			return;
+		}
+		break;
+
+	default:
+		//@TODO: Implement pAPU registers
+		break;
+	}
+}
+
 uint8 Cpu::Read8(uint16 address) const
 {
 	return m_cpuMemoryBus->Read(address);

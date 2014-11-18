@@ -1,6 +1,7 @@
 #include "Cartridge.h"
 #include "FileStream.h"
 #include "Rom.h"
+#include "Debugger.h"
 
 RomHeader Cartridge::LoadRom(const char* file)
 {
@@ -43,7 +44,7 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 		return m_sram.Read(MapCpuToSram(cpuAddress));
 	}
 	
-	assert(false && "Mapper doesn't handle this address");
+	assert(Debugger::IsExecuting() || (false && "Mapper doesn't handle this address"));
 	return 0;
 }
 
@@ -60,7 +61,7 @@ void Cartridge::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		return;
 	}
 	
-	assert(false && "Mapper doesn't handle this address");
+	assert(Debugger::IsExecuting() || (false && "Mapper doesn't handle this address"));
 }
 
 uint8 Cartridge::HandlePpuRead(uint16 ppuAddress)

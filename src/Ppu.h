@@ -43,13 +43,16 @@ private:
 	PaletteMemory m_palette;
 	
 	// Memory mapped registers
-	typedef Memory<FixedSizeStorage<8>> PpuRegisterMemory;
+	typedef Memory<FixedSizeStorage<8>> PpuRegisterMemory; // $2000 - $2007
 	PpuRegisterMemory m_ppuRegisters;
 
-	// Internal registers for handling the "vram pointer" controlled via $2006/$2007 in CPU memory space.
+	// Internal registers for handling the "vram pointer" controlled via $2006/$2007 in CPU address space.
 	bool m_vramAddressHigh; // $2006 latch (T)
 	uint16 m_vramAddress; // (V) - in PPU address space
 	uint8 m_vramBufferedValue;
+
+	typedef Memory<FixedSizeStorage<256>> SpriteMemory; // (aka OAM or SPR-RAM)
+	SpriteMemory m_sprites;
 
 	// Memory-mapped registers
 	Bitfield8* m_ppuControlReg1;	// $2000
