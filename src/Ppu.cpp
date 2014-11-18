@@ -374,7 +374,7 @@ uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 	const uint16 virtualVRamAddress = (ppuAddress - PpuMemory::kVRamBase) % PpuMemory::kVRamSize;
 	
 	//@TODO: Map according to nametable mirroring (4K -> 2K). For now, we assume vertical mirroring (horizontal scrolling).
-	const uint16 physicalVRamAddress = virtualVRamAddress % NameTableMemory::Size;
+	const uint16 physicalVRamAddress = virtualVRamAddress % NameTableMemory::kSize;
 	
 	return physicalVRamAddress;
 }
@@ -462,45 +462,101 @@ void Ppu::Render()
 		}
 	};
 
-	static auto DrawTile = [&] (Renderer& renderer, int x, int y, uint8 tile[8][8])
+	static auto DrawBackgroundTile = [&] (Renderer& renderer, int x, int y, uint8 tile[8][8])
 	{
-		Color4 color;
-
 		for (uint16 ty = 0; ty < 8; ++ty)
 		{
-			for (size_t tx = 0; tx < 8; ++tx)
+			for (uint16 tx = 0; tx < 8; ++tx)
 			{
 				const uint8 paletteOffset = tile[tx][ty];
 
 				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
-				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kPalettesBase + paletteOffset) );
+				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kImagePalette + paletteOffset) );
 				assert(paletteIndex < kNumPaletteColors);
-				const Color4& color = g_paletteColors[paletteIndex];
 
+				const Color4& color = g_paletteColors[paletteIndex];
 				renderer.DrawPixel(x + tx, y + ty, color);
 			}
 		}
 	};
-	
-	const uint16 currBgPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-	const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
-	const uint16 currAttributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
 
-	uint8 tile[8][8] = {0};
-	for (uint8 y = 0; y < 30; ++y)
+	static auto DrawSpriteTile = [&] (Renderer& renderer, int x, int y, uint8 tile[8][8], bool flipHorz, bool flipVert)
 	{
-		for (uint8 x = 0; x < 32; ++x)
+		for (uint16 ty = 0; ty < 8; ++ty)
 		{
-			// Name table is a table of 32x30 1 byte tile indices
-			const uint16 tileIndexAddress = currNameTableAddress + y * 32 + x;
-			const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+			for (uint16 tx = 0; tx < 8; ++tx)
+			{
+				const uint8 paletteOffset = tile[tx][ty];
 
-			const uint8 paletteUpperBits = GetTilePaletteUpperBits(currAttributeTableAddress, x, y);
+				if (paletteOffset % 4 == 0) // Don't draw transparent pixel
+					continue;
 
-			// Read in the tile data for tileIndex into the 8x8 tile from the pattern table (actual image data on the cart)
-			ReadTile(currBgPatternTableAddress, tileIndex, paletteUpperBits, tile);
+				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
+				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kSpritePalette + paletteOffset) );
+				assert(paletteIndex < kNumPaletteColors);
+
+				const Color4& color = g_paletteColors[paletteIndex];
+				
+				int xf = x + (flipHorz? 7 - tx : tx);
+				int yf = y + (flipVert? 7 - ty : ty);
+				renderer.DrawPixel(xf, yf, color);
+			}
+		}
+	};
+	
+	// Tiles
+	{
+		const uint16 currPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+		const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
+		const uint16 currAttributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
+
+		uint8 tile[8][8] = {0};
+		for (uint8 y = 0; y < 30; ++y)
+		{
+			for (uint8 x = 0; x < 32; ++x)
+			{
+				// Name table is a table of 32x30 1 byte tile indices
+				const uint16 tileIndexAddress = currNameTableAddress + y * 32 + x;
+				const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+
+				const uint8 paletteUpperBits = GetTilePaletteUpperBits(currAttributeTableAddress, x, y);
+
+				// Read in the tile data for tileIndex into the 8x8 tile from the pattern table (actual image data on the cart)
+				ReadTile(currPatternTableAddress, tileIndex, paletteUpperBits, tile);
 			
-			DrawTile(*m_renderer, x*8, y*8, tile);
+				DrawBackgroundTile(*m_renderer, x*8, y*8, tile);
+			}
+		}
+	}
+
+	// Sprites
+	{
+		assert(!m_ppuControlReg1->Test(PpuControl1::SpriteSize) && "TODO: 8x16 sprites");
+
+		// For 8x8 sprites...
+		const uint16 currPatternTableAddress = PpuControl1::GetSpritePatternTableAddress(m_ppuControlReg1->Value());
+
+		for (const uint8* currSprite = m_sprites.Begin(); currSprite != m_sprites.End(); currSprite += 4)
+		{
+			// Note that sprites are drawn one scanline late, so we must add 1 to the y provided.
+			// Client code must subtract 1 from the desired Y. This also implies that sprites can
+			// never be drawn at the first visible scanline (Y = 0).
+			const uint8 y = currSprite[0];
+			if (y >= 239) // Don't render sprites clipped by bottom of screen
+				continue;
+
+			const uint8 tileIndex = currSprite[1];
+			const uint8 attribs = currSprite[2];
+			const uint8 x = currSprite[3];
+
+			uint8 tile[8][8] = {0};
+			const uint8 paletteUpperBits = ReadBits(attribs, 0x3);
+			ReadTile(currPatternTableAddress, tileIndex, paletteUpperBits, tile);
+
+			const bool flipHorz = TestBits(attribs, BIT(6));
+			const bool flipVert = TestBits(attribs, BIT(7));
+
+			DrawSpriteTile(*m_renderer, x, y + 1, tile, flipHorz, flipVert);
 		}
 	}
 

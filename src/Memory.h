@@ -8,12 +8,14 @@ template <size_t size>
 class FixedSizeStorage
 {
 public:
-	static const size_t Size = size;
+	static const size_t kSize = size;
 
 	void Initialize()
 	{
 		m_memory.fill(0);
 	}
+
+	size_t Size() const { return kSize; }
 
 protected:
 	std::array<uint8, size> m_memory;
@@ -27,6 +29,8 @@ public:
 		m_memory.resize(size);
 		std::fill(begin(m_memory), end(m_memory), 0);
 	}
+
+	size_t GetSize() { return m_memory.size(); }
 
 protected:
 	std::vector<uint8> m_memory;
@@ -56,6 +60,9 @@ public:
 	{
 		return reinterpret_cast<T>(&m_memory[address]);
 	}
+
+	const uint8* Begin() const { return &m_memory[0]; }
+	const uint8* End() const { return Begin() + Size(); }
 };
 
 
