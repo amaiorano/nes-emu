@@ -30,7 +30,7 @@ public:
 		std::fill(begin(m_memory), end(m_memory), 0);
 	}
 
-	size_t GetSize() { return m_memory.size(); }
+	size_t Size() { return m_memory.size(); }
 
 protected:
 	std::vector<uint8> m_memory;

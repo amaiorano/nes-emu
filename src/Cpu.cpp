@@ -143,7 +143,7 @@ void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 
 			static auto SpriteDmaTransfer = [&] (uint16 cpuAddress)
 			{
-				for (uint16 i = 0; i < 256; ++i)
+				for (uint16 i = 0; i < 256; ++i) //@TODO: Use constant for 256 (kSpriteMemorySize?)
 				{
 					const uint8 value = m_cpuMemoryBus->Read(cpuAddress + i);
 					m_cpuMemoryBus->Write(CpuMemory::kPpuSprRamIoReg, value);

@@ -18,6 +18,16 @@ namespace
 			Lock();
 		}
 
+		void Clear(const Color4& color)
+		{
+			auto pCurrRow = reinterpret_cast<Uint32*>(m_backbuffer);
+			for (int y = 0; y < m_height; ++y, pCurrRow += (m_pitch/4))
+			{
+				for (int x = 0; x < m_width; ++x)
+					pCurrRow[x] = color.argb;
+			}
+		}
+
 		void Flip(SDL_Renderer* renderer)
 		{
 			Unlock();
@@ -112,10 +122,9 @@ void Renderer::Destroy()
 	}
 }
 
-void Renderer::Clear()
+void Renderer::Clear(const Color4& color)
 {
-	SDL_SetRenderDrawColor(m_impl->m_renderer, 0, 0, 0, 0);
-	SDL_RenderClear(m_impl->m_renderer);
+	m_impl->m_backbuffer.Clear(color);
 }
 
 void Renderer::Render()

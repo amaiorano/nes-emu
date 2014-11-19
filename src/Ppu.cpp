@@ -7,8 +7,7 @@
 
 namespace
 {
-	const size_t kNumPaletteColors = 56;
-
+	const size_t kNumPaletteColors = 64; // Technically 56 but there is space for 64 and some games access >= 56
 	Color4 g_paletteColors[kNumPaletteColors] = {0};
 
 	void InitPaletteColors()
@@ -112,10 +111,10 @@ namespace PpuControl2 // $2001 (W)
 	enum Type : uint8
 	{
 		DisplayType				= BIT(0), // 0 = Color, 1 = Monochrome
-		BackgroundClipping		= BIT(1), // 0 = BG invisible in left 8-pixel column, 1 = No clipping
-		SpriteClipping			= BIT(2), // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
-		BackgroundVisible		= BIT(3), // 0 = Background not displayed, 1 = Background visible
-		SpriteVisible			= BIT(4), // 0 = Sprites not displayed, 1 = Sprites visible		
+		BackgroundClipLeft8		= BIT(1), // 0 = BG invisible in left 8-pixel column, 1 = No clipping
+		SpritesClipLeft8		= BIT(2), // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
+		RenderBackground		= BIT(3), // 0 = Background not displayed, 1 = Background visible
+		RenderSprites			= BIT(4), // 0 = Sprites not displayed, 1 = Sprites visible		
 		ColorIntensityMask		= BIT(5)|BIT(6)|BIT(7), // High 3 bits if DisplayType == 0
 		FullBackgroundColorMask	= BIT(5)|BIT(6)|BIT(7), // High 3 bits if DisplayType == 1
 	};
@@ -189,13 +188,14 @@ void Ppu::Execute(bool& finishedRender, uint32& numCpuCyclesToExecute)
 		{
 			m_ppuStatusReg->Clear(PpuStatus::InVBlank); // cleared at dot 1 of line 261 (start of pre-render line)
 
-			if (m_ppuControlReg2->Test(PpuControl2::BackgroundVisible))
+			if (m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites))
 			{
 				Render();
 			}
 			else
 			{
-				m_renderer->Clear();
+				// We're in "forced vblank"
+				ClearBackground();
 				m_renderer->Render();
 			}
 
@@ -405,6 +405,13 @@ void Ppu::WritePpuRegister(uint16 cpuAddress, uint8 value)
 	m_ppuRegisters.Write(MapCpuToPpuRegister(cpuAddress), value);
 }
 
+void Ppu::ClearBackground()
+{
+	// Clear to palette color 0
+	//@TODO: If vram address points to palette, we should render that palette color
+	m_renderer->Clear(g_paletteColors[m_palette.Read(0)]);
+}
+
 void Ppu::Render()
 {	
 	static auto GetTilePaletteUpperBits = [&] (uint16 attributeTableAddress, uint8 x, uint8 y)
@@ -470,6 +477,9 @@ void Ppu::Render()
 			{
 				const uint8 paletteOffset = tile[tx][ty];
 
+				if (paletteOffset % 4 == 0) // Don't draw bg color pixel as screen was already cleared with that color
+					continue;
+
 				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
 				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kImagePalette + paletteOffset) );
 				assert(paletteIndex < kNumPaletteColors);
@@ -499,66 +509,97 @@ void Ppu::Render()
 				
 				int xf = x + (flipHorz? 7 - tx : tx);
 				int yf = y + (flipVert? 7 - ty : ty);
+
+				// Clip x against right screen edge and y against bottom screen edge
+				if (xf >= kScreenWidth || yf >= kScreenHeight)
+					continue;
+
 				renderer.DrawPixel(xf, yf, color);
 			}
 		}
 	};
-	
-	// Tiles
+
+	static auto RenderSprites = [&] (bool behindBackground)
 	{
-		const uint16 currPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-		const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
-		const uint16 currAttributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
-
-		uint8 tile[8][8] = {0};
-		for (uint8 y = 0; y < 30; ++y)
+		if (m_ppuControlReg2->Test(PpuControl2::RenderSprites))
 		{
-			for (uint8 x = 0; x < 32; ++x)
+			assert(!m_ppuControlReg1->Test(PpuControl1::SpriteSize) && "TODO: 8x16 sprites");
+
+			// For 8x8 sprites...
+			const uint16 currPatternTableAddress = PpuControl1::GetSpritePatternTableAddress(m_ppuControlReg1->Value());
+
+			// Iterate backwards for sprite rendering priority (smaller indices draw over larger indices)
+			for (size_t i = kMaxSprites; i-- > 0; )
 			{
-				// Name table is a table of 32x30 1 byte tile indices
-				const uint16 tileIndexAddress = currNameTableAddress + y * 32 + x;
-				const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+				const uint8* spriteData = m_sprites.RawPtr(static_cast<uint16>(i * kSpriteDataSize));
 
-				const uint8 paletteUpperBits = GetTilePaletteUpperBits(currAttributeTableAddress, x, y);
+				// Note that sprites are drawn one scanline late, so we must add 1 to the y provided.
+				// Client code must subtract 1 from the desired Y. This also implies that sprites can
+				// never be drawn at the first visible scanline (Y = 0).
+				const uint8 y = spriteData[0];
+				if (y >= 239) // Don't render sprites clipped by bottom of screen
+					continue;
 
-				// Read in the tile data for tileIndex into the 8x8 tile from the pattern table (actual image data on the cart)
+				const uint8 attribs = spriteData[2];
+				const bool currBehindBackground = TestBits(attribs, BIT(5));
+				if (behindBackground != currBehindBackground)
+					continue;
+
+				const uint8 tileIndex = spriteData[1];
+				const uint8 x = spriteData[3];
+
+				uint8 tile[8][8] = {0};
+				const uint8 paletteUpperBits = ReadBits(attribs, 0x3);
 				ReadTile(currPatternTableAddress, tileIndex, paletteUpperBits, tile);
-			
-				DrawBackgroundTile(*m_renderer, x*8, y*8, tile);
+
+				const bool flipHorz = TestBits(attribs, BIT(6));
+				const bool flipVert = TestBits(attribs, BIT(7));
+
+				DrawSpriteTile(*m_renderer, x, y + 1, tile, flipHorz, flipVert);
 			}
 		}
-	}
+	};
 
-	// Sprites
+	static auto RenderBackground = [&] ()
 	{
-		assert(!m_ppuControlReg1->Test(PpuControl1::SpriteSize) && "TODO: 8x16 sprites");
-
-		// For 8x8 sprites...
-		const uint16 currPatternTableAddress = PpuControl1::GetSpritePatternTableAddress(m_ppuControlReg1->Value());
-
-		for (const uint8* currSprite = m_sprites.Begin(); currSprite != m_sprites.End(); currSprite += 4)
+		if (m_ppuControlReg2->Test(PpuControl2::RenderBackground))
 		{
-			// Note that sprites are drawn one scanline late, so we must add 1 to the y provided.
-			// Client code must subtract 1 from the desired Y. This also implies that sprites can
-			// never be drawn at the first visible scanline (Y = 0).
-			const uint8 y = currSprite[0];
-			if (y >= 239) // Don't render sprites clipped by bottom of screen
-				continue;
-
-			const uint8 tileIndex = currSprite[1];
-			const uint8 attribs = currSprite[2];
-			const uint8 x = currSprite[3];
+			const uint16 currPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+			const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
+			const uint16 currAttributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
 
 			uint8 tile[8][8] = {0};
-			const uint8 paletteUpperBits = ReadBits(attribs, 0x3);
-			ReadTile(currPatternTableAddress, tileIndex, paletteUpperBits, tile);
+			for (uint8 y = 0; y < 30; ++y)
+			{
+				for (uint8 x = 0; x < 32; ++x)
+				{
+					// Name table is a table of 32x30 1 byte tile indices
+					const uint16 tileIndexAddress = currNameTableAddress + y * 32 + x;
+					const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
 
-			const bool flipHorz = TestBits(attribs, BIT(6));
-			const bool flipVert = TestBits(attribs, BIT(7));
+					const uint8 paletteUpperBits = GetTilePaletteUpperBits(currAttributeTableAddress, x, y);
 
-			DrawSpriteTile(*m_renderer, x, y + 1, tile, flipHorz, flipVert);
+					// Read in the tile data for tileIndex into the 8x8 tile from the pattern table (actual image data on the cart)
+					ReadTile(currPatternTableAddress, tileIndex, paletteUpperBits, tile);
+
+					DrawBackgroundTile(*m_renderer, x*8, y*8, tile);
+				}
+			}
 		}
-	}
+	};
+	
+	// Always clear using palette color 0. When rendering bg tiles, we don't render color 0 so that
+	// sprites below bg remain there.	
+	ClearBackground();
+
+	// Sprites behind background
+	RenderSprites(true);
+
+	// Background
+	RenderBackground();
+
+	// Sprites above background
+	RenderSprites(false);
 
 	m_renderer->Render();
 }

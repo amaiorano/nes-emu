@@ -29,6 +29,7 @@ private:
 	uint8 ReadPpuRegister(uint16 cpuAddress);
 	void WritePpuRegister(uint16 cpuAddress, uint8 value);
 
+	void ClearBackground();
 	void Render();
 
 	PpuMemoryBus* m_ppuMemoryBus;
@@ -51,7 +52,10 @@ private:
 	uint16 m_vramAddress; // (V) - in PPU address space
 	uint8 m_vramBufferedValue;
 
-	typedef Memory<FixedSizeStorage<256>> SpriteMemory; // (aka OAM or SPR-RAM)
+	static const size_t kMaxSprites = 64;
+	static const size_t kSpriteDataSize = 4;
+	static const size_t kSpriteMemorySize = kMaxSprites * kSpriteDataSize;
+	typedef Memory<FixedSizeStorage<kSpriteMemorySize>> SpriteMemory; // (aka OAM or SPR-RAM)
 	SpriteMemory m_sprites;
 
 	// Memory-mapped registers

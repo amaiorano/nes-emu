@@ -148,7 +148,7 @@ private:
 	{
 		const char* file = "CpuMemory.dmp";
 		printf("Dumping: %s\n", file);
-		MemoryDump(cpuMemoryBus, "PpuRam.dmp");
+		MemoryDump(cpuMemoryBus, file);
 	}
 
 	void ProcessInput()

@@ -42,7 +42,7 @@ public:
 	void Create();
 	void Destroy();
 
-	void Clear();
+	void Clear(const Color4& color = Color4::Black());
 	void Render();
 
 	void DrawPixel(int x, int y, const Color4& color);
