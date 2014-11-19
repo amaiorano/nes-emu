@@ -77,10 +77,10 @@ void Cartridge::HandlePpuWrite(uint16 ppuAddress, uint8 value)
 uint16 Cartridge::MapCpuToPrgRom(uint16 cpuAddress)
 {
 	// Mapper 0 supports either 16K or 32K of PRG-ROM
-	// For now, assume 16K so mirror upper bank to lower (C000-FFFF -> 8000-BFFF)
+	// If 16K, mirror upper bank to lower (C000-FFFF -> 8000-BFFF)
 	assert(cpuAddress >= CpuMemory::kPrgRomBase);
-	const uint16 kPrgRomBankSize = KB(16);
-	return (cpuAddress - CpuMemory::kPrgRomBase) % kPrgRomBankSize;
+	const size_t kPrgRomBankSize = m_prgRom.Size();
+	return static_cast<uint16>((cpuAddress - CpuMemory::kPrgRomBase) % kPrgRomBankSize);
 }
 
 uint16 Cartridge::MapCpuToSram(uint16 cpuAddress)
