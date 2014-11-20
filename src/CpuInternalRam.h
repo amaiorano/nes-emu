@@ -1,5 +1,6 @@
 #pragma once
 #include "Memory.h"
+#include "MemoryMap.h"
 
 class CpuInternalRam
 {

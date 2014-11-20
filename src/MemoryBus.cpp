@@ -3,6 +3,7 @@
 #include "Ppu.h"
 #include "Cartridge.h"
 #include "CpuInternalRam.h"
+#include "MemoryMap.h"
 
 CpuMemoryBus::CpuMemoryBus()
 	: m_ppu(nullptr)

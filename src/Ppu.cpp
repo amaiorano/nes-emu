@@ -3,6 +3,7 @@
 #include "Memory.h"
 #include "Renderer.h"
 #include "Bitfield.h"
+#include "MemoryMap.h"
 #include "Debugger.h"
 
 namespace

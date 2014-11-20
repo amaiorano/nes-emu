@@ -21,6 +21,7 @@
     <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />
     <ClInclude Include="src\MemoryBus.h" />
+    <ClInclude Include="src\MemoryMap.h" />
     <ClInclude Include="src\Nes.h" />
     <ClInclude Include="src\OpCodeTable.h" />
     <ClInclude Include="src\Ppu.h" />

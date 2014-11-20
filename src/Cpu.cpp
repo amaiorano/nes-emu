@@ -1,6 +1,7 @@
 #include "Cpu.h"
 #include "Nes.h"
 #include "OpCodeTable.h"
+#include "MemoryMap.h"
 #include "Debugger.h"
 
 namespace

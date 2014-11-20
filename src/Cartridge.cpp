@@ -1,6 +1,7 @@
 #include "Cartridge.h"
 #include "FileStream.h"
 #include "Rom.h"
+#include "MemoryMap.h"
 #include "Debugger.h"
 
 RomHeader Cartridge::LoadRom(const char* file)
