@@ -111,8 +111,8 @@ namespace PpuControl2 // $2001 (W)
 	enum Type : uint8
 	{
 		DisplayType				= BIT(0), // 0 = Color, 1 = Monochrome
-		BackgroundClipLeft8		= BIT(1), // 0 = BG invisible in left 8-pixel column, 1 = No clipping
-		SpritesClipLeft8		= BIT(2), // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
+		BackgroundShowLeft8		= BIT(1), // 0 = BG invisible in left 8-pixel column, 1 = No clipping
+		SpritesShowLeft8		= BIT(2), // 0 = Sprites invisible in left 8-pixel column, 1 = No clipping
 		RenderBackground		= BIT(3), // 0 = Background not displayed, 1 = Background visible
 		RenderSprites			= BIT(4), // 0 = Sprites not displayed, 1 = Sprites visible		
 		ColorIntensityMask		= BIT(5)|BIT(6)|BIT(7), // High 3 bits if DisplayType == 0
@@ -540,13 +540,16 @@ void Ppu::Render()
 				if (y >= 239) // Don't render sprites clipped by bottom of screen
 					continue;
 
+				const uint8 x = spriteData[3];
+				if (x < 8 && !m_ppuControlReg2->Test(PpuControl2::SpritesShowLeft8))
+					continue;
+
 				const uint8 attribs = spriteData[2];
 				const bool currBehindBackground = TestBits(attribs, BIT(5));
 				if (behindBackground != currBehindBackground)
 					continue;
 
 				const uint8 tileIndex = spriteData[1];
-				const uint8 x = spriteData[3];
 
 				uint8 tile[8][8] = {0};
 				const uint8 paletteUpperBits = ReadBits(attribs, 0x3);
@@ -568,10 +571,12 @@ void Ppu::Render()
 			const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
 			const uint16 currAttributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
 
+			const uint8 initialX = m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8)? 0 : 1;
+
 			uint8 tile[8][8] = {0};
 			for (uint8 y = 0; y < 30; ++y)
 			{
-				for (uint8 x = 0; x < 32; ++x)
+				for (uint8 x = initialX; x < 32; ++x)
 				{
 					// Name table is a table of 32x30 1 byte tile indices
 					const uint16 tileIndexAddress = currNameTableAddress + y * 32 + x;
