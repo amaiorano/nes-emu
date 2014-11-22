@@ -2,6 +2,7 @@
 
 #include "Base.h"
 #include "Bitfield.h"
+#include "ControllerPorts.h"
 
 class CpuMemoryBus;
 struct OpCodeEntry;
@@ -89,4 +90,6 @@ private:
 	uint16 m_operandAddress;
 
 	uint8 m_spriteDmaRegister; // $4014
+
+	ControllerPorts m_controllerPorts;
 };

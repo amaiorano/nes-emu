@@ -14,6 +14,7 @@
     <ClInclude Include="src\Base.h" />
     <ClInclude Include="src\Bitfield.h" />
     <ClInclude Include="src\Cartridge.h" />
+    <ClInclude Include="src\ControllerPorts.h" />
     <ClInclude Include="src\Cpu.h" />
     <ClInclude Include="src\CpuInternalRam.h" />
     <ClInclude Include="src\Debugger.h" />
@@ -31,6 +32,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cartridge.cpp" />
+    <ClCompile Include="src\ControllerPorts.cpp" />
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\Debugger.cpp" />
     <ClCompile Include="src\FileStream.cpp" />

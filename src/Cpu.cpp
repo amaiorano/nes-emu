@@ -61,6 +61,7 @@ Cpu::Cpu()
 void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus)
 {
 	m_cpuMemoryBus = &cpuMemoryBus;
+	m_controllerPorts.Initialize();
 }
 
 void Cpu::Reset()
@@ -75,6 +76,8 @@ void Cpu::Reset()
 
 	// Entry point is located at the Reset interrupt location
 	PC = Read16(CpuMemory::kResetVector);
+
+	m_controllerPorts.Reset();
 }
 
 void Cpu::Nmi()
@@ -125,9 +128,15 @@ void Cpu::Execute(uint32 cycles, uint32& actualCycles)
 
 uint8 Cpu::HandleCpuRead(uint16 cpuAddress)
 {
-	if (cpuAddress == CpuMemory::kSpriteDmaReg)
+	switch (cpuAddress)
 	{
+	case CpuMemory::kSpriteDmaReg: // $4014
 		return m_spriteDmaRegister;
+
+	case CpuMemory::kControllerPort1: // $4016
+	case CpuMemory::kControllerPort2: // $4017
+		return m_controllerPorts.HandleCpuRead(cpuAddress);
+		break;
 	}
 
 	//@TODO: Implement pAPU registers
@@ -163,6 +172,11 @@ void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 
 			return;
 		}
+		break;
+
+	case CpuMemory::kControllerPort1: // $4016
+	case CpuMemory::kControllerPort2: // $4017
+		m_controllerPorts.HandleCpuWrite(cpuAddress, value);
 		break;
 
 	default:

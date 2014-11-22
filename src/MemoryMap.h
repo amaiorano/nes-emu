@@ -50,6 +50,8 @@ namespace CpuMemory
 	const uint16 kPpuVRamIoReg				= 0x2007; // (RW) /
 
 	const uint16 kSpriteDmaReg				= 0x4014; // (W) OAMDMA
+	const uint16 kControllerPort1			= 0x4016; // (RW) Strobe for both controllers (bit 0), and controller 1 output
+	const uint16 kControllerPort2			= 0x4017; // (R) Controller 2 output
 
 	const uint16 kNmiVector					= 0xFFFA; // and 0xFFFB
 	const uint16 kResetVector				= 0xFFFC; // and 0xFFFD
