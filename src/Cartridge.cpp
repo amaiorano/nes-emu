@@ -21,6 +21,9 @@ RomHeader Cartridge::LoadRom(const char* file)
 	if ( romHeader.IsPlayChoice10() || romHeader.IsVSUnisystem() )
 		throw std::exception("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
 
+	if ( romHeader.GetMapperNumber() != 0 )
+		throw std::exception(FormattedString<>("Unsupported mapper: %d", romHeader.GetMapperNumber()));
+
 	// Next is PRG-ROM data (16K or 32K)
 	const size_t prgRomSize = romHeader.GetPrgRomSizeBytes();
 	m_prgRom.Initialize(prgRomSize);
@@ -45,7 +48,10 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 		return m_sram.Read(MapCpuToSram(cpuAddress));
 	}
 	
-	assert(Debugger::IsExecuting() || (false && "Mapper doesn't handle this address"));
+#if CONFIG_DEBUG
+	printf("Unhandled by mapper - read: $%04X\n", cpuAddress);
+#endif
+
 	return 0;
 }
 

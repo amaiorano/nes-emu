@@ -7,6 +7,10 @@
 #undef ARRAYSIZE // Already defined in a Windows header
 #include <Windows.h>
 #include <conio.h>
+#include <cstdio>
+
+// Undef the macro in WinUser.h so we can use this name as our function. We invoke MessageBoxA directly.
+#undef MessageBox
 
 namespace System
 {
@@ -44,6 +48,12 @@ namespace System
 	void DebugBreak()
 	{
 		::DebugBreak();
+	}
+
+	void MessageBox(const char* title, const char* message)
+	{
+		printf(FormattedString<>("%s: %s\n", title, message).Value());
+		::MessageBoxA(::GetActiveWindow(), message, title, MB_OK);
 	}
 
 	static float64 GetPerfCountTicksPerSec()

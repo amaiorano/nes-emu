@@ -9,6 +9,7 @@ namespace System
 	bool GetKeyPress(char& key);
 	char WaitForKeyPress();
 	void DebugBreak();
+	void MessageBox(const char* title, const char* message);
 
 	typedef uint64 Ticks;
 	Ticks GetTicks();

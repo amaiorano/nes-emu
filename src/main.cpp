@@ -1,5 +1,6 @@
 #include "Base.h"
 #include "Nes.h"
+#include "System.h"
 
 namespace
 {
@@ -55,11 +56,11 @@ int main(int argc, char* argv[])
 	}
 	catch (const std::exception& ex)
 	{
-		printf("Exception caught: %s\n", ex.what());
+		System::MessageBox("Exception", ex.what());
 	}
 	catch (...)
 	{
-		printf("Unknown exception caught\n");
+		System::MessageBox("Exception", "Unknown exception");
 	}
 
 	return 0;
