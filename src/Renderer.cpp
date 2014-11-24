@@ -127,7 +127,12 @@ void Renderer::Clear(const Color4& color)
 	m_impl->m_backbuffer.Clear(color);
 }
 
-void Renderer::Render()
+void Renderer::DrawPixel(int x, int y, const Color4& color)
+{
+	m_impl->m_backbuffer(x, y) = color.argb;
+}
+
+void Renderer::Present()
 {
 	m_impl->m_backbuffer.Flip(m_impl->m_renderer);
 
@@ -142,9 +147,4 @@ void Renderer::Render()
 			exit(0);
 		}
 	}
-}
-
-void Renderer::DrawPixel(int x, int y, const Color4& color)
-{
-	m_impl->m_backbuffer(x, y) = color.argb;
 }

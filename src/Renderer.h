@@ -43,9 +43,9 @@ public:
 	void Destroy();
 
 	void Clear(const Color4& color = Color4::Black());
-	void Render();
-
 	void DrawPixel(int x, int y, const Color4& color);
+	
+	void Present();
 
 private:
 	struct PIMPL;

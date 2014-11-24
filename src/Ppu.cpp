@@ -197,7 +197,7 @@ void Ppu::Execute(bool& finishedRender, uint32& numCpuCyclesToExecute)
 			{
 				// We're in "forced vblank"
 				ClearBackground();
-				m_renderer->Render();
+				m_renderer->Present();
 			}
 
 			finishedRender = true;
@@ -607,5 +607,5 @@ void Ppu::Render()
 	// Sprites above background
 	RenderSprites(false);
 
-	m_renderer->Render();
+	m_renderer->Present();
 }
