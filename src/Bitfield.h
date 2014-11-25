@@ -21,14 +21,16 @@ public:
 	FORCEINLINE void Set(T bits) { m_field |= bits; }
 	FORCEINLINE void Clear(T bits) { m_field &= ~bits; }
 	FORCEINLINE T Read(T bits) const { return m_field & bits; }
-	FORCEINLINE T Test(T bits) const { return Read(bits) != 0? 1 : 0; }
+	FORCEINLINE bool Test(T bits) const { return Read(bits) != 0; }
+	FORCEINLINE T Test01(T bits) const { return Read(bits) != 0? 1 : 0; }
 
 	// Bit position functions
 	FORCEINLINE void SetPos(T bitPos, T enabled) { if (enabled) SetPos(bitPos); else ClearPos(bitPos); }
 	FORCEINLINE void SetPos(T bitPos) { Set(1 << bitPos); }
 	FORCEINLINE void ClearPos(T bitPos) { Clear(1 << bitPos); }
 	FORCEINLINE T ReadPos(T bitPos) const { return Read(1 << bitPos); }
-	FORCEINLINE T TestPos(T bitPos) const { return Read(1 << bitPos) != 0? 1 : 0; }
+	FORCEINLINE bool TestPos(T bitPos) const { return Read(1 << bitPos) != 0; }
+	FORCEINLINE T TestPos01(T bitPos) const { return Read(1 << bitPos) != 0? 1 : 0; }
 
 private:
 	T m_field;

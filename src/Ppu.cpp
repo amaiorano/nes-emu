@@ -5,6 +5,7 @@
 #include "Bitfield.h"
 #include "MemoryMap.h"
 #include "Debugger.h"
+#include <tuple>
 
 namespace
 {
@@ -73,9 +74,9 @@ namespace PpuControl1 // $2000 (W)
 	{
 		NameTableAddressMask			= BIT(0)|BIT(1),
 		PpuAddressIncrement				= BIT(2), // 0 = 1 byte, 1 = 32 bytes
-		SpritePatternTableAddress		= BIT(3), // 0 = $0000, 1 = $1000 in VRAM
+		SpritePatternTableAddress8x8	= BIT(3), // 0 = $0000, 1 = $1000 in VRAM only for 8x8 sprite size mode
 		BackgroundPatternTableAddress	= BIT(4), // 0 = $0000, 1 = $1000 in VRAM
-		SpriteSize						= BIT(5), // 0 = 8x8, 1 = 8x16
+		SpriteSize8x16					= BIT(5), // 0 = 8x8, 1 = 8x16 (sprite size mode)
 		PpuMasterSlaveSelect			= BIT(6), // 0 = Master, 1 = Slave (Unused)
 		NmiOnVBlank						= BIT(7), // 0 = Disabled, 1 = Enabled
 	};
@@ -89,11 +90,6 @@ namespace PpuControl1 // $2000 (W)
 	inline uint16 GetAttributeTableAddress(uint16 ppuControl1)
 	{
 		return GetNameTableAddress(ppuControl1) + PpuMemory::kNameTableSize; // Follows name table
-	}
-
-	inline uint16 GetSpritePatternTableAddress(uint16 ppuControl1)
-	{
-		return (ppuControl1 & SpritePatternTableAddress)? 0x1000 : 0x0000;
 	}
 
 	inline uint16 GetBackgroundPatternTableAddress(uint16 ppuControl1)
@@ -130,6 +126,26 @@ namespace PpuStatus // $2002 (R)
 		PpuHitSprite0		= BIT(6),
 		InVBlank			= BIT(7),
 	};
+}
+
+namespace
+{
+	std::tuple<uint16,uint8> GetSpritePatternTableAddressAndTileIndex(Bitfield8* ppuControlReg1, uint8 oamByte1)
+	{
+		uint16 address;
+		uint8 tileIndex;
+		if ( !ppuControlReg1->Test(PpuControl1::SpriteSize8x16) ) // 8x8 sprite
+		{
+			address = ppuControlReg1->Test(PpuControl1::SpritePatternTableAddress8x8)? 0x1000 : 0x0000;
+			tileIndex = oamByte1;
+		}
+		else // 8x16 sprite, information is stored in oam byte 1
+		{
+			address = TestBits(oamByte1, BIT(0))? 0x1000 : 0x0000;
+			tileIndex = ReadBits(oamByte1, ~BIT(0));
+		}
+		return std::make_tuple(address, tileIndex);
+	}
 }
 
 Ppu::Ppu()
@@ -456,14 +472,14 @@ void Ppu::Render()
 			const Bitfield8& byte1 = reinterpret_cast<const Bitfield8&>(b1);
 			const Bitfield8& byte2 = reinterpret_cast<const Bitfield8&>(b2);
 
-			tile[0][y] = (paletteUpperBits << 2) | (byte1.TestPos(7) | (byte2.TestPos(7) << 1));
-			tile[1][y] = (paletteUpperBits << 2) | (byte1.TestPos(6) | (byte2.TestPos(6) << 1));
-			tile[2][y] = (paletteUpperBits << 2) | (byte1.TestPos(5) | (byte2.TestPos(5) << 1));
-			tile[3][y] = (paletteUpperBits << 2) | (byte1.TestPos(4) | (byte2.TestPos(4) << 1));
-			tile[4][y] = (paletteUpperBits << 2) | (byte1.TestPos(3) | (byte2.TestPos(3) << 1));
-			tile[5][y] = (paletteUpperBits << 2) | (byte1.TestPos(2) | (byte2.TestPos(2) << 1));
-			tile[6][y] = (paletteUpperBits << 2) | (byte1.TestPos(1) | (byte2.TestPos(1) << 1));
-			tile[7][y] = (paletteUpperBits << 2) | (byte1.TestPos(0) | (byte2.TestPos(0) << 1));
+			tile[0][y] = (paletteUpperBits << 2) | (byte1.TestPos01(7) | (byte2.TestPos01(7) << 1));
+			tile[1][y] = (paletteUpperBits << 2) | (byte1.TestPos01(6) | (byte2.TestPos01(6) << 1));
+			tile[2][y] = (paletteUpperBits << 2) | (byte1.TestPos01(5) | (byte2.TestPos01(5) << 1));
+			tile[3][y] = (paletteUpperBits << 2) | (byte1.TestPos01(4) | (byte2.TestPos01(4) << 1));
+			tile[4][y] = (paletteUpperBits << 2) | (byte1.TestPos01(3) | (byte2.TestPos01(3) << 1));
+			tile[5][y] = (paletteUpperBits << 2) | (byte1.TestPos01(2) | (byte2.TestPos01(2) << 1));
+			tile[6][y] = (paletteUpperBits << 2) | (byte1.TestPos01(1) | (byte2.TestPos01(1) << 1));
+			tile[7][y] = (paletteUpperBits << 2) | (byte1.TestPos01(0) | (byte2.TestPos01(0) << 1));
 
 			++byte1Address;
 			++byte2Address;
@@ -524,10 +540,7 @@ void Ppu::Render()
 	{
 		if (m_ppuControlReg2->Test(PpuControl2::RenderSprites))
 		{
-			assert(!m_ppuControlReg1->Test(PpuControl1::SpriteSize) && "TODO: 8x16 sprites");
-
-			// For 8x8 sprites...
-			const uint16 currPatternTableAddress = PpuControl1::GetSpritePatternTableAddress(m_ppuControlReg1->Value());
+			const bool spriteSize8x8 = !m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
 
 			// Iterate backwards for sprite rendering priority (smaller indices draw over larger indices)
 			for (size_t i = kMaxSprites; i-- > 0; )
@@ -550,16 +563,31 @@ void Ppu::Render()
 				if (behindBackground != currBehindBackground)
 					continue;
 
-				const uint8 tileIndex = spriteData[1];
+				uint16 patternTableAddress;
+				uint8 tileIndex;
+				std::tie(patternTableAddress, tileIndex) = GetSpritePatternTableAddressAndTileIndex(m_ppuControlReg1, spriteData[1]);
 
 				uint8 tile[8][8] = {0};
 				const uint8 paletteUpperBits = ReadBits(attribs, 0x3);
-				ReadTile(currPatternTableAddress, tileIndex, paletteUpperBits, tile);
-
 				const bool flipHorz = TestBits(attribs, BIT(6));
 				const bool flipVert = TestBits(attribs, BIT(7));
 
-				DrawSpriteTile(*m_renderer, x, y + 1, tile, flipHorz, flipVert);
+				if (spriteSize8x8)
+				{
+					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
+					DrawSpriteTile(*m_renderer, x, y + 1, tile, flipHorz, flipVert);
+				}
+				else
+				{
+					const int y1 = flipVert? y + 1 + 8 : y + 1;
+					const int y2 = flipVert? y + 1 : y + 1 + 8;
+
+					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
+					DrawSpriteTile(*m_renderer, x, y1, tile, flipHorz, flipVert);
+
+					ReadTile(patternTableAddress, tileIndex + 1, paletteUpperBits, tile);
+					DrawSpriteTile(*m_renderer, x, y2, tile, flipHorz, flipVert);
+				}
 			}
 		}
 	};
@@ -568,9 +596,9 @@ void Ppu::Render()
 	{
 		if (m_ppuControlReg2->Test(PpuControl2::RenderBackground))
 		{
-			const uint16 currPatternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-			const uint16 currNameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
-			const uint16 currAttributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
+			const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+			const uint16 nameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
+			const uint16 attributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
 
 			const uint8 initialX = m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8)? 0 : 1;
 
@@ -580,13 +608,13 @@ void Ppu::Render()
 				for (uint8 x = initialX; x < 32; ++x)
 				{
 					// Name table is a table of 32x30 1 byte tile indices
-					const uint16 tileIndexAddress = currNameTableAddress + y * 32 + x;
+					const uint16 tileIndexAddress = nameTableAddress + y * 32 + x;
 					const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
 
-					const uint8 paletteUpperBits = GetTilePaletteUpperBits(currAttributeTableAddress, x, y);
+					const uint8 paletteUpperBits = GetTilePaletteUpperBits(attributeTableAddress, x, y);
 
 					// Read in the tile data for tileIndex into the 8x8 tile from the pattern table (actual image data on the cart)
-					ReadTile(currPatternTableAddress, tileIndex, paletteUpperBits, tile);
+					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
 
 					DrawBackgroundTile(*m_renderer, x*8, y*8, tile);
 				}

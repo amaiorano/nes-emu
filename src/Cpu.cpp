@@ -303,7 +303,7 @@ void Cpu::ExecuteInstruction()
 		{
 			// Operation:  A + M + C -> A, C
 			const uint8 value = GetMemValue();
-			const uint16 result = TO16(A) + TO16(value) + TO16(P.Test(Carry));
+			const uint16 result = TO16(A) + TO16(value) + TO16(P.Test01(Carry));
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
 			P.Set(Carry, CalcCarryFlag(result));
@@ -553,7 +553,7 @@ void Cpu::ExecuteInstruction()
 
 	case ROL: // Rotate one bit left (memory or accumulator)
 		{
-			const uint16 result = (TO16(GetAccumOrMemValue()) << 1) | TO16(P.Test(Carry));
+			const uint16 result = (TO16(GetAccumOrMemValue()) << 1) | TO16(P.Test01(Carry));
 			P.Set(Carry, CalcCarryFlag(result));
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
@@ -564,7 +564,7 @@ void Cpu::ExecuteInstruction()
 	case ROR: // Rotate one bit right (memory or accumulator)
 		{
 			const uint8 value = GetAccumOrMemValue();
-			const uint8 result = (value >> 1) | (P.Test(Carry) << 7);
+			const uint8 result = (value >> 1) | (P.Test01(Carry) << 7);
 			P.Set(Carry, value & 0x01);
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
@@ -593,7 +593,7 @@ void Cpu::ExecuteInstruction()
 			// and we want to perform the bitwise add ourself
 			const uint8 value = GetMemValue() ^ 0XFF;
 
-			const uint16 result = TO16(A) + TO16(value) + TO16(P.Test(Carry));
+			const uint16 result = TO16(A) + TO16(value) + TO16(P.Test01(Carry));
 			P.Set(Negative, CalcNegativeFlag(result));
 			P.Set(Zero, CalcZeroFlag(result));
 			P.Set(Carry, CalcCarryFlag(result));
