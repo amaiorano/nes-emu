@@ -6,11 +6,7 @@
 class Cartridge
 {
 public:
-	void Initialize()
-	{
-		m_sram.Initialize();
-	}
-
+	void Initialize();
 	RomHeader LoadRom(const char* file);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
@@ -18,10 +14,14 @@ public:
 	uint8 HandlePpuRead(uint16 ppuAddress);
 	void HandlePpuWrite(uint16 ppuAddress, uint8 value);
 
+	ScreenArrangement GetScreenArrangement() { return m_screenArrangement; }
+
 private:
 	uint16 MapCpuToPrgRom(uint16 cpuAddress);
 	uint16 MapCpuToSram(uint16 cpuAddress);
-	uint16 MapPpuToChrRom(uint16 ppuAddress);	
+	uint16 MapPpuToChrRom(uint16 ppuAddress);
+
+	ScreenArrangement m_screenArrangement;
 
 	Memory<DynamicSizeStorage> m_prgRom;
 	Memory<DynamicSizeStorage> m_chrRom;

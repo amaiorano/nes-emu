@@ -4,6 +4,11 @@
 #include "MemoryMap.h"
 #include "Debugger.h"
 
+void Cartridge::Initialize()
+{
+	m_sram.Initialize();
+}
+
 RomHeader Cartridge::LoadRom(const char* file)
 {
 	FileStream fs(file, "rb");
@@ -34,6 +39,8 @@ RomHeader Cartridge::LoadRom(const char* file)
 	m_chrRom.Initialize(chrRomSize);
 	fs.Read(m_chrRom.RawPtr(), chrRomSize);
 
+	m_screenArrangement = romHeader.GetScreenArrangement();
+
 	return romHeader;
 }
 
@@ -49,7 +56,8 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 	}
 	
 #if CONFIG_DEBUG
-	printf("Unhandled by mapper - read: $%04X\n", cpuAddress);
+	if (!Debugger::IsExecuting())
+		printf("Unhandled by mapper - read: $%04X\n", cpuAddress);
 #endif
 
 	return 0;
@@ -59,7 +67,8 @@ void Cartridge::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 {
 	if (cpuAddress >= CpuMemory::kPrgRomBase)
 	{
-		m_prgRom.Write(MapCpuToPrgRom(cpuAddress), value);
+		printf("Mapper 0 doesn't support writes to PRG-ROM! " ADDR_16 " = " ADDR_8 "\n", cpuAddress, value);
+		//m_prgRom.Write(MapCpuToPrgRom(cpuAddress), value);
 		return;
 	}
 	else if (cpuAddress >= CpuMemory::kSaveRamBase)
@@ -78,7 +87,8 @@ uint8 Cartridge::HandlePpuRead(uint16 ppuAddress)
 
 void Cartridge::HandlePpuWrite(uint16 ppuAddress, uint8 value)
 {
-	m_chrRom.Write(MapPpuToChrRom(ppuAddress), value);
+	printf("Mapper 0 doesn't support writes to CHR-ROM! " ADDR_16 " = " ADDR_8 "\n", ppuAddress, value);
+	//m_chrRom.Write(MapPpuToChrRom(ppuAddress), value);
 }
 
 uint16 Cartridge::MapCpuToPrgRom(uint16 cpuAddress)

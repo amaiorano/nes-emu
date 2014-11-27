@@ -11,9 +11,6 @@
 #include <cassert>
 #include <stdexcept>
 
-#define ADDR_8 "$%02X"
-#define ADDR_16 "$%04X"
-
 #define FCEUX_OUTPUT 0
 
 namespace

@@ -20,7 +20,24 @@ void Nes::Initialize()
 
 RomHeader Nes::LoadRom(const char* file)
 {
-	return m_cartridge.LoadRom(file);
+	RomHeader romHeader = m_cartridge.LoadRom(file);
+
+	switch (m_cartridge.GetScreenArrangement())
+	{
+	case ScreenArrangement::FourScreen:
+		assert(false && "Four screen name tables not yet supported");
+		// Fall through... same case as Horizontal (PPU VRAM is used for top 2 virtual screens, bottom two is on cart)
+
+	case ScreenArrangement::Horizontal:
+		m_ppu.SetNameTableVerticalMirroring(true);
+		break;
+
+	case ScreenArrangement::Vertical:
+		m_ppu.SetNameTableVerticalMirroring(false);
+		break;
+	}
+
+	return romHeader;
 }
 
 void Nes::Reset()

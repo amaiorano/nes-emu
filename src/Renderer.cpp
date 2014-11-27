@@ -21,9 +21,9 @@ namespace
 		void Clear(const Color4& color)
 		{
 			auto pCurrRow = reinterpret_cast<Uint32*>(m_backbuffer);
-			for (int y = 0; y < m_height; ++y, pCurrRow += (m_pitch/4))
+			for (int32 y = 0; y < m_height; ++y, pCurrRow += (m_pitch/4))
 			{
-				for (int x = 0; x < m_width; ++x)
+				for (int32 x = 0; x < m_width; ++x)
 					pCurrRow[x] = color.argb;
 			}
 		}
@@ -36,7 +36,7 @@ namespace
 			Lock();
 		}
 
-		FORCEINLINE Uint32& operator()(int x, int y)
+		FORCEINLINE Uint32& operator()(int32 x, int32 y)
 		{
 			assert(x < m_width && y < m_height);
 			return reinterpret_cast<Uint32&>(m_backbuffer[y * m_pitch + x * sizeof(Uint32)]);
@@ -54,7 +54,7 @@ namespace
 
 		SDL_Texture* m_backbufferTexture;
 		Uint8* m_backbuffer;
-		int m_width, m_height, m_pitch;
+		int32 m_width, m_height, m_pitch;
 	};
 }
 
@@ -127,7 +127,7 @@ void Renderer::Clear(const Color4& color)
 	m_impl->m_backbuffer.Clear(color);
 }
 
-void Renderer::DrawPixel(int x, int y, const Color4& color)
+void Renderer::DrawPixel(int32 x, int32 y, const Color4& color)
 {
 	m_impl->m_backbuffer(x, y) = color.argb;
 }

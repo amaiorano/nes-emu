@@ -152,6 +152,7 @@ Ppu::Ppu()
 	: m_ppuMemoryBus(nullptr)
 	, m_nes(nullptr)
 	, m_renderer(new Renderer())
+	, m_nameTableVerticalMirroring(false)
 {
 	InitPaletteColors();
 	m_renderer->Create();
@@ -179,7 +180,7 @@ void Ppu::Reset()
 	WritePpuRegister(CpuMemory::kPpuControlReg2, 0);
 	WritePpuRegister(CpuMemory::kPpuVRamAddressReg1, 0);
 	WritePpuRegister(CpuMemory::kPpuVRamIoReg, 0);
-	m_vramAddressHigh = true;
+	m_vramAndScrollFirstWrite = true;
 
 	// Not necessary but helps with debugging
 	m_vramAddress = 0xDDDD;
@@ -261,13 +262,13 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 			WritePpuRegister(CpuMemory::kPpuVRamAddressReg1, 0);
 			WritePpuRegister(CpuMemory::kPpuVRamAddressReg2, 0);
 			m_vramAddress = 0;
-			m_vramAddressHigh = true;
+			m_vramAndScrollFirstWrite = true;
 		}
 		break;
 
 	case CpuMemory::kPpuVRamIoReg: // $2007
 		{
-			assert(m_vramAddressHigh && "User code error: trying to read from $2007 when VRAM address not yet fully set via $2006");
+			assert(m_vramAndScrollFirstWrite && "User code error: trying to read from $2007 when VRAM address not yet fully set via $2006");
 
 			// Read from palette or return buffered value
 			if (m_vramAddress >= PpuMemory::kPalettesBase)			
@@ -335,21 +336,42 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		}
 		break;
 
-	case CpuMemory::kPpuVRamAddressReg2: // $2006
+	case CpuMemory::kPpuVRamAddressReg1: // $2005 (PPUSCROLL)
+		{
+			if (m_vramAndScrollFirstWrite) // First write: X scroll values
+			{
+				m_scroll.fineOffsetX = ReadBits(value, 0x07);
+				m_scroll.coarseOffsetX = ReadBits(value, ~0x07);
+			}
+			else // Second write: Y scroll values
+			{
+				m_scroll.fineOffsetY = ReadBits(value, 0x07);
+				m_scroll.coarseOffsetY = ReadBits(value, ~0x07);
+			}
+
+			m_vramAndScrollFirstWrite = !m_vramAndScrollFirstWrite;
+		}
+		break;
+
+	case CpuMemory::kPpuVRamAddressReg2: // $2006 (PPUADDR)
 		{
 			const uint16 halfAddress = TO16(value);
-			if (m_vramAddressHigh)
+			if (m_vramAndScrollFirstWrite) // First write: high byte
+			{
 				m_vramAddress = (halfAddress << 8) | (m_vramAddress & 0x00FF);
-			else
+			}
+			else // Second write: low byte
+			{
 				m_vramAddress = halfAddress | (m_vramAddress & 0xFF00);
+			}
 
-			m_vramAddressHigh = !m_vramAddressHigh; // Toggle high/low
+			m_vramAndScrollFirstWrite = !m_vramAndScrollFirstWrite;
 		}
 		break;
 
 	case CpuMemory::kPpuVRamIoReg: // $2007
 		{
-			assert(m_vramAddressHigh && "User code error: trying to write to $2007 when VRAM address not yet fully set via $2006");
+			assert(m_vramAndScrollFirstWrite && "User code error: trying to write to $2007 when VRAM address not yet fully set via $2006");
 
 			// Write to palette or memory bus
 			if (m_vramAddress >= PpuMemory::kPalettesBase)
@@ -388,11 +410,41 @@ uint16 Ppu::MapCpuToPpuRegister(uint16 cpuAddress)
 uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 {
 	assert(ppuAddress >= PpuMemory::kVRamBase); // Address may go into palettes (vram pointer)
+
 	const uint16 virtualVRamAddress = (ppuAddress - PpuMemory::kVRamBase) % PpuMemory::kVRamSize;
 	
-	//@TODO: Map according to nametable mirroring (4K -> 2K). For now, we assume vertical mirroring (horizontal scrolling).
-	const uint16 physicalVRamAddress = virtualVRamAddress % NameTableMemory::kSize;
-	
+	uint16 physicalVRamAddress = 0;
+	if (m_nameTableVerticalMirroring)
+	{
+		// Vertical mirroring (horizontal scrolling)
+		// A B
+		// A B
+		// Simplest case, just wrap >= 2K
+		physicalVRamAddress = virtualVRamAddress % NameTableMemory::kSize;
+	}
+	else
+	{
+		// Horizontal mirroring (vertical scrolling)
+		// A A
+		// B B		
+		if (virtualVRamAddress >= KB(3)) // 4th virtual page (B) maps to 2nd physical page
+		{
+			physicalVRamAddress = virtualVRamAddress - KB(2);
+		}
+		else if (virtualVRamAddress >= KB(2)) // 3rd virtual page (B) maps to 2nd physical page (B)
+		{
+			physicalVRamAddress = virtualVRamAddress - KB(1);
+		}
+		else if (virtualVRamAddress >= KB(1)) // 2nd virtual page (A) maps to 1st physical page (A)
+		{
+			physicalVRamAddress = virtualVRamAddress - KB(1);
+		}
+		else // 1st virtual page (A) maps to 1st physical page (A)
+		{
+			physicalVRamAddress = virtualVRamAddress;
+		}
+	}
+
 	return physicalVRamAddress;
 }
 
@@ -430,7 +482,7 @@ void Ppu::ClearBackground()
 }
 
 void Ppu::Render()
-{	
+{
 	static auto GetTilePaletteUpperBits = [&] (uint16 attributeTableAddress, uint8 x, uint8 y)
 	{
 		const uint8 groupsPerScreenX = 8;
@@ -486,7 +538,7 @@ void Ppu::Render()
 		}
 	};
 
-	static auto DrawBackgroundTile = [&] (Renderer& renderer, int x, int y, uint8 tile[8][8])
+	static auto DrawBackgroundTile = [&] (Renderer& renderer, int32 x, int32 y, uint8 tile[8][8])
 	{
 		for (uint16 ty = 0; ty < 8; ++ty)
 		{
@@ -502,12 +554,20 @@ void Ppu::Render()
 				assert(paletteIndex < kNumPaletteColors);
 
 				const Color4& color = g_paletteColors[paletteIndex];
-				renderer.DrawPixel(x + tx, y + ty, color);
+
+				const int32 xf = x + tx;
+				const int32 yf = y + ty;
+
+				// Clip x against right screen edge and y against bottom screen edge
+				if (xf >= kScreenWidth || yf >= kScreenHeight)
+					continue;
+
+				renderer.DrawPixel(xf, yf, color);
 			}
 		}
 	};
 
-	static auto DrawSpriteTile = [&] (Renderer& renderer, int x, int y, uint8 tile[8][8], bool flipHorz, bool flipVert)
+	static auto DrawSpriteTile = [&] (Renderer& renderer, int32 x, int32 y, uint8 tile[8][8], bool flipHorz, bool flipVert)
 	{
 		for (uint16 ty = 0; ty < 8; ++ty)
 		{
@@ -524,8 +584,8 @@ void Ppu::Render()
 
 				const Color4& color = g_paletteColors[paletteIndex];
 				
-				int xf = x + (flipHorz? 7 - tx : tx);
-				int yf = y + (flipVert? 7 - ty : ty);
+				int32 xf = x + (flipHorz? 7 - tx : tx);
+				int32 yf = y + (flipVert? 7 - ty : ty);
 
 				// Clip x against right screen edge and y against bottom screen edge
 				if (xf >= kScreenWidth || yf >= kScreenHeight)
@@ -579,8 +639,8 @@ void Ppu::Render()
 				}
 				else
 				{
-					const int y1 = flipVert? y + 1 + 8 : y + 1;
-					const int y2 = flipVert? y + 1 : y + 1 + 8;
+					const int32 y1 = flipVert? y + 1 + 8 : y + 1;
+					const int32 y2 = flipVert? y + 1 : y + 1 + 8;
 
 					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
 					DrawSpriteTile(*m_renderer, x, y1, tile, flipHorz, flipVert);
@@ -594,34 +654,69 @@ void Ppu::Render()
 
 	static auto RenderBackground = [&] ()
 	{
-		if (m_ppuControlReg2->Test(PpuControl2::RenderBackground))
+		const uint8 kScreenTilesX = 32;
+		const uint8 kScreenTilesY = 30;
+
+		if (!m_ppuControlReg2->Test(PpuControl2::RenderBackground))
+			return;
+
+		const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+		const uint16 nameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
+		const uint16 attributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
+
+		const uint8 initialX = m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8)? 0 : 1;
+
+		uint8 tile[8][8] = {0};
+
+		uint8 scrollTileOffsetX = m_scroll.coarseOffsetX / 8;
+		uint8 scrollTileOffsetY = m_scroll.coarseOffsetY / 8;
+
+		// Render 32x30 tiles for the screen, plus 1 extra on each side for scrolling (we can see 33x31 tiles)
+		for (uint8 screenTileY = 0; screenTileY < kScreenTilesY + 1; ++screenTileY)
 		{
-			const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-			const uint16 nameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
-			const uint16 attributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
-
-			const uint8 initialX = m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8)? 0 : 1;
-
-			uint8 tile[8][8] = {0};
-			for (uint8 y = 0; y < 30; ++y)
+			for (uint8 screenTileX = initialX; screenTileX < kScreenTilesX + 1; ++screenTileX)
 			{
-				for (uint8 x = initialX; x < 32; ++x)
+				// Compute actual tile coordinate, taking scrolling offsets into account
+				uint8 tileX = screenTileX + scrollTileOffsetX;
+				uint8 tileY = screenTileY + scrollTileOffsetY;
+
+				// The "virtual" tile space is 4x4 screens, so we need to adjust base nameTableAddress
+				// and tile coordinates if the tile falls onto another screen
+				uint16 addressOffset = 0;
+
+				if (scrollTileOffsetY >= kScreenTilesY)
 				{
-					// Name table is a table of 32x30 1 byte tile indices
-					const uint16 tileIndexAddress = nameTableAddress + y * 32 + x;
-					const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
-
-					const uint8 paletteUpperBits = GetTilePaletteUpperBits(attributeTableAddress, x, y);
-
-					// Read in the tile data for tileIndex into the 8x8 tile from the pattern table (actual image data on the cart)
-					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
-
-					DrawBackgroundTile(*m_renderer, x*8, y*8, tile);
+					// Special case for when Y coarse scroll is set outside of valid range [0,29]
+					// In that case, we don't switch name tables, but instead, address into attribute memory.
+					// The effect is rendering one or two rows of attribute data as tiles at the top of the screen.
+					// See: http://wiki.nesdev.com/w/index.php/The_skinny_on_NES_scrolling#Y_increment
+					tileY %= 32; // Wrap around (5 bits hold this value in hardware)
 				}
+				else if (tileY >= kScreenTilesY) // If below current screen, switch vertical nametable
+				{
+					addressOffset += PpuMemory::kNameAttributeTableSize * 2;
+					tileY %= kScreenTilesY; // Tile Y within next screen
+				}
+				
+				if (tileX >= kScreenTilesX) // If to the right of current screen, switch horizontal nametable
+				{
+					addressOffset += PpuMemory::kNameAttributeTableSize;
+					tileX %= kScreenTilesX; // Tile X within next screen
+				}
+
+				const uint16 tileIndexAddress = (nameTableAddress + addressOffset) + (tileY * kScreenTilesX) + tileX;
+				const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+				const uint8 paletteUpperBits = GetTilePaletteUpperBits(attributeTableAddress + addressOffset, tileX, tileY);
+
+				ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
+
+				const int32 xf = screenTileX * 8 - m_scroll.fineOffsetX;
+				const int32 yf = screenTileY * 8 - m_scroll.fineOffsetY;
+				DrawBackgroundTile(*m_renderer, xf, yf, tile);
 			}
 		}
 	};
-	
+
 	// Always clear using palette color 0. When rendering bg tiles, we don't render color 0 so that
 	// sprites below bg remain there.	
 	ClearBackground();

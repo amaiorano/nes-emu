@@ -50,6 +50,9 @@ static_assert(sizeof(float64)==8, "Invalid type size");
 #define TO16(v8) ((uint16)(v8))
 #define TO8(v16) ((uint8)(v16 & 0x00FF))
 
+#define ADDR_8 "$%02X"
+#define ADDR_16 "$%04X"
+
 #define BIT(n) (1<<n)
 
 #define ARRAYSIZE(arr) (sizeof(arr)/sizeof(arr[0]))
