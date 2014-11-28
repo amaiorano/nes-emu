@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
 		if (argc != 2)
 		{
 			ShowUsage(argv[0]);
-			throw std::exception("Missing argument(s)");
+			throw std::exception(/*"Missing argument(s)"*/);
 		}
 
 		const char* inputFile = argv[1];

@@ -21,9 +21,9 @@ namespace
 		void Clear(const Color4& color)
 		{
 			auto pCurrRow = reinterpret_cast<Uint32*>(m_backbuffer);
-			for (int32 y = 0; y < m_height; ++y, pCurrRow += (m_pitch/4))
+			for (int y = 0; y < m_height; ++y, pCurrRow += (m_pitch/4))
 			{
-				for (int32 x = 0; x < m_width; ++x)
+				for (int x = 0; x < m_width; ++x)
 					pCurrRow[x] = color.argb;
 			}
 		}
@@ -36,7 +36,7 @@ namespace
 			Lock();
 		}
 
-		FORCEINLINE Uint32& operator()(int32 x, int32 y)
+		FORCEINLINE Uint32& operator()(int x, int y)
 		{
 			assert(x < m_width && y < m_height);
 			return reinterpret_cast<Uint32&>(m_backbuffer[y * m_pitch + x * sizeof(Uint32)]);
@@ -54,7 +54,7 @@ namespace
 
 		SDL_Texture* m_backbufferTexture;
 		Uint8* m_backbuffer;
-		int32 m_width, m_height, m_pitch;
+		int m_width, m_height, m_pitch;
 	};
 }
 
@@ -92,7 +92,7 @@ void Renderer::Create()
 	m_impl = new PIMPL();
 
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
-		throw std::exception("SDL_Init failed");
+		throw std::exception(/*"SDL_Init failed"*/);
 
 	const float windowScale = 3.0f;
 	const size_t windowWidth = static_cast<size_t>(kScreenWidth * windowScale);
@@ -100,11 +100,11 @@ void Renderer::Create()
 	
 	m_impl->m_window = SDL_CreateWindow(g_windowTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
 	if (!m_impl->m_window)
-		throw std::exception("SDL_CreateWindow failed");
+		throw std::exception(/*"SDL_CreateWindow failed"*/);
 
 	m_impl->m_renderer = SDL_CreateRenderer(m_impl->m_window, -1, SDL_RENDERER_ACCELERATED);
 	if (!m_impl->m_renderer)
-		throw std::exception("SDL_CreateRenderer failed");
+		throw std::exception(/*"SDL_CreateRenderer failed"*/);
 
 	m_impl->m_backbuffer.Create(kScreenWidth, kScreenHeight, m_impl->m_renderer);
 
@@ -127,7 +127,7 @@ void Renderer::Clear(const Color4& color)
 	m_impl->m_backbuffer.Clear(color);
 }
 
-void Renderer::DrawPixel(int32 x, int32 y, const Color4& color)
+void Renderer::DrawPixel(int x, int y, const Color4& color)
 {
 	m_impl->m_backbuffer(x, y) = color.argb;
 }

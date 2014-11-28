@@ -43,7 +43,7 @@ public:
 	void Destroy();
 
 	void Clear(const Color4& color = Color4::Black());
-	void DrawPixel(int32 x, int32 y, const Color4& color);
+	void DrawPixel(int x, int y, const Color4& color);
 	
 	void Present();
 

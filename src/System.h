@@ -5,6 +5,8 @@
 
 namespace System
 {
+	void Reset();
+	
 	void Sleep(uint32 ms);
 	bool GetKeyPress(char& key);
 	char WaitForKeyPress();

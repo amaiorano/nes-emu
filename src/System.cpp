@@ -14,6 +14,8 @@
 
 namespace System
 {
+	void Reset() {}
+	
 	void Sleep(uint32 ms) { ::Sleep(ms); }
 
 	bool GetKeyPress(char& key)
@@ -77,6 +79,56 @@ namespace System
 	}
 }
 
+#elif PLATFORM_MACOSX
+
+#include <unistd.h>
+#include <sys/time.h>
+
+namespace System
+{
+	static timeval firsttime;
+	void Reset()
+	{
+		gettimeofday(&firsttime, NULL);
+	}
+	
+	void Sleep(uint32 ms) { usleep(ms * 1000); }
+	
+	bool GetKeyPress(char& key)
+	{
+		return false;
+	}
+	
+	char WaitForKeyPress()
+	{
+		char key;
+		while (!GetKeyPress(key))
+		{
+			Sleep(1);
+		}
+		return key;
+	}
+	
+	void DebugBreak()
+	{
+		//::DebugBreak();
+	}
+	
+	void MessageBox(const char* title, const char* message) { }
+	
+	Ticks GetTicks()
+	{
+		timeval t;
+		gettimeofday(&t, NULL);
+		
+		return (t.tv_sec - firsttime.tv_sec) * 1000 * 1000 + (t.tv_usec - firsttime.tv_usec);
+	}
+	
+	float64 TicksToSec(Ticks t1)
+	{
+		return t1 / (1000.0f * 1000.0f);
+	}
+}
 
 #else
 #error "Implement for current platform
