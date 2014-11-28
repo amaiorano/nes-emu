@@ -84,7 +84,6 @@ private:
 	Bitfield8 P;	// Processor status (flags)
 
 	uint16 m_cycles; // Elapsed cycles of each fetch and execute of an instruction
-	uint16 m_lastPC; // Useful for debugging purposes
 
 	// Operand address is either the operand's memory location, or the target for a branch or jmp
 	uint16 m_operandAddress;

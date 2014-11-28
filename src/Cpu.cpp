@@ -295,7 +295,8 @@ void Cpu::ExecuteInstruction()
 	using namespace OpCodeName;
 	using namespace StatusFlag;
 
-	m_lastPC = PC;
+	bool instructionSetPC = false;
+	auto SetPC = [&] () -> uint16& { instructionSetPC = true; return PC; };
 
 	switch (m_opCodeEntry->opCodeName)
 	{
@@ -330,17 +331,17 @@ void Cpu::ExecuteInstruction()
 
 	case BCC: // Branch on Carry Clear
 		if (!P.Test(Carry))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case BCS: // Branch on Carry Set
 		if (P.Test(Carry))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case BEQ: // Branch on result zero (equal means compare difference is 0)
 		if (P.Test(Zero))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case BIT: // Test bits in memory with accumulator
@@ -354,17 +355,17 @@ void Cpu::ExecuteInstruction()
 
 	case BMI: // Branch on result minus
 		if (P.Test(Negative))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case BNE:  // Branch on result non-zero
 		if (!P.Test(Zero))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case BPL: // Branch on result plus
 		if (!P.Test(Negative))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS) (used with RTI)
@@ -373,18 +374,18 @@ void Cpu::ExecuteInstruction()
 			Push16(returnAddr);
 			PushProcessorStatus(true);
 			P.Set(IrqDisabled); // Disable hardware IRQs
-			PC = Read16(CpuMemory::kIrqVector);
+			SetPC() = Read16(CpuMemory::kIrqVector);
 		}
 		break;
 
 	case BVC: // Branch on Overflow Clear
 		if (!P.Test(Overflow))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case BVS: // Branch on Overflow Set
 		if (P.Test(Overflow))
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case CLC: // CLC Clear carry flag
@@ -482,7 +483,7 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case JMP: // Jump to new location
-		PC = GetBranchOrJmpLocation();
+		SetPC() = GetBranchOrJmpLocation();
 		break;
 
 	case JSR: // Jump to subroutine (used with RTS)
@@ -491,7 +492,7 @@ void Cpu::ExecuteInstruction()
 			// RTS jumps to popped value + 1.
 			const uint16 returnAddr = PC + m_opCodeEntry->numBytes - 1;
 			Push16(returnAddr);
-			PC = GetBranchOrJmpLocation();
+			SetPC() = GetBranchOrJmpLocation();
 		}
 		break;
 
@@ -575,13 +576,13 @@ void Cpu::ExecuteInstruction()
 	case RTI: // Return from interrupt (used with BRK, Nmi or Irq)
 		{
 			PopProcessorStatus();
-			PC = Pop16();
+			SetPC() = Pop16();
 		}
 		break;
 
 	case RTS: // Return from subroutine (used with JSR)
 		{
-			PC = Pop16() + 1;
+			SetPC() = Pop16() + 1;
 		}
 		break;
 
@@ -661,8 +662,8 @@ void Cpu::ExecuteInstruction()
 		break;
 	}
 
-	// If instruction hasn't modified PC, move it to next instruction
-	if (m_lastPC == PC)
+	// If instruction did not set PC, move it to next instruction
+	if (!instructionSetPC)
 		PC += m_opCodeEntry->numBytes;
 
 	//@TODO: For now just return approx number of cycles for the instruction; however, we need to compute
