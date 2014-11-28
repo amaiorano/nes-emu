@@ -6,6 +6,8 @@
 // Platform defines
 #ifdef _MSC_VER
 	#define PLATFORM_WINDOWS 1
+#elif __clang__
+	#define PLATFORM_MACOSX 1
 #else
 	#error "Define current platform"
 #endif
@@ -50,9 +52,6 @@ static_assert(sizeof(float64)==8, "Invalid type size");
 #define TO16(v8) ((uint16)(v8))
 #define TO8(v16) ((uint8)(v16 & 0x00FF))
 
-#define ADDR_8 "$%02X"
-#define ADDR_16 "$%04X"
-
 #define BIT(n) (1<<n)
 
 #define ARRAYSIZE(arr) (sizeof(arr)/sizeof(arr[0]))
@@ -66,6 +65,8 @@ template <typename T> struct CTPrintSize : __CTPrintSize<sizeof(T)> {};
 // Use with std::shared_ptr that manage array allocations.
 // Example: std::shared_ptr<uint8> data(new uint8[10], ArrayDeleter<uint8>); 
 template <typename T> void ArrayDeleter(T* p) { delete [] p; }
+
+#include <stdio.h>
 
 // Utility for creating a temporary formatted string
 template <int MaxLength = 1024>

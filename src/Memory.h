@@ -39,7 +39,11 @@ protected:
 template <typename StorageType>
 class Memory : public StorageType
 {
+	using StorageType::m_memory;
+	
 public:
+	using StorageType::Size;
+
 	uint8 Read(uint16 address)
 	{
 		return m_memory[address];

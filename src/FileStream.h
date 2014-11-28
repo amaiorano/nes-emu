@@ -19,7 +19,7 @@ public:
 	FileStream(const char* name, const char* mode) : m_file(nullptr)
 	{
 		if (!Open(name, mode))
-			throw std::exception(FormattedString<>("Failed to open file: %s", name));
+			throw std::exception(/*FormattedString<>("Failed to open file: %s", name)*/);
 	}
 
 	bool Open(const char* name, const char* mode)
