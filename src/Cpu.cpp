@@ -77,32 +77,31 @@ void Cpu::Reset()
 	// Entry point is located at the Reset interrupt location
 	PC = Read16(CpuMemory::kResetVector);
 
+	m_pendingNmi = m_pendingIrq = false;
+
 	m_controllerPorts.Reset();
 }
 
 void Cpu::Nmi()
 {
-	Push16(PC);
-	PushProcessorStatus(false);
-	P.Clear(StatusFlag::BrkExecuted);
-	P.Set(StatusFlag::IrqDisabled);
-	PC = Read16(CpuMemory::kNmiVector);
+	assert(!m_pendingNmi && "Interrupt already pending");
+	assert(!m_pendingIrq && "One interrupt at at time");
+	m_pendingNmi = true;
 }
 
 void Cpu::Irq()
 {
-	if ( !P.Test(StatusFlag::IrqDisabled) )
-	{
-		Push16(PC);
-		PushProcessorStatus(false);
-		P.Clear(StatusFlag::BrkExecuted);
-		P.Set(StatusFlag::IrqDisabled);
-		PC = Read16(CpuMemory::kIrqVector);
-	}
+	assert(!m_pendingIrq && "Interrupt already pending");
+	assert(!m_pendingNmi && "One interrupt at at time");
+
+	if (!P.Test(StatusFlag::IrqDisabled))
+		m_pendingIrq = true;
 }
 
 void Cpu::Execute(uint32 cycles, uint32& actualCycles)
 {
+	ExecutePendingInterrupts(); // Handle wehen interrupts are called "between" CPU updates (e.g. PPU sends NMI)
+
 	actualCycles = 0;
 	while (actualCycles < cycles)
 	{
@@ -120,8 +119,9 @@ void Cpu::Execute(uint32 cycles, uint32& actualCycles)
 
 		Debugger::PreCpuInstruction();
 		ExecuteInstruction();
-		Debugger::PostCpuInstruction();
-		
+		ExecutePendingInterrupts(); // Handle when instruction (memory read) causes interrupt
+		Debugger::PostCpuInstruction();		
+
 		actualCycles += m_cycles;
 	}
 }
@@ -295,7 +295,8 @@ void Cpu::ExecuteInstruction()
 	using namespace OpCodeName;
 	using namespace StatusFlag;
 
-	m_lastPC = PC;
+	// By default, next instruction is after current, but can also be changed by a branch or jump
+	uint16 nextPC = PC + m_opCodeEntry->numBytes;
 
 	switch (m_opCodeEntry->opCodeName)
 	{
@@ -330,17 +331,17 @@ void Cpu::ExecuteInstruction()
 
 	case BCC: // Branch on Carry Clear
 		if (!P.Test(Carry))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case BCS: // Branch on Carry Set
 		if (P.Test(Carry))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case BEQ: // Branch on result zero (equal means compare difference is 0)
 		if (P.Test(Zero))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case BIT: // Test bits in memory with accumulator
@@ -354,17 +355,17 @@ void Cpu::ExecuteInstruction()
 
 	case BMI: // Branch on result minus
 		if (P.Test(Negative))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case BNE:  // Branch on result non-zero
 		if (!P.Test(Zero))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case BPL: // Branch on result plus
 		if (!P.Test(Negative))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS) (used with RTI)
@@ -373,18 +374,18 @@ void Cpu::ExecuteInstruction()
 			Push16(returnAddr);
 			PushProcessorStatus(true);
 			P.Set(IrqDisabled); // Disable hardware IRQs
-			PC = Read16(CpuMemory::kIrqVector);
+			nextPC = Read16(CpuMemory::kIrqVector);
 		}
 		break;
 
 	case BVC: // Branch on Overflow Clear
 		if (!P.Test(Overflow))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case BVS: // Branch on Overflow Set
 		if (P.Test(Overflow))
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case CLC: // CLC Clear carry flag
@@ -482,7 +483,7 @@ void Cpu::ExecuteInstruction()
 		break;
 
 	case JMP: // Jump to new location
-		PC = GetBranchOrJmpLocation();
+		nextPC = GetBranchOrJmpLocation();
 		break;
 
 	case JSR: // Jump to subroutine (used with RTS)
@@ -491,7 +492,7 @@ void Cpu::ExecuteInstruction()
 			// RTS jumps to popped value + 1.
 			const uint16 returnAddr = PC + m_opCodeEntry->numBytes - 1;
 			Push16(returnAddr);
-			PC = GetBranchOrJmpLocation();
+			nextPC = GetBranchOrJmpLocation();
 		}
 		break;
 
@@ -575,13 +576,13 @@ void Cpu::ExecuteInstruction()
 	case RTI: // Return from interrupt (used with BRK, Nmi or Irq)
 		{
 			PopProcessorStatus();
-			PC = Pop16();
+			nextPC = Pop16();
 		}
 		break;
 
 	case RTS: // Return from subroutine (used with JSR)
 		{
-			PC = Pop16() + 1;
+			nextPC = Pop16() + 1;
 		}
 		break;
 
@@ -661,13 +662,34 @@ void Cpu::ExecuteInstruction()
 		break;
 	}
 
-	// If instruction hasn't modified PC, move it to next instruction
-	if (m_lastPC == PC)
-		PC += m_opCodeEntry->numBytes;
-
+	// Move to next instruction
+	PC = nextPC;
+	
 	//@TODO: For now just return approx number of cycles for the instruction; however, we need to compute
 	// actual cycles taken for branches taken or not, and for page crossing penalties.
 	m_cycles += m_opCodeEntry->numCycles;
+}
+
+void Cpu::ExecutePendingInterrupts()
+{
+	if (m_pendingNmi)
+	{
+		Push16(PC);
+		PushProcessorStatus(false);
+		P.Clear(StatusFlag::BrkExecuted);
+		P.Set(StatusFlag::IrqDisabled);
+		PC = Read16(CpuMemory::kNmiVector);
+		m_pendingNmi = false;
+	}
+	else if (m_pendingIrq)
+	{
+		Push16(PC);
+		PushProcessorStatus(false);
+		P.Clear(StatusFlag::BrkExecuted);
+		P.Set(StatusFlag::IrqDisabled);
+		PC = Read16(CpuMemory::kIrqVector);
+		m_pendingIrq = false;
+	}
 }
 
 uint8 Cpu::GetAccumOrMemValue() const

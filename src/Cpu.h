@@ -50,6 +50,9 @@ private:
 	// Executes current instruction and updates PC
 	void ExecuteInstruction();
 
+	// Executes pending interrupts (if any)
+	void ExecutePendingInterrupts();
+
 	// For instructions that work on accumulator (A) or memory location
 	uint8 GetAccumOrMemValue() const;
 	void SetAccumOrMemValue(uint8 value);
@@ -75,7 +78,7 @@ private:
 	OpCodeEntry* m_opCodeEntry; // Current opcode entry
 	
 	// Registers - not using the usual m_ prefix because I find the code looks
-	// more straightfoward when using the typical register names
+	// more straightforward when using the typical register names
 	uint16 PC;		// Program counter
 	uint8 SP;		// Stack pointer
 	uint8 A;		// Accumulator
@@ -84,7 +87,9 @@ private:
 	Bitfield8 P;	// Processor status (flags)
 
 	uint16 m_cycles; // Elapsed cycles of each fetch and execute of an instruction
-	uint16 m_lastPC; // Useful for debugging purposes
+
+	bool m_pendingNmi;
+	bool m_pendingIrq;
 
 	// Operand address is either the operand's memory location, or the target for a branch or jmp
 	uint16 m_operandAddress;
