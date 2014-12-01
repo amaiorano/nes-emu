@@ -12,16 +12,40 @@
 #include <stdexcept>
 
 #define FCEUX_OUTPUT 0
+#define TRACE_TO_FILE 0
 
 namespace
 {
-	bool g_trace = false;
+	bool g_trace = true;
 	bool g_stepMode = false;
 	uint16 g_instructionBreakpoints[10] = {0};
 	uint16 g_dataBreakpoints[10] = {0};
+
+	FILE* GetTraceFile()
+	{
+		static FILE* fs = fopen("trace.log", "w+");
+		return fs;
+	}
+
+	void CloseTraceFile()
+	{
+		fclose(GetTraceFile());
+	}
+
+	void TraceToFile(const char* format, ...)
+	{
+		va_list args;
+		va_start(args, format);
+		vfprintf(GetTraceFile(), format, args);
+		va_end(args);
+	}
 }
 
-#define TRACE printf
+#if TRACE_TO_FILE
+	#define TRACE TraceToFile
+#else
+	#define TRACE printf
+#endif
 
 class DebuggerImpl
 {
