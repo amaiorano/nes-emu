@@ -72,6 +72,7 @@ struct OpCodeEntry
 	OpCodeName::Type opCodeName;
 	uint8 numBytes;
 	uint8 numCycles;
+	uint8 pageCrossCycles; // 0 or 1
 	AddressMode::Type addrMode;
 };
 

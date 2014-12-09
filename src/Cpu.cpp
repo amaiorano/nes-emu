@@ -8,6 +8,11 @@ namespace
 {
 	OpCodeEntry** g_opCodeTable = GetOpCodeTable();
 
+	FORCEINLINE uint16 GetPageAddress(uint16 address)
+	{
+		return (address & 0xFF00);
+	}
+
 	FORCEINLINE uint8 CalcNegativeFlag(uint16 v)
 	{
 		// Check if bit 7 is set
@@ -202,11 +207,11 @@ void Cpu::Write8(uint16 address, uint8 value)
 
 void Cpu::UpdateOperandAddress()
 {
-	//@TODO: For all 2 byte reads, we need to compute potential page boundary penalty
-	
 #if CONFIG_DEBUG
 	m_operandAddress = 0; // Reset to help find bugs
 #endif
+
+	m_operandReadCrossedPage = false;
 
 	switch (m_opCodeEntry->addrMode)
 	{
@@ -247,11 +252,21 @@ void Cpu::UpdateOperandAddress()
 		break;
 
 	case AddressMode::AbIdxX:
-		m_operandAddress = Read16(PC+1) + X;
+		{
+			const uint16 baseAddress = Read16(PC+1);
+			const uint16 basePage = GetPageAddress(baseAddress);
+			m_operandAddress = baseAddress + X;
+			m_operandReadCrossedPage = basePage != GetPageAddress(m_operandAddress);
+		}
 		break;
 
 	case AddressMode::AbIdxY:
-		m_operandAddress = Read16(PC+1) + Y;
+		{
+			const uint16 baseAddress = Read16(PC+1);
+			const uint16 basePage = GetPageAddress(baseAddress);
+			m_operandAddress = baseAddress + Y;
+			m_operandReadCrossedPage = basePage != GetPageAddress(m_operandAddress);
+		}
 		break;
 
 	case AddressMode::Indrct: // for JMP only
@@ -279,8 +294,10 @@ void Cpu::UpdateOperandAddress()
 		{
 			const uint16 low = TO16(Read8(PC+1)); // Zero page low byte of operand address
 			const uint16 high = TO16(low + 1) & 0x00FF; // Wrap high byte around zero page
-			//@TODO: potential penalty if + Y crosses page boundary here
-			m_operandAddress = (TO16(Read8(low)) | TO16(Read8(high)) << 8) + TO16(Y);
+			const uint16 baseAddress = (TO16(Read8(low)) | TO16(Read8(high)) << 8);
+			const uint16 basePage = GetPageAddress(baseAddress);
+			m_operandAddress = baseAddress + Y;
+			m_operandReadCrossedPage = basePage != GetPageAddress(m_operandAddress);
 		}
 		break;
 
@@ -297,6 +314,8 @@ void Cpu::ExecuteInstruction()
 
 	// By default, next instruction is after current, but can also be changed by a branch or jump
 	uint16 nextPC = PC + m_opCodeEntry->numBytes;
+	
+	bool branchTaken = false;
 
 	switch (m_opCodeEntry->opCodeName)
 	{
@@ -331,17 +350,26 @@ void Cpu::ExecuteInstruction()
 
 	case BCC: // Branch on Carry Clear
 		if (!P.Test(Carry))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case BCS: // Branch on Carry Set
 		if (P.Test(Carry))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case BEQ: // Branch on result zero (equal means compare difference is 0)
 		if (P.Test(Zero))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case BIT: // Test bits in memory with accumulator
@@ -355,17 +383,26 @@ void Cpu::ExecuteInstruction()
 
 	case BMI: // Branch on result minus
 		if (P.Test(Negative))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case BNE:  // Branch on result non-zero
 		if (!P.Test(Zero))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case BPL: // Branch on result plus
 		if (!P.Test(Negative))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS) (used with RTI)
@@ -380,12 +417,18 @@ void Cpu::ExecuteInstruction()
 
 	case BVC: // Branch on Overflow Clear
 		if (!P.Test(Overflow))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case BVS: // Branch on Overflow Set
 		if (P.Test(Overflow))
+		{
 			nextPC = GetBranchOrJmpLocation();
+			branchTaken = true;
+		}
 		break;
 
 	case CLC: // CLC Clear carry flag
@@ -662,12 +705,31 @@ void Cpu::ExecuteInstruction()
 		break;
 	}
 
+	// Compute cycles for instruction
+	{
+		uint16 cycles = m_opCodeEntry->numCycles;
+
+		// Some instructions take an extra cycle when reading operand across page boundary
+		if (m_operandReadCrossedPage)
+			cycles += m_opCodeEntry->pageCrossCycles;
+
+		// Extra cycle when branch is taken
+		if (branchTaken)
+		{
+			++cycles;
+
+			// And extra cycle when branching to a different page
+			if (GetPageAddress(PC) != GetPageAddress(nextPC))
+			{
+				++cycles;
+			}
+		}
+
+		m_cycles += cycles;
+	}
+
 	// Move to next instruction
 	PC = nextPC;
-	
-	//@TODO: For now just return approx number of cycles for the instruction; however, we need to compute
-	// actual cycles taken for branches taken or not, and for page crossing penalties.
-	m_cycles += m_opCodeEntry->numCycles;
 }
 
 void Cpu::ExecutePendingInterrupts()

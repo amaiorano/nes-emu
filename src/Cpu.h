@@ -93,6 +93,7 @@ private:
 
 	// Operand address is either the operand's memory location, or the target for a branch or jmp
 	uint16 m_operandAddress;
+	bool m_operandReadCrossedPage;
 
 	uint8 m_spriteDmaRegister; // $4014
 
