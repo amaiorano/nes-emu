@@ -48,30 +48,25 @@ void Nes::Reset()
 
 void Nes::Run()
 {
-	int32 numCpuCyclesLeft = 0;
-
 	const float32 minFrameTime = 1.0f/60.0f;
 	FrameTimer frameTimer;
 
 	for (;;)
 	{
+		// Update CPU, get number of cycles elapsed
+		uint32 cpuCycles;
+		m_cpu.Execute(cpuCycles);
+
+		// Update PPU with that many cycles
 		bool finishedRender = false;
-		while (!finishedRender)
+		const uint32 ppuCycles = cpuCycles * 3;
+		m_ppu.Execute(ppuCycles, finishedRender);
+
+		if (finishedRender)
 		{
-			// PPU update
-			uint32 numCpuCyclesToExecute = 0;
-			m_ppu.Execute(finishedRender, numCpuCyclesToExecute);
-			numCpuCyclesLeft += numCpuCyclesToExecute;
-			assert(numCpuCyclesLeft > 0);
-
-			// CPU update
-			uint32 actualCpuCycles = 0;
-			m_cpu.Execute(numCpuCyclesLeft, actualCpuCycles);
-			numCpuCyclesLeft -= actualCpuCycles; // Usually negative
+			// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
+			frameTimer.Update(minFrameTime);
+			Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", frameTimer.GetFps()).Value() );
 		}
-
-		// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
-		frameTimer.Update(minFrameTime);
-		Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", frameTimer.GetFps()).Value() );
 	}
 }

@@ -66,6 +66,84 @@ namespace
 		}
 	#endif
 	}
+
+	// EDC BA 98765 43210 *** NOTE bit 15 is missing because it's not used. PPU address space is 14 bits wide, but extra bit is used f or scrolling.
+	// yyy NN YYYYY XXXXX
+	// ||| || ||||| +++++-- coarse X scroll
+	// ||| || +++++-------- coarse Y scroll
+	// ||| ++-------------- nametable select
+	// +++----------------- fine Y scroll
+	FORCEINLINE void SetVRamAddressCoarseX(uint16& v, uint8 value)
+	{
+		v = (v & ~0x001F) | (TO16(value) & 0x001F);
+	}
+
+	FORCEINLINE void SetVRamAddressCoarseY(uint16& v, uint8 value)
+	{
+		v = (v & ~0x03E0) | (TO16(value) << 5);
+	}
+
+	FORCEINLINE void SetVRamAddressNameTable(uint16& v, uint8 value)
+	{
+		v = (v & ~0x0C00) | (TO16(value) << 10);
+	}
+
+	FORCEINLINE void SetVRamAddressFineY(uint16& v, uint8 value)
+	{
+		v = (v & ~0x7000) | (TO16(value) << 12);
+	}
+
+	FORCEINLINE void CopyVRamAddressHori(uint16& target, uint16& source)
+	{
+		// Copy coarse X (5 bits) and low nametable bit
+		target = (target & ~0x041F) | ((source & 0x041F));
+	}
+
+	FORCEINLINE void CopyVRamAddressVert(uint16& target, uint16& source)
+	{
+		// Copy coarse Y (5 bits), fine Y (3 bits), and high nametable bit
+		target = (target & 0x041F) | ((source & ~0x041F));
+	}
+
+	void IncHoriVRamAddress(uint16& v)
+	{
+		if ((v & 0x001F) == 31) // if coarse X == 31
+		{
+			v &= ~0x001F; // coarse X = 0
+			v ^= 0x0400; // switch horizontal nametable
+		}
+		else
+		{
+			v += 1; // increment coarse X
+		}
+	}
+
+	void IncVertVRamAddress(uint16& v)
+	{
+		if ((v & 0x7000) != 0x7000) // if fine Y < 7
+		{
+			v += 0x1000; // increment fine Y
+		}
+		else
+		{
+			v &= ~0x7000; // fine Y = 0
+			uint16 y = (v & 0x03E0) >> 5; // let y = coarse Y
+			if (y == 29)
+			{
+				y = 0; // coarse Y = 0
+				v ^= 0x0800; // switch vertical nametable
+			}
+			else if (y == 31)
+			{
+				y = 0; // coarse Y = 0, nametable not switched
+			}
+			else
+			{
+				y += 1; // increment coarse Y
+			}
+			v = (v & ~0x03E0) | (y << 5); // put coarse Y back into v
+		}
+	};
 }
 
 namespace PpuControl1 // $2000 (W)
@@ -122,7 +200,7 @@ namespace PpuStatus // $2002 (R)
 	enum Type : uint8
 	{
 		VRAMWritesIgnored	= BIT(4),
-		ScanlineSpritesGt8	= BIT(5),
+		SpriteOverflow		= BIT(5),
 		PpuHitSprite0		= BIT(6),
 		InVBlank			= BIT(7),
 	};
@@ -184,58 +262,171 @@ void Ppu::Reset()
 
 	// Not necessary but helps with debugging
 	m_vramAddress = 0xDDDD;
+	m_tempVRamAddress = 0xDDDD;
 	m_vramBufferedValue = 0xDD;
+
+	m_cycle = 0;
+	m_evenFrame = true;
 }
 
-void Ppu::Execute(bool& finishedRender, uint32& numCpuCyclesToExecute)
+void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 {
+	static auto ReadTileRow = [&] (uint16 patternTableAddress, uint8 tileIndex, uint8 fineY, uint8 paletteUpperBits, uint8 tileRow[8])
+	{
+		// Every 16 bytes is 1 8x8 tile; 2 bytes per 8 pixel row.
+		const uint16 tileOffset = TO16(tileIndex) * 16;
+		assert(tileOffset+16 < KB(16) && "Indexing outside of current pattern table");
+
+		uint16 byte1Address = patternTableAddress + tileOffset + fineY;
+		uint16 byte2Address = byte1Address + 8;
+
+		const uint8 b1 = m_ppuMemoryBus->Read(byte1Address);
+		const uint8 b2 = m_ppuMemoryBus->Read(byte2Address);
+		const Bitfield8& byte1 = reinterpret_cast<const Bitfield8&>(b1);
+		const Bitfield8& byte2 = reinterpret_cast<const Bitfield8&>(b2);
+
+		tileRow[0] = (paletteUpperBits << 2) | (byte1.TestPos01(7) | (byte2.TestPos01(7) << 1));
+		tileRow[1] = (paletteUpperBits << 2) | (byte1.TestPos01(6) | (byte2.TestPos01(6) << 1));
+		tileRow[2] = (paletteUpperBits << 2) | (byte1.TestPos01(5) | (byte2.TestPos01(5) << 1));
+		tileRow[3] = (paletteUpperBits << 2) | (byte1.TestPos01(4) | (byte2.TestPos01(4) << 1));
+		tileRow[4] = (paletteUpperBits << 2) | (byte1.TestPos01(3) | (byte2.TestPos01(3) << 1));
+		tileRow[5] = (paletteUpperBits << 2) | (byte1.TestPos01(2) | (byte2.TestPos01(2) << 1));
+		tileRow[6] = (paletteUpperBits << 2) | (byte1.TestPos01(1) | (byte2.TestPos01(1) << 1));
+		tileRow[7] = (paletteUpperBits << 2) | (byte1.TestPos01(0) | (byte2.TestPos01(0) << 1));
+	};
+
+	// Pipeline for 2 VRAM addresses for rendering, since PPU loads and caches up 2 tiles worth of pixels
+	// before rendering them.
+	static uint16 m_vramAddressPipeline[2];
+	static auto PushVRamAddress = [&] (uint16 v)
+	{
+		m_vramAddressPipeline[0] = m_vramAddressPipeline[1];
+		m_vramAddressPipeline[1] = v;
+	};
+	static auto PopVRamAddress = [&] () -> uint16
+	{
+		uint16 result = m_vramAddressPipeline[0];
+		m_vramAddressPipeline[0] = m_vramAddressPipeline[1];
+		return result;
+	};
+
+	const size_t kNumTotalScanlines = 262;
+	const size_t kNumHBlankAndBorderCycles = 85;
+	const size_t kNumScanlineCycles = kScreenWidth + kNumHBlankAndBorderCycles; // 256 + 85 = 341
+	const size_t kNumScreenCycles = kNumScanlineCycles * kNumTotalScanlines; // 89342 cycles per screen
+
 	finishedRender = false;
-	
-	const uint32 kNumVBlankCycles = 2273; // 20 scanlines
-	const uint32 kNumRenderCycles = 27507; // 242 scanlines (1 prerender + 240 render + 1 postrender)
 
-	enum State { Rendering, VBlanking };
-	static State currState;
-	static State nextState = VBlanking;
+	const bool renderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites);
 
-	currState = nextState;
+	for ( ; ppuCycles > 0; --ppuCycles)
+	{
+		const uint32 x = m_cycle % kNumScanlineCycles; // offset in current scanline
+		const uint32 y = m_cycle / kNumScanlineCycles; // scanline
 
-	switch (currState)
-	{	
-	case Rendering:
+		if (x >= 258 && x <= 320) // HBlank?
 		{
-			m_ppuStatusReg->Clear(PpuStatus::InVBlank); // cleared at dot 1 of line 261 (start of pre-render line)
-
-			if (m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites))
+			// On pre-render line during sub-range of HBlank, we copy vertical values of t to v
+			if (renderingEnabled && y == 261 && x >= 280 && x <= 304)
 			{
-				Render();
+				CopyVRamAddressVert(m_vramAddress, m_tempVRamAddress);
 			}
-			else
+		}
+		else if ( (y >= 0 && y <= 239) || y == 261 ) // Visible and Pre-render
+		{
+			// Render "last" 8 pixels every 8 cycles starting at cycle 8. Technically we could render on any cycle
+			// between the 8 cycles when the vram address is changed.
+			if (renderingEnabled && (x > 0) && (x % 8 == 0) && (x <= kScreenWidth) && (y < kScreenHeight))
 			{
-				// We're in "forced vblank"
-				ClearBackground();
+				uint16 v = PopVRamAddress(); // Get vram address saved ~16 cycles ago
+
+				const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+				const uint16 tileIndexAddress = 0x2000 | (v & 0x0FFF);
+				const uint16 attributeAddress = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
+				const uint8 fineY = (v & 0x7000) >> 12;
+
+				const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+				const uint8 paletteUpperBits = 0; //@TODO:!!
+
+				//printf("%02X(%d,%d)[%d] ", tileIndexAddress, x-8, y, tileIndex);
+
+				uint8 tileRow[8];
+				ReadTileRow(patternTableAddress, tileIndex, fineY, paletteUpperBits, tileRow);
+
+				for (auto xf = x - 8; xf < x; ++xf)
+				{
+					uint8 paletteLowBits = tileRow[8-(x-xf)];
+					assert(paletteLowBits < 4);
+					Color4 c;
+					switch (paletteLowBits)
+					{
+					case 0: c = Color4::Black(); break;
+					case 1: c = Color4::Blue(); break;
+					case 2: c = Color4::Green(); break;
+					case 3: c = Color4::Red(); break;
+					}
+
+					m_renderer->DrawPixel(xf, y, c);
+				}
+			}
+
+			// Update VRAM address
+			if (renderingEnabled)
+			{
+				if (x >= 8 && (x % 8 == 0) && x != 256)
+				{
+					// Before incrementing V, save it so that it will get rendered in ~16 cycles
+					PushVRamAddress(m_vramAddress);
+
+					IncHoriVRamAddress(m_vramAddress);
+				}
+				else if (x == 256)
+				{
+					IncVertVRamAddress(m_vramAddress);
+				}			
+				else if (x == 257)
+				{
+					CopyVRamAddressHori(m_vramAddress, m_tempVRamAddress);
+				}
+			}
+
+			// Clear flags on pre-render line at dot 1
+			if (y == 261 && x == 1)
+			{
+				m_ppuStatusReg->Clear(PpuStatus::InVBlank | PpuStatus::PpuHitSprite0 | PpuStatus::SpriteOverflow);
+			}
+			
+			// Present on (second to) last cycle of last visible scanline
+			//@TODO: Do this on last frame of post-render line?
+			if (x == 339 && y == 239)
+			{
 				m_renderer->Present();
+				ClearBackground();
+				finishedRender = true;
+
+				// For odd frames, the cycle at the end of the scanline (340,239) is skipped
+				if (!m_evenFrame && renderingEnabled)
+					++m_cycle;
+
+				m_evenFrame = !m_evenFrame;
 			}
-
-			finishedRender = true;
-			numCpuCyclesToExecute = kNumRenderCycles;
-
-			nextState = VBlanking;
 		}
-		break;
-
-	case VBlanking:
+		else // Post-render and VBlank 240-260
 		{
-			m_ppuStatusReg->Set(PpuStatus::InVBlank); // set at dot 1 of line 241 (line *after* post-render line)
+			assert(y >= 240 && y <= 260);
 
-			if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
-				m_nes->SignalCpuNmi();
+			if (y == 241 && x == 1)
+			{
+				m_ppuStatusReg->Set(PpuStatus::InVBlank);
 
-			numCpuCyclesToExecute = kNumVBlankCycles;
-
-			nextState = Rendering;
+				//@TODO: is this the right time?
+				if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
+					m_nes->SignalCpuNmi();
+			}
 		}
-		break;
+
+		// Update cycle
+		m_cycle = (m_cycle + 1) % kNumScreenCycles;
 	}
 }
 
@@ -261,7 +452,6 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 			m_ppuStatusReg->Clear(PpuStatus::InVBlank);
 			WritePpuRegister(CpuMemory::kPpuVRamAddressReg1, 0);
 			WritePpuRegister(CpuMemory::kPpuVRamAddressReg2, 0);
-			m_vramAddress = 0;
 			m_vramAndScrollFirstWrite = true;
 		}
 		break;
@@ -313,6 +503,8 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 	{
 	case CpuMemory::kPpuControlReg1: // $2000
 		{
+			SetVRamAddressNameTable(m_tempVRamAddress, value & 0x3);
+
 			const Bitfield8* oldPpuControlReg1 = reinterpret_cast<const Bitfield8*>(&oldValue);
 
 			// The PPU pulls /NMI low if and only if both NMI_occurred and NMI_output are true. By toggling NMI_output ($2000 bit 7)
@@ -340,13 +532,13 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		{
 			if (m_vramAndScrollFirstWrite) // First write: X scroll values
 			{
-				m_scroll.fineOffsetX = ReadBits(value, 0x07);
-				m_scroll.coarseOffsetX = ReadBits(value, ~0x07);
+				m_fineX = value & 0x07;
+				SetVRamAddressCoarseX(m_tempVRamAddress, (value & ~0x07) >> 3);
 			}
 			else // Second write: Y scroll values
 			{
-				m_scroll.fineOffsetY = ReadBits(value, 0x07);
-				m_scroll.coarseOffsetY = ReadBits(value, ~0x07);
+				SetVRamAddressFineY(m_tempVRamAddress, value & 0x07);
+				SetVRamAddressCoarseY(m_tempVRamAddress, (value & ~0x07) >> 3);
 			}
 
 			m_vramAndScrollFirstWrite = !m_vramAndScrollFirstWrite;
@@ -358,11 +550,13 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 			const uint16 halfAddress = TO16(value);
 			if (m_vramAndScrollFirstWrite) // First write: high byte
 			{
-				m_vramAddress = (halfAddress << 8) | (m_vramAddress & 0x00FF);
+				// Write 6 bits to high byte - note that technically we shouldn't touch bit 15, but whatever
+				m_tempVRamAddress = ((halfAddress & 0x3F) << 8) | (m_tempVRamAddress & 0x00FF);
 			}
-			else // Second write: low byte
+			else
 			{
-				m_vramAddress = halfAddress | (m_vramAddress & 0xFF00);
+				m_tempVRamAddress = (m_tempVRamAddress & 0xFF00) | halfAddress;
+				m_vramAddress = m_tempVRamAddress; // Update v from t on second write
 			}
 
 			m_vramAndScrollFirstWrite = !m_vramAndScrollFirstWrite;
@@ -382,7 +576,7 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 			{
 				m_ppuMemoryBus->Write(m_vramAddress, value);
 			}
-				
+
 			const uint16 advanceOffset = PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
 			m_vramAddress += advanceOffset;
 		}
@@ -479,256 +673,4 @@ void Ppu::ClearBackground()
 	// Clear to palette color 0
 	//@TODO: If vram address points to palette, we should render that palette color
 	m_renderer->Clear(g_paletteColors[m_palette.Read(0)]);
-}
-
-void Ppu::Render()
-{
-	static auto GetTilePaletteUpperBits = [&] (uint16 attributeTableAddress, uint8 x, uint8 y)
-	{
-		const uint8 groupsPerScreenX = 8;
-		const uint8 tilesPerGroupAxis = 4; // 4x4 = 16 tiles per group
-		const uint8 tilesPerSquareAxis = 2; // 2x2 = 4 tiles per square (and 4x4 squares per group)
-		const uint8 squaresPerGroupAxis = 2;
-
-		// Get attribute byte for current group
-		const uint8 groupX = x / tilesPerGroupAxis; assert(groupX < 8);
-		const uint8 groupY = y / tilesPerGroupAxis; assert(groupY < 8);
-		const uint8 groupIndex = groupY * groupsPerScreenX + groupX; assert(groupIndex < 64);
-		const uint8 attributeByte = m_ppuMemoryBus->Read(attributeTableAddress + groupIndex);
-
-		// Get square x,y relative to current group
-		const uint8 squareX = (x - (groupX * tilesPerGroupAxis)) / squaresPerGroupAxis; assert(squareX < 2);
-		const uint8 squareY = (y - (groupY * tilesPerGroupAxis))  / squaresPerGroupAxis; assert(squareY < 2);
-		const uint8 squareIndex = squareY * tilesPerSquareAxis + squareX; assert(squareIndex < 4);
-
-		// Compute tile's upper 2 palette bits (lower 2 bits are in tile data itself)
-		const uint8 paletteUpperBits = (attributeByte >> (squareIndex*2)) & 0x3;
-		assert(paletteUpperBits < 4);
-
-		return paletteUpperBits;
-	};
-
-	static auto ReadTile = [&] (uint16 patternTableAddress, uint8 tileIndex, uint8 paletteUpperBits, uint8 tile[8][8])
-	{
-		// Every 16 bytes is 1 8x8 tile
-		const uint16 tileOffset = TO16(tileIndex) * 16;
-		assert(tileOffset+16 < KB(16) && "Indexing outside of current pattern table");
-
-		uint16 byte1Address = patternTableAddress + tileOffset + 0;
-		uint16 byte2Address = patternTableAddress + tileOffset + 8;
-
-		for (uint16 y = 0; y < 8; ++y)
-		{
-			const uint8 b1 = m_ppuMemoryBus->Read(byte1Address);
-			const uint8 b2 = m_ppuMemoryBus->Read(byte2Address);
-			const Bitfield8& byte1 = reinterpret_cast<const Bitfield8&>(b1);
-			const Bitfield8& byte2 = reinterpret_cast<const Bitfield8&>(b2);
-
-			tile[0][y] = (paletteUpperBits << 2) | (byte1.TestPos01(7) | (byte2.TestPos01(7) << 1));
-			tile[1][y] = (paletteUpperBits << 2) | (byte1.TestPos01(6) | (byte2.TestPos01(6) << 1));
-			tile[2][y] = (paletteUpperBits << 2) | (byte1.TestPos01(5) | (byte2.TestPos01(5) << 1));
-			tile[3][y] = (paletteUpperBits << 2) | (byte1.TestPos01(4) | (byte2.TestPos01(4) << 1));
-			tile[4][y] = (paletteUpperBits << 2) | (byte1.TestPos01(3) | (byte2.TestPos01(3) << 1));
-			tile[5][y] = (paletteUpperBits << 2) | (byte1.TestPos01(2) | (byte2.TestPos01(2) << 1));
-			tile[6][y] = (paletteUpperBits << 2) | (byte1.TestPos01(1) | (byte2.TestPos01(1) << 1));
-			tile[7][y] = (paletteUpperBits << 2) | (byte1.TestPos01(0) | (byte2.TestPos01(0) << 1));
-
-			++byte1Address;
-			++byte2Address;
-		}
-	};
-
-	static auto DrawBackgroundTile = [&] (Renderer& renderer, int32 x, int32 y, uint8 tile[8][8])
-	{
-		for (uint16 ty = 0; ty < 8; ++ty)
-		{
-			for (uint16 tx = 0; tx < 8; ++tx)
-			{
-				const uint8 paletteOffset = tile[tx][ty];
-
-				if (paletteOffset % 4 == 0) // Don't draw bg color pixel as screen was already cleared with that color
-					continue;
-
-				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
-				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kImagePalette + paletteOffset) );
-				assert(paletteIndex < kNumPaletteColors);
-
-				const Color4& color = g_paletteColors[paletteIndex];
-
-				const int32 xf = x + tx;
-				const int32 yf = y + ty;
-
-				// Clip x against right screen edge and y against bottom screen edge
-				if (xf >= kScreenWidth || yf >= kScreenHeight)
-					continue;
-
-				renderer.DrawPixel(xf, yf, color);
-			}
-		}
-	};
-
-	static auto DrawSpriteTile = [&] (Renderer& renderer, int32 x, int32 y, uint8 tile[8][8], bool flipHorz, bool flipVert)
-	{
-		for (uint16 ty = 0; ty < 8; ++ty)
-		{
-			for (uint16 tx = 0; tx < 8; ++tx)
-			{
-				const uint8 paletteOffset = tile[tx][ty];
-
-				if (paletteOffset % 4 == 0) // Don't draw transparent pixel
-					continue;
-
-				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
-				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kSpritePalette + paletteOffset) );
-				assert(paletteIndex < kNumPaletteColors);
-
-				const Color4& color = g_paletteColors[paletteIndex];
-				
-				int32 xf = x + (flipHorz? 7 - tx : tx);
-				int32 yf = y + (flipVert? 7 - ty : ty);
-
-				// Clip x against right screen edge and y against bottom screen edge
-				if (xf >= kScreenWidth || yf >= kScreenHeight)
-					continue;
-
-				renderer.DrawPixel(xf, yf, color);
-			}
-		}
-	};
-
-	static auto RenderSprites = [&] (bool behindBackground)
-	{
-		if (m_ppuControlReg2->Test(PpuControl2::RenderSprites))
-		{
-			const bool spriteSize8x8 = !m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
-
-			// Iterate backwards for sprite rendering priority (smaller indices draw over larger indices)
-			for (size_t i = kMaxSprites; i-- > 0; )
-			{
-				const uint8* spriteData = m_sprites.RawPtr(static_cast<uint16>(i * kSpriteDataSize));
-
-				// Note that sprites are drawn one scanline late, so we must add 1 to the y provided.
-				// Client code must subtract 1 from the desired Y. This also implies that sprites can
-				// never be drawn at the first visible scanline (Y = 0).
-				const uint8 y = spriteData[0];
-				if (y >= 239) // Don't render sprites clipped by bottom of screen
-					continue;
-
-				const uint8 x = spriteData[3];
-				if (x < 8 && !m_ppuControlReg2->Test(PpuControl2::SpritesShowLeft8))
-					continue;
-
-				const uint8 attribs = spriteData[2];
-				const bool currBehindBackground = TestBits(attribs, BIT(5));
-				if (behindBackground != currBehindBackground)
-					continue;
-
-				uint16 patternTableAddress;
-				uint8 tileIndex;
-				std::tie(patternTableAddress, tileIndex) = GetSpritePatternTableAddressAndTileIndex(m_ppuControlReg1, spriteData[1]);
-
-				uint8 tile[8][8] = {0};
-				const uint8 paletteUpperBits = ReadBits(attribs, 0x3);
-				const bool flipHorz = TestBits(attribs, BIT(6));
-				const bool flipVert = TestBits(attribs, BIT(7));
-
-				if (spriteSize8x8)
-				{
-					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
-					DrawSpriteTile(*m_renderer, x, y + 1, tile, flipHorz, flipVert);
-				}
-				else
-				{
-					const int32 y1 = flipVert? y + 1 + 8 : y + 1;
-					const int32 y2 = flipVert? y + 1 : y + 1 + 8;
-
-					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
-					DrawSpriteTile(*m_renderer, x, y1, tile, flipHorz, flipVert);
-
-					ReadTile(patternTableAddress, tileIndex + 1, paletteUpperBits, tile);
-					DrawSpriteTile(*m_renderer, x, y2, tile, flipHorz, flipVert);
-				}
-			}
-		}
-	};
-
-	static auto RenderBackground = [&] ()
-	{
-		const uint8 kScreenTilesX = 32;
-		const uint8 kScreenTilesY = 30;
-
-		if (!m_ppuControlReg2->Test(PpuControl2::RenderBackground))
-			return;
-
-		const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-		const uint16 nameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
-		const uint16 attributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
-
-		const uint8 initialX = m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8)? 0 : 1;
-
-		uint8 tile[8][8] = {0};
-
-		uint8 scrollTileOffsetX = m_scroll.coarseOffsetX / 8;
-		uint8 scrollTileOffsetY = m_scroll.coarseOffsetY / 8;
-
-		// Render 32x30 tiles for the screen, plus 1 extra on each side for scrolling (we can see 33x31 tiles)
-		for (uint8 screenTileY = 0; screenTileY < kScreenTilesY + 1; ++screenTileY)
-		{
-			for (uint8 screenTileX = initialX; screenTileX < kScreenTilesX + 1; ++screenTileX)
-			{
-				// Compute actual tile coordinate, taking scrolling offsets into account
-				uint8 tileX = screenTileX + scrollTileOffsetX;
-				uint8 tileY = screenTileY + scrollTileOffsetY;
-
-				// The "virtual" tile space is 4x4 screens, so we need to adjust base nameTableAddress
-				// and tile coordinates if the tile falls onto another screen
-				uint16 addressOffset = 0;
-
-				if (scrollTileOffsetY >= kScreenTilesY)
-				{
-					// Special case for when Y coarse scroll is set outside of valid range [0,29]
-					// In that case, we don't switch name tables, but instead, address into attribute memory.
-					// The effect is rendering one or two rows of attribute data as tiles at the top of the screen.
-					// See: http://wiki.nesdev.com/w/index.php/The_skinny_on_NES_scrolling#Y_increment
-					tileY %= 32; // Wrap around (5 bits hold this value in hardware)
-				}
-				else if (tileY >= kScreenTilesY) // If below current screen, switch vertical nametable
-				{
-					addressOffset += PpuMemory::kNameAttributeTableSize * 2;
-					tileY %= kScreenTilesY; // Tile Y within next screen
-				}
-				
-				if (tileX >= kScreenTilesX) // If to the right of current screen, switch horizontal nametable
-				{
-					addressOffset += PpuMemory::kNameAttributeTableSize;
-					tileX %= kScreenTilesX; // Tile X within next screen
-				}
-
-				const uint16 tileIndexAddress = (nameTableAddress + addressOffset) + (tileY * kScreenTilesX) + tileX;
-				const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
-				const uint8 paletteUpperBits = GetTilePaletteUpperBits(attributeTableAddress + addressOffset, tileX, tileY);
-
-				ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
-
-				const int32 xf = screenTileX * 8 - m_scroll.fineOffsetX;
-				const int32 yf = screenTileY * 8 - m_scroll.fineOffsetY;
-				DrawBackgroundTile(*m_renderer, xf, yf, tile);
-			}
-		}
-	};
-
-	// Always clear using palette color 0. When rendering bg tiles, we don't render color 0 so that
-	// sprites below bg remain there.	
-	ClearBackground();
-
-	// Sprites behind background
-	RenderSprites(true);
-
-	// Background
-	RenderBackground();
-
-	// Sprites above background
-	RenderSprites(false);
-
-	m_renderer->Present();
 }

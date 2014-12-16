@@ -16,7 +16,7 @@ public:
 	void SetNameTableVerticalMirroring(bool enabled) { m_nameTableVerticalMirroring = enabled; }
 
 	void Reset();
-	void Execute(bool& finishedRender, uint32& numCpuCyclesToExecute);
+	void Execute(uint32 ppuCycles, bool& finishedRender);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
@@ -32,7 +32,7 @@ private:
 	void WritePpuRegister(uint16 cpuAddress, uint8 value);
 
 	void ClearBackground();
-	void Render();
+	void RenderScreen();
 
 	PpuMemoryBus* m_ppuMemoryBus;
 	Nes* m_nes; //@TODO: Get rid of this dependency
@@ -64,17 +64,12 @@ private:
 	Bitfield8* m_ppuControlReg2;	// $2001
 	Bitfield8* m_ppuStatusReg;		// $2002
 
-	bool m_vramAndScrollFirstWrite; // $2005/2006 flip-flop
-
-	uint16 m_vramAddress; // (V) - in PPU address space
+	bool m_vramAndScrollFirstWrite;	// $2005/2006 flip-flop, "Loopy w"
+	uint16 m_vramAddress;			// "Loopy v"
+	uint16 m_tempVRamAddress;		// "Loopy t"
+	uint8 m_fineX;					// Fine x scroll (3 bits), "Loopy x"
 	uint8 m_vramBufferedValue;
 
-	struct ScrollData
-	{
-		uint8 fineOffsetX;
-		uint8 fineOffsetY;
-		uint8 coarseOffsetX;
-		uint8 coarseOffsetY;
-	};
-	ScrollData m_scroll;
+	uint32 m_cycle;
+	bool m_evenFrame;
 };
