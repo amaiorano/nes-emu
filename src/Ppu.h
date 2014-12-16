@@ -36,7 +36,8 @@ private:
 
 	PpuMemoryBus* m_ppuMemoryBus;
 	Nes* m_nes; //@TODO: Get rid of this dependency
-	std::shared_ptr<Renderer> m_renderer;
+	std::shared_ptr<Renderer> m_rendererHolder;
+	Renderer* m_renderer;
 
 	// Hardware wise, setting this to true is like connecting PPU A10 to CIRAM A10, else PPU A11 to CIRAM A10.
 	// This is done on cartridges by shorting the "V" or "H" solder pads.
@@ -72,4 +73,11 @@ private:
 
 	uint32 m_cycle;
 	bool m_evenFrame;
+
+	struct ShiftRegister16
+	{
+		uint8 low;
+		uint8 high;
+	};
+	ShiftRegister16 m_bgTilePipeline[2];
 };

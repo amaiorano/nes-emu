@@ -229,7 +229,8 @@ namespace
 Ppu::Ppu()
 	: m_ppuMemoryBus(nullptr)
 	, m_nes(nullptr)
-	, m_renderer(new Renderer())
+	, m_rendererHolder(new Renderer())
+	, m_renderer(m_rendererHolder.get())
 	, m_nameTableVerticalMirroring(false)
 {
 	InitPaletteColors();
@@ -271,44 +272,28 @@ void Ppu::Reset()
 
 void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 {
-	static auto ReadTileRow = [&] (uint16 patternTableAddress, uint8 tileIndex, uint8 fineY, uint8 paletteUpperBits, uint8 tileRow[8])
+	static auto LoadTileRow = [&] (uint8 tileRow[8])
 	{
-		// Every 16 bytes is 1 8x8 tile; 2 bytes per 8 pixel row.
-		const uint16 tileOffset = TO16(tileIndex) * 16;
-		assert(tileOffset+16 < KB(16) && "Indexing outside of current pattern table");
+		// Like on the NES, we preload the bitmap data for the next 2 tiles to render
+		// so that we can implement fine X scroll.
+		auto& tile1 = m_bgTilePipeline[0];
+		auto& tile2 = m_bgTilePipeline[1];
+		const uint8 b1 = (tile1.low << m_fineX) | (tile2.low >> (8 - m_fineX));
+		const uint8 b2 = (tile1.high << m_fineX) | (tile2.high >> (8 - m_fineX));
 
-		uint16 byte1Address = patternTableAddress + tileOffset + fineY;
-		uint16 byte2Address = byte1Address + 8;
-
-		const uint8 b1 = m_ppuMemoryBus->Read(byte1Address);
-		const uint8 b2 = m_ppuMemoryBus->Read(byte2Address);
 		const Bitfield8& byte1 = reinterpret_cast<const Bitfield8&>(b1);
 		const Bitfield8& byte2 = reinterpret_cast<const Bitfield8&>(b2);
 
-		tileRow[0] = (paletteUpperBits << 2) | (byte1.TestPos01(7) | (byte2.TestPos01(7) << 1));
-		tileRow[1] = (paletteUpperBits << 2) | (byte1.TestPos01(6) | (byte2.TestPos01(6) << 1));
-		tileRow[2] = (paletteUpperBits << 2) | (byte1.TestPos01(5) | (byte2.TestPos01(5) << 1));
-		tileRow[3] = (paletteUpperBits << 2) | (byte1.TestPos01(4) | (byte2.TestPos01(4) << 1));
-		tileRow[4] = (paletteUpperBits << 2) | (byte1.TestPos01(3) | (byte2.TestPos01(3) << 1));
-		tileRow[5] = (paletteUpperBits << 2) | (byte1.TestPos01(2) | (byte2.TestPos01(2) << 1));
-		tileRow[6] = (paletteUpperBits << 2) | (byte1.TestPos01(1) | (byte2.TestPos01(1) << 1));
-		tileRow[7] = (paletteUpperBits << 2) | (byte1.TestPos01(0) | (byte2.TestPos01(0) << 1));
+		tileRow[0] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(7) | (byte2.TestPos01(7) << 1));
+		tileRow[1] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(6) | (byte2.TestPos01(6) << 1));
+		tileRow[2] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(5) | (byte2.TestPos01(5) << 1));
+		tileRow[3] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(4) | (byte2.TestPos01(4) << 1));
+		tileRow[4] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(3) | (byte2.TestPos01(3) << 1));
+		tileRow[5] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(2) | (byte2.TestPos01(2) << 1));
+		tileRow[6] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(1) | (byte2.TestPos01(1) << 1));
+		tileRow[7] = /*(paletteUpperBits << 2) |*/ (byte1.TestPos01(0) | (byte2.TestPos01(0) << 1));
 	};
 
-	// Pipeline for 2 VRAM addresses for rendering, since PPU loads and caches up 2 tiles worth of pixels
-	// before rendering them.
-	static uint16 m_vramAddressPipeline[2];
-	static auto PushVRamAddress = [&] (uint16 v)
-	{
-		m_vramAddressPipeline[0] = m_vramAddressPipeline[1];
-		m_vramAddressPipeline[1] = v;
-	};
-	static auto PopVRamAddress = [&] () -> uint16
-	{
-		uint16 result = m_vramAddressPipeline[0];
-		m_vramAddressPipeline[0] = m_vramAddressPipeline[1];
-		return result;
-	};
 
 	const size_t kNumTotalScanlines = 262;
 	const size_t kNumHBlankAndBorderCycles = 85;
@@ -338,20 +323,11 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 			// between the 8 cycles when the vram address is changed.
 			if (renderingEnabled && (x > 0) && (x % 8 == 0) && (x <= kScreenWidth) && (y < kScreenHeight))
 			{
-				uint16 v = PopVRamAddress(); // Get vram address saved ~16 cycles ago
-
-				const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-				const uint16 tileIndexAddress = 0x2000 | (v & 0x0FFF);
-				const uint16 attributeAddress = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
-				const uint8 fineY = (v & 0x7000) >> 12;
-
-				const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
-				const uint8 paletteUpperBits = 0; //@TODO:!!
-
-				//printf("%02X(%d,%d)[%d] ", tileIndexAddress, x-8, y, tileIndex);
-
+				// Load bitmap data for row from pipelined data
 				uint8 tileRow[8];
-				ReadTileRow(patternTableAddress, tileIndex, fineY, paletteUpperBits, tileRow);
+				LoadTileRow(tileRow);
+
+				m_bgTilePipeline[0] = m_bgTilePipeline[1]; // Shift
 
 				for (auto xf = x - 8; xf < x; ++xf)
 				{
@@ -375,9 +351,23 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 			{
 				if (x >= 8 && (x % 8 == 0) && x != 256)
 				{
-					// Before incrementing V, save it so that it will get rendered in ~16 cycles
-					PushVRamAddress(m_vramAddress);
+					// Load bg tile row data (2 bytes) at v into shift register pipeline
+					auto& v = m_vramAddress;
+					const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+					const uint16 tileIndexAddress = 0x2000 | (v & 0x0FFF);
+					const uint16 attributeAddress = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
+					const uint8 fineY = (v & 0x7000) >> 12;
+					const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+					const uint16 tileOffset = TO16(tileIndex) * 16;
+					const uint16 byte1Address = patternTableAddress + tileOffset + fineY;
+					const uint16 byte2Address = byte1Address + 8;
+					
+					m_bgTilePipeline[0] = m_bgTilePipeline[1]; // Shift
 
+					m_bgTilePipeline[1].low = m_ppuMemoryBus->Read(byte1Address);
+					m_bgTilePipeline[1].high = m_ppuMemoryBus->Read(byte2Address);
+
+					// Move v to next tile
 					IncHoriVRamAddress(m_vramAddress);
 				}
 				else if (x == 256)
