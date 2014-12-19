@@ -74,10 +74,22 @@ private:
 	uint32 m_cycle;
 	bool m_evenFrame;
 
-	struct ShiftRegister16
+	struct BgTileFetchData
 	{
-		uint8 low;
-		uint8 high;
+		uint8 lowBg;
+		uint8 highBg;
+		uint8 paletteHighBits;
+
+#if CONFIG_DEBUG
+		struct
+		{
+			uint16 vramAddress;
+			uint16 tileIndexAddress;
+			uint16 attributeAddress;
+			uint16 attributeShift;
+			uint16 byte1Address;
+		} debug;
+#endif
 	};
-	ShiftRegister16 m_bgTilePipeline[2];
+	BgTileFetchData m_bgTileFetchDataPipeline[2];
 };
