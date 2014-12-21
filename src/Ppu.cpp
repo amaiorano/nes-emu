@@ -301,68 +301,74 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 		const uint32 x = m_cycle % kNumScanlineCycles; // offset in current scanline
 		const uint32 y = m_cycle / kNumScanlineCycles; // scanline
 
-		if (x >= 258 && x <= 320) // HBlank?
+		if ( (y >= 0 && y <= 239) || y == 261 ) // Visible and Pre-render scanlines
 		{
-			// On pre-render line during sub-range of HBlank, we copy vertical values of t to v
-			if (renderingEnabled && y == 261 && x >= 280 && x <= 304)
+			if (x >= 257 && x <= 320) // "HBlank" (idle cycles)
 			{
-				CopyVRamAddressVert(m_vramAddress, m_tempVRamAddress);
-			}
-		}
-		else if ( (y >= 0 && y <= 239) || y == 261 ) // Visible and Pre-render scanlines
-		{
-			// Update VRAM address and fetch data
-			if (renderingEnabled)
-			{
-				// PPU fetches 4 bytes every 8 cycles for a given tile (NT, AT, LowBG, and HighBG).
-				// We want to know when we're on the last cycle of the HighBG tile byte (see Ntsc_timing.jpg)
-				const bool lastFetchCycle = x >= 8 && (x % 8 == 0);
-
-				if (lastFetchCycle)
+				if (renderingEnabled)
 				{
-					FetchBackgroundTileData();
-
-					// Data for v was just fetched, so we can now increment it
-					if (x != 256)
+					if (x == 257)
 					{
-						IncHoriVRamAddress(m_vramAddress);
+						CopyVRamAddressHori(m_vramAddress, m_tempVRamAddress);
 					}
-					else
+					else if (y == 261 && x >= 280 && x <= 304)
 					{
-						IncVertVRamAddress(m_vramAddress);
+						//@TODO: could optimize by just doing this once on last cycle (x==304)
+						CopyVRamAddressVert(m_vramAddress, m_tempVRamAddress);
 					}
 				}
-				else if (x == 257)
+			}
+			else // Fetch and render cycles
+			{
+				// Update VRAM address and fetch data
+				if (renderingEnabled)
 				{
-					CopyVRamAddressHori(m_vramAddress, m_tempVRamAddress);
+					// PPU fetches 4 bytes every 8 cycles for a given tile (NT, AT, LowBG, and HighBG).
+					// We want to know when we're on the last cycle of the HighBG tile byte (see Ntsc_timing.jpg)
+					const bool lastFetchCycle = (x >= 8) && (x % 8 == 0);
+
+					if (lastFetchCycle)
+					{
+						FetchBackgroundTileData();
+
+						// Data for v was just fetched, so we can now increment it
+						if (x != 256)
+						{
+							IncHoriVRamAddress(m_vramAddress);
+						}
+						else
+						{
+							IncVertVRamAddress(m_vramAddress);
+						}
+					}
+
+					if (x < kScreenWidth && y < kScreenHeight)
+					{
+						// Render pixel at x,y using pipelined fetch data
+						RenderPixel(x, y);
+					}
 				}
 
-				if (renderingEnabled && (x < kScreenWidth) && (y < kScreenHeight))
+				// Clear flags on pre-render line at dot 1
+				if (y == 261 && x == 1)
 				{
-					// Render pixel at x,y using pipelined fetch data
-					RenderPixel(x, y);
+					m_ppuStatusReg->Clear(PpuStatus::InVBlank | PpuStatus::PpuHitSprite0 | PpuStatus::SpriteOverflow);
 				}
-			}
 
-			// Clear flags on pre-render line at dot 1
-			if (y == 261 && x == 1)
-			{
-				m_ppuStatusReg->Clear(PpuStatus::InVBlank | PpuStatus::PpuHitSprite0 | PpuStatus::SpriteOverflow);
-			}
-			
-			// Present on (second to) last cycle of last visible scanline
-			//@TODO: Do this on last frame of post-render line?
-			if (y == 239 && x == 339)
-			{
-				m_renderer->Present();
-				ClearBackground();
-				finishedRender = true;
+				// Present on (second to) last cycle of last visible scanline
+				//@TODO: Do this on last frame of post-render line?
+				if (y == 239 && x == 339)
+				{
+					m_renderer->Present();
+					ClearBackground();
+					finishedRender = true;
 
-				// For odd frames, the cycle at the end of the scanline (340,239) is skipped
-				if (!m_evenFrame && renderingEnabled)
-					++m_cycle;
+					// For odd frames, the cycle at the end of the scanline (340,239) is skipped
+					if (!m_evenFrame && renderingEnabled)
+						++m_cycle;
 
-				m_evenFrame = !m_evenFrame;
+					m_evenFrame = !m_evenFrame;
+				}
 			}
 		}
 		else // Post-render and VBlank 240-260
