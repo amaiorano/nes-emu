@@ -318,96 +318,29 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 				// We want to know when we're on the last cycle of the HighBG tile byte (see Ntsc_timing.jpg)
 				const bool lastFetchCycle = x >= 8 && (x % 8 == 0);
 
-				// VRAM fetch for 1 tile at current v
 				if (lastFetchCycle)
 				{
-					// Load bg tile row data (2 bytes) at v into pipeline
-					const auto& v = m_vramAddress;
-					const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-					const uint16 tileIndexAddress = 0x2000 | (v & 0x0FFF);
-					const uint16 attributeAddress = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
-					assert(attributeAddress >= PpuMemory::kAttributeTable0 && attributeAddress < PpuMemory::kNameTablesEnd);
-					const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
-					const uint16 tileOffset = TO16(tileIndex) * 16;
-					const uint8 fineY = GetVRamAddressFineY(v);
-					const uint16 byte1Address = patternTableAddress + tileOffset + fineY;
-					const uint16 byte2Address = byte1Address + 8;
-					
-					// Load attribute byte then compute and store the high palette bits from it for this tile
-					// The high palette bits are 2 consecutive bits in the attribute byte. We need to shift it right
-					// by 0, 2, 4, or 6 and read the 2 low bits. The amount to shift by is can be computed from the
-					// VRAM address as follows: [bit 6, bit 2, 0]
-					const uint8 attribute = m_ppuMemoryBus->Read(attributeAddress);
-					const uint8 attributeShift = ((v & 0x40) >> 4) | (v & 0x2);
-					assert(attributeShift == 0 || attributeShift == 2 || attributeShift == 4 || attributeShift == 6);
-					const uint8 paletteHighBits = (attribute >> attributeShift) & 0x3;
+					FetchBackgroundTileData();
 
-					auto& currTile = m_bgTileFetchDataPipeline[0];
-					auto& nextTile = m_bgTileFetchDataPipeline[1];
-
-					currTile = nextTile; // Shift pipelined data
-
-					// Push results at top of pipeline
-					nextTile.lowBg = m_ppuMemoryBus->Read(byte1Address);
-					nextTile.highBg = m_ppuMemoryBus->Read(byte2Address);
-					nextTile.paletteHighBits = paletteHighBits;
-				
-				#if CONFIG_DEBUG
-					nextTile.debug.vramAddress = m_vramAddress;
-					nextTile.debug.tileIndexAddress = tileIndexAddress;
-					nextTile.debug.attributeAddress = attributeAddress;
-					nextTile.debug.attributeShift = attributeShift;
-					nextTile.debug.byte1Address = byte1Address;
-				#endif
+					// Data for v was just fetched, so we can now increment it
+					if (x != 256)
+					{
+						IncHoriVRamAddress(m_vramAddress);
+					}
+					else
+					{
+						IncVertVRamAddress(m_vramAddress);
+					}
 				}
-
-				if (lastFetchCycle && x != 256)
-				{
-					// Data for v was fetched just above, so we can now increment it
-					IncHoriVRamAddress(m_vramAddress);
-				}
-				else if (x == 256)
-				{
-					IncVertVRamAddress(m_vramAddress);
-				}			
 				else if (x == 257)
 				{
 					CopyVRamAddressHori(m_vramAddress, m_tempVRamAddress);
 				}
 
-				// Render current pixel
 				if (renderingEnabled && (x < kScreenWidth) && (y < kScreenHeight))
 				{
-					// At this point, the data for the current and next tile are in m_bgTileFetchDataPipeline
-					const auto& currTile = m_bgTileFetchDataPipeline[0];
-					const auto& nextTile = m_bgTileFetchDataPipeline[1];
-
-					// Mux uses fine X to select a bit from shift registers
-					const uint16 muxMask = 1 << (7 - m_fineX);
-
-					// Instead of actually shifting every cycle, we rebuild the shift register values
-					// for the current cycle (using the x value)
-					//@TODO: We could optimize this storing 16 bit values for low and high BG bytes and
-					// either doing the shift every cycle, or building 16 bit mask.
-					const uint8 xShift = x % 8;
-					const uint8 lowBg = (currTile.lowBg << xShift) | (nextTile.lowBg >> (8 - xShift));
-					const uint8 highBg = (currTile.highBg << xShift) | (nextTile.highBg >> (8 - xShift));
-
-					const uint8 paletteLowBits = (TestBits01(highBg, muxMask) << 1) | (TestBits01(lowBg, muxMask));
-
-					// Technically, the mux would index 2 8-bit registers containing replicated values for the current
-					// and next tile palette high bits (from attribute bytes), but this is faster.
-					const uint8 paletteHighBits = (xShift + m_fineX < 8)? currTile.paletteHighBits : nextTile.paletteHighBits;
-					
-					// Compute offset into palette memory that contains the palette index
-					const uint8 paletteOffset = (paletteHighBits << 2) | (paletteLowBits & 0x3);
-
-					//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
-					const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kImagePalette + paletteOffset) );
-					assert(paletteIndex < kNumPaletteColors);
-					const Color4& color = g_paletteColors[paletteIndex];
-
-					m_renderer->DrawPixel(x, y, color);
+					// Render pixel at x,y using pipelined fetch data
+					RenderPixel(x, y);
 				}
 			}
 
@@ -419,7 +352,7 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 			
 			// Present on (second to) last cycle of last visible scanline
 			//@TODO: Do this on last frame of post-render line?
-			if (x == 339 && y == 239)
+			if (y == 239 && x == 339)
 			{
 				m_renderer->Present();
 				ClearBackground();
@@ -694,4 +627,80 @@ void Ppu::ClearBackground()
 	// Clear to palette color 0
 	//@TODO: If vram address points to palette, we should render that palette color
 	m_renderer->Clear(g_paletteColors[m_palette.Read(0)]);
+}
+
+void Ppu::FetchBackgroundTileData()
+{
+	// Load bg tile row data (2 bytes) at v into pipeline
+	const auto& v = m_vramAddress;
+	const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+	const uint16 tileIndexAddress = 0x2000 | (v & 0x0FFF);
+	const uint16 attributeAddress = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
+	assert(attributeAddress >= PpuMemory::kAttributeTable0 && attributeAddress < PpuMemory::kNameTablesEnd);
+	const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+	const uint16 tileOffset = TO16(tileIndex) * 16;
+	const uint8 fineY = GetVRamAddressFineY(v);
+	const uint16 byte1Address = patternTableAddress + tileOffset + fineY;
+	const uint16 byte2Address = byte1Address + 8;
+
+	// Load attribute byte then compute and store the high palette bits from it for this tile
+	// The high palette bits are 2 consecutive bits in the attribute byte. We need to shift it right
+	// by 0, 2, 4, or 6 and read the 2 low bits. The amount to shift by is can be computed from the
+	// VRAM address as follows: [bit 6, bit 2, 0]
+	const uint8 attribute = m_ppuMemoryBus->Read(attributeAddress);
+	const uint8 attributeShift = ((v & 0x40) >> 4) | (v & 0x2);
+	assert(attributeShift == 0 || attributeShift == 2 || attributeShift == 4 || attributeShift == 6);
+	const uint8 paletteHighBits = (attribute >> attributeShift) & 0x3;
+
+	auto& currTile = m_bgTileFetchDataPipeline[0];
+	auto& nextTile = m_bgTileFetchDataPipeline[1];
+
+	currTile = nextTile; // Shift pipelined data
+
+	// Push results at top of pipeline
+	nextTile.lowBg = m_ppuMemoryBus->Read(byte1Address);
+	nextTile.highBg = m_ppuMemoryBus->Read(byte2Address);
+	nextTile.paletteHighBits = paletteHighBits;
+
+#if CONFIG_DEBUG
+	nextTile.debug.vramAddress = m_vramAddress;
+	nextTile.debug.tileIndexAddress = tileIndexAddress;
+	nextTile.debug.attributeAddress = attributeAddress;
+	nextTile.debug.attributeShift = attributeShift;
+	nextTile.debug.byte1Address = byte1Address;
+#endif
+}
+
+void Ppu::RenderPixel(uint32 x, uint32 y)
+{
+	// At this point, the data for the current and next tile are in m_bgTileFetchDataPipeline
+	const auto& currTile = m_bgTileFetchDataPipeline[0];
+	const auto& nextTile = m_bgTileFetchDataPipeline[1];
+
+	// Mux uses fine X to select a bit from shift registers
+	const uint16 muxMask = 1 << (7 - m_fineX);
+
+	// Instead of actually shifting every cycle, we rebuild the shift register values
+	// for the current cycle (using the x value)
+	//@TODO: We could optimize this storing 16 bit values for low and high BG bytes and
+	// either doing the shift every cycle, or building 16 bit mask.
+	const uint8 xShift = x % 8;
+	const uint8 lowBg = (currTile.lowBg << xShift) | (nextTile.lowBg >> (8 - xShift));
+	const uint8 highBg = (currTile.highBg << xShift) | (nextTile.highBg >> (8 - xShift));
+
+	const uint8 paletteLowBits = (TestBits01(highBg, muxMask) << 1) | (TestBits01(lowBg, muxMask));
+
+	// Technically, the mux would index 2 8-bit registers containing replicated values for the current
+	// and next tile palette high bits (from attribute bytes), but this is faster.
+	const uint8 paletteHighBits = (xShift + m_fineX < 8)? currTile.paletteHighBits : nextTile.paletteHighBits;
+
+	// Compute offset into palette memory that contains the palette index
+	const uint8 paletteOffset = (paletteHighBits << 2) | (paletteLowBits & 0x3);
+
+	//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
+	const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kImagePalette + paletteOffset) );
+	assert(paletteIndex < kNumPaletteColors);
+	const Color4& color = g_paletteColors[paletteIndex];
+
+	m_renderer->DrawPixel(x, y, color);
 }

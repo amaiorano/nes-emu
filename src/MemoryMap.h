@@ -69,7 +69,7 @@ namespace PpuMemory
 	const uint16 kChrRomSize				= KB(8); // Half the memory is CHR-ROM (2 pattern tables of 4kb each)
 	const uint16 kChrRomEnd					= kChrRomBase + kChrRomSize;
 
-	// VRAM (aka CIRAM) stores name tabl	es
+	// VRAM (aka CIRAM) stores name tables
 	const uint16 kVRamBase					= 0x2000;
 	const uint16 kVRamSize					= KB(4);
 	const uint16 kVRamEnd					= kVRamBase + KB(8) - 256; // Mirrored

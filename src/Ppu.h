@@ -32,7 +32,8 @@ private:
 	void WritePpuRegister(uint16 cpuAddress, uint8 value);
 
 	void ClearBackground();
-	void RenderScreen();
+	void FetchBackgroundTileData();
+	void RenderPixel(uint32 x, uint32 y);
 
 	PpuMemoryBus* m_ppuMemoryBus;
 	Nes* m_nes; //@TODO: Get rid of this dependency
