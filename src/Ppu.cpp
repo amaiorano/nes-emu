@@ -159,6 +159,17 @@ namespace
 			v = (v & ~0x03E0) | (y << 5); // put coarse Y back into v
 		}
 	};
+
+	template <typename T, typename U>
+	bool IncAndWrap(T& v, U size)
+	{
+		if (++v == size)
+		{
+			v = 0;
+			return true;
+		}
+		return false;
+	}
 }
 
 namespace PpuControl1 // $2000 (W)
@@ -303,6 +314,17 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 
 		if ( (y >= 0 && y <= 239) || y == 261 ) // Visible and Pre-render scanlines
 		{
+			if (x == 64)
+			{
+				// Cycles 1-64: Clear secondary OAM to $FF
+				ClearOAM2();
+			}
+			else if (x == 256)
+			{
+				// Cycles 65-256: Sprite evaluation
+				PerformSpriteEvaluation(x, y);
+			}
+
 			if (x >= 257 && x <= 320) // "HBlank" (idle cycles)
 			{
 				if (renderingEnabled)
@@ -315,6 +337,11 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 					{
 						//@TODO: could optimize by just doing this once on last cycle (x==304)
 						CopyVRamAddressVert(m_vramAddress, m_tempVRamAddress);
+					}
+					else if (x == 320)
+					{
+						// Cycles 257-320: sprite data fetch for next scanline
+						FetchSpriteData(y);
 					}
 				}
 			}
@@ -377,7 +404,7 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 
 			if (y == 241 && x == 1)
 			{
-				m_ppuStatusReg->Set(PpuStatus::InVBlank);
+				m_ppuStatusReg->Set(PpuStatus::InVBlank);				
 
 				//@TODO: is this the right time?
 				if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
@@ -483,7 +510,7 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		{
 			// Write value to sprite ram at address in $2003 (OAMADDR) and increment address
 			const uint8 spriteRamAddress = ReadPpuRegister(CpuMemory::kPpuSprRamAddressReg);
-			m_sprites.Write(spriteRamAddress, value);
+			m_oam.Write(spriteRamAddress, value);
 			WritePpuRegister(CpuMemory::kPpuSprRamAddressReg, spriteRamAddress + 1);
 		}
 		break;
@@ -664,8 +691,8 @@ void Ppu::FetchBackgroundTileData()
 	currTile = nextTile; // Shift pipelined data
 
 	// Push results at top of pipeline
-	nextTile.lowBg = m_ppuMemoryBus->Read(byte1Address);
-	nextTile.highBg = m_ppuMemoryBus->Read(byte2Address);
+	nextTile.bmpLow = m_ppuMemoryBus->Read(byte1Address);
+	nextTile.bmpHigh = m_ppuMemoryBus->Read(byte2Address);
 	nextTile.paletteHighBits = paletteHighBits;
 
 #if CONFIG_DEBUG
@@ -677,36 +704,241 @@ void Ppu::FetchBackgroundTileData()
 #endif
 }
 
+void Ppu::ClearOAM2()
+{
+	//@NOTE: We don't actually need this step as we track number of sprites to render per scanline
+	memset(m_oam2.RawPtr(), 0xFF, m_oam2.Size());
+}
+
+void Ppu::PerformSpriteEvaluation(uint32 /*x*/, uint32 y) // OAM -> OAM2
+{
+	// See http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
+
+	static auto IsSpriteInRangeY = [] (uint32 y, uint8 spriteY) -> bool
+	{
+		return (y >= spriteY && y < (spriteY + 8u) && spriteY < kScreenHeight);
+	};
+
+	// Reset sprite vars for current scanline
+	m_numSpritesToRender = 0;
+	m_renderSprite0 = false;
+
+	uint16 n = 0; // Sprite [0-63] in OAM
+	auto& n2 = m_numSpritesToRender; // Sprite [0-7] in OAM2
+
+	typedef uint8 SpriteData[4]; //@TODO: Maybe we should just store m_oam and m_oam2 as arrays of this
+	SpriteData* oam = m_oam.RawPtrAs<SpriteData*>();
+	SpriteData* oam2 = m_oam2.RawPtrAs<SpriteData*>();
+
+	// Attempt to find up to 8 sprites on current scanline
+	while (n2 < 8)
+	{
+		const uint8 spriteY = oam[n][0];
+		oam2[n2][0] = spriteY; // (1)
+
+		if (IsSpriteInRangeY(y, spriteY)) // (1a)
+		{
+			oam2[n2][1] = oam[n][1];
+			oam2[n2][2] = oam[n][2];
+			oam2[n2][3] = oam[n][3];
+
+			if (n == 0) // If we're going to render sprite 0, set flag so we can detect sprite 0 hit when we render
+			{
+				m_renderSprite0 = true;
+			}
+
+			++n2;
+		}
+
+		++n; // (2)
+		if (n == 64) // (2a)
+		{
+			// We didn't find 8 sprites, OAM2 contains what we've found so far, so we can bail
+			return;
+		}
+	}
+
+	// We found 8 sprites above. Let's see if there are any more so we can set sprite overflow flag.
+	uint16 m = 0; // Byte in sprite data [0-3]
+	
+	while (n < 64)
+	{
+		const uint8 spriteY = oam[n][m]; // (3) Evaluate OAM[n][m] as a Y-coordinate (it might not be)
+		IncAndWrap(m, 4);
+		
+		if (IsSpriteInRangeY(y, spriteY)) // (3a)
+		{
+			m_ppuStatusReg->Set(PpuStatus::SpriteOverflow);
+
+			// PPU reads next 3 bytes from OAM. Because of the hardware bug (below), m might not be 1 here, so
+			// we carefully increment n when m overflows.
+			for (int i = 0; i < 3; ++i)
+			{
+				if (IncAndWrap(m, 4))
+				{
+					++n;
+				}
+			}
+		}
+		else
+		{
+			// (3b) If the value is not in range, increment n and m (without carry). If n overflows to 0, go to 4; otherwise go to 3
+			// The m increment is a hardware bug - if only n was incremented, the overflow flag would be set whenever more than 8
+			// sprites were present on the same scanline, as expected.
+			++n;
+			
+			IncAndWrap(m, 4); // This increment is a hardware bug
+		}
+	}
+}
+
+void Ppu::FetchSpriteData(uint32 y)
+{
+	// See http://wiki.nesdev.com/w/index.php/PPU_rendering#Cycles_257-320
+
+	typedef uint8 SpriteData[4];
+	SpriteData* oam2 = m_oam2.RawPtrAs<SpriteData*>();
+
+	for (uint8 n = 0; n < m_numSpritesToRender; ++n)
+	{
+		uint16 patternTableAddress;
+		uint8 tileIndex;
+		std::tie(patternTableAddress, tileIndex) = GetSpritePatternTableAddressAndTileIndex(m_ppuControlReg1, oam2[n][1]);
+
+		const uint8 spriteY = oam2[n][0];
+		const uint8 yOffset = static_cast<uint8>(y) - spriteY;
+		assert(yOffset < 8);
+		
+		const uint16 tileOffset = TO16(tileIndex) * 16;
+		const uint16 byte1Address = patternTableAddress + tileOffset + yOffset;
+		const uint16 byte2Address = byte1Address + 8;
+
+		auto& data = m_spriteFetchData[n];
+		data.bmpLow = m_ppuMemoryBus->Read(byte1Address);
+		data.bmpHigh = m_ppuMemoryBus->Read(byte2Address);
+		data.attributes = oam2[n][2];
+		data.x = oam2[n][3];
+	}
+}
+
 void Ppu::RenderPixel(uint32 x, uint32 y)
 {
-	// At this point, the data for the current and next tile are in m_bgTileFetchDataPipeline
-	const auto& currTile = m_bgTileFetchDataPipeline[0];
-	const auto& nextTile = m_bgTileFetchDataPipeline[1];
+	// See http://wiki.nesdev.com/w/index.php/PPU_rendering
 
-	// Mux uses fine X to select a bit from shift registers
-	const uint16 muxMask = 1 << (7 - m_fineX);
+	static auto GetBackgroundColor = [&] (Color4& color)
+	{
+		color = g_paletteColors[m_palette.Read(0)]; // BG ($3F00)
+	};
 
-	// Instead of actually shifting every cycle, we rebuild the shift register values
-	// for the current cycle (using the x value)
-	//@TODO: We could optimize this storing 16 bit values for low and high BG bytes and
-	// either doing the shift every cycle, or building 16 bit mask.
-	const uint8 xShift = x % 8;
-	const uint8 lowBg = (currTile.lowBg << xShift) | (nextTile.lowBg >> (8 - xShift));
-	const uint8 highBg = (currTile.highBg << xShift) | (nextTile.highBg >> (8 - xShift));
+	static auto GetPaletteColor = [&] (uint8 highBits, uint8 lowBits, uint16 paletteBaseAddress, Color4& color)
+	{
+		assert(lowBits != 0);
 
-	const uint8 paletteLowBits = (TestBits01(highBg, muxMask) << 1) | (TestBits01(lowBg, muxMask));
+		// Compute offset into palette memory that contains the palette index
+		const uint8 paletteOffset = (highBits << 2) | (lowBits & 0x3);
 
-	// Technically, the mux would index 2 8-bit registers containing replicated values for the current
-	// and next tile palette high bits (from attribute bytes), but this is faster.
-	const uint8 paletteHighBits = (xShift + m_fineX < 8)? currTile.paletteHighBits : nextTile.paletteHighBits;
+		//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
+		const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(paletteBaseAddress + paletteOffset) );
+		assert(paletteIndex < kNumPaletteColors);
 
-	// Compute offset into palette memory that contains the palette index
-	const uint8 paletteOffset = (paletteHighBits << 2) | (paletteLowBits & 0x3);
+		color = g_paletteColors[paletteIndex];
+	};
 
-	//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
-	const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kImagePalette + paletteOffset) );
-	assert(paletteIndex < kNumPaletteColors);
-	const Color4& color = g_paletteColors[paletteIndex];
+	// Get the background pixel
+	uint8 bgPaletteHighBits = 0;
+	uint8 bgPaletteLowBits = 0;
+	{
+		// At this point, the data for the current and next tile are in m_bgTileFetchDataPipeline
+		const auto& currTile = m_bgTileFetchDataPipeline[0];
+		const auto& nextTile = m_bgTileFetchDataPipeline[1];
+
+		// Mux uses fine X to select a bit from shift registers
+		const uint16 muxMask = 1 << (7 - m_fineX);
+
+		// Instead of actually shifting every cycle, we rebuild the shift register values
+		// for the current cycle (using the x value)
+		//@TODO: Optimize by storing 16 bit values for low and high bitmap bytes and shifting every cycle
+		const uint8 xShift = x % 8;
+		const uint8 shiftRegLow = (currTile.bmpLow << xShift) | (nextTile.bmpLow >> (8 - xShift));
+		const uint8 shiftRegHigh = (currTile.bmpHigh << xShift) | (nextTile.bmpHigh >> (8 - xShift));
+
+		bgPaletteLowBits = (TestBits01(shiftRegHigh, muxMask) << 1) | (TestBits01(shiftRegLow, muxMask));
+
+		// Technically, the mux would index 2 8-bit registers containing replicated values for the current
+		// and next tile palette high bits (from attribute bytes), but this is faster.
+		bgPaletteHighBits = (xShift + m_fineX < 8)? currTile.paletteHighBits : nextTile.paletteHighBits;
+	}
+
+	// Get the potential sprite pixel
+	bool foundSprite = false;
+	bool spriteHasBgPriority = false;
+	bool isSprite0 = false;
+	uint8 sprPaletteHighBits = 0;
+	uint8 sprPaletteLowBits = 0;
+	{
+		for (uint8 n = 0; !foundSprite && n < m_numSpritesToRender; ++n)
+		{
+			auto& spriteData = m_spriteFetchData[n];
+
+			if ( (x >= spriteData.x) && (x < (spriteData.x + 8u)) )
+			{
+				// Compose "sprite color" (0-3) from high bit in bitmap bytes
+				sprPaletteLowBits = (TestBits01(spriteData.bmpHigh, 0x80) << 1) | (TestBits01(spriteData.bmpLow, 0x80));
+
+				// Shift out high bits
+				spriteData.bmpLow <<= 1;
+				spriteData.bmpHigh <<= 1;
+
+				// First non-transparent pixel moves on to multiplexer
+				if (sprPaletteLowBits != 0)
+				{
+					foundSprite = true;
+					sprPaletteHighBits = ReadBits(spriteData.attributes, 0x3); //@TODO: cache this in spriteData
+					spriteHasBgPriority = TestBits(spriteData.attributes, BIT(5));
+
+					if (m_renderSprite0 && (n == 0)) // Rendering pixel from sprite 0?
+					{
+						isSprite0 = true;
+					}
+				}
+			}
+		}
+	}
+
+	// Multiplexer selects background or sprite pixel (see "Priority multiplexer decision table")
+	Color4 color;
+
+	if (bgPaletteLowBits == 0)
+	{
+		if (!foundSprite || sprPaletteLowBits == 0)
+		{
+			// Background color 0
+			GetBackgroundColor(color);
+		}
+		else
+		{
+			// Sprite color
+			GetPaletteColor(sprPaletteHighBits, sprPaletteLowBits, PpuMemory::kSpritePalette, color);
+		}
+	}
+	else
+	{
+		if (foundSprite && !spriteHasBgPriority)
+		{
+			// Sprite color
+			GetPaletteColor(sprPaletteHighBits, sprPaletteLowBits, PpuMemory::kSpritePalette, color);
+		}
+		else
+		{
+			// BG color
+			GetPaletteColor(bgPaletteHighBits, bgPaletteLowBits, PpuMemory::kImagePalette, color);
+		}
+
+		if (isSprite0)
+		{
+			m_ppuStatusReg->Set(PpuStatus::PpuHitSprite0);
+		}
+	}
 
 	m_renderer->DrawPixel(x, y, color);
 }

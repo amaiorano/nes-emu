@@ -33,6 +33,11 @@ private:
 
 	void ClearBackground();
 	void FetchBackgroundTileData();
+	
+	void ClearOAM2(); // OAM2 = $FF
+	void PerformSpriteEvaluation(uint32 x, uint32 y); // OAM -> OAM2
+	void FetchSpriteData(uint32 y); // OAM2 -> render (shift) registers
+
 	void RenderPixel(uint32 x, uint32 y);
 
 	PpuMemoryBus* m_ppuMemoryBus;
@@ -54,8 +59,13 @@ private:
 	static const size_t kMaxSprites = 64;
 	static const size_t kSpriteDataSize = 4;
 	static const size_t kSpriteMemorySize = kMaxSprites * kSpriteDataSize;
-	typedef Memory<FixedSizeStorage<kSpriteMemorySize>> SpriteMemory; // (aka OAM or SPR-RAM)
-	SpriteMemory m_sprites;
+	typedef Memory<FixedSizeStorage<kSpriteMemorySize>> ObjectAttributeMemory; // Sprite memory
+	ObjectAttributeMemory m_oam;
+
+	typedef Memory<FixedSizeStorage<kSpriteDataSize * 8>> ObjectAttributeMemory2;
+	ObjectAttributeMemory2 m_oam2;
+	uint8 m_numSpritesToRender;
+	bool m_renderSprite0;
 	
 	// Memory mapped registers
 	typedef Memory<FixedSizeStorage<8>> PpuRegisterMemory; // $2000 - $2007
@@ -77,8 +87,8 @@ private:
 
 	struct BgTileFetchData
 	{
-		uint8 lowBg;
-		uint8 highBg;
+		uint8 bmpLow; //@TODO: rename bmpLow and bmpHigh
+		uint8 bmpHigh;
 		uint8 paletteHighBits;
 
 #if CONFIG_DEBUG
@@ -93,4 +103,16 @@ private:
 #endif
 	};
 	BgTileFetchData m_bgTileFetchDataPipeline[2];
+
+	struct SpriteFetchData
+	{
+		// Fetched from VRAM
+		uint8 bmpLow;
+		uint8 bmpHigh;
+		
+		// Copied from OAM2
+		uint8 attributes;
+		uint8 x;
+	};
+	SpriteFetchData m_spriteFetchData[8];
 };
