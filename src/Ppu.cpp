@@ -704,7 +704,7 @@ void Ppu::FetchBackgroundTileData()
 #endif
 }
 
-void Ppu::ClearOAM2()
+void Ppu::ClearOAM2() // OAM2 = $FF
 {
 	//@NOTE: We don't actually need this step as we track number of sprites to render per scanline
 	memset(m_oam2.RawPtr(), 0xFF, m_oam2.Size());
@@ -714,11 +714,14 @@ void Ppu::PerformSpriteEvaluation(uint32 /*x*/, uint32 y) // OAM -> OAM2
 {
 	// See http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
 
-	static auto IsSpriteInRangeY = [] (uint32 y, uint8 spriteY) -> bool
+	static auto IsSpriteInRangeY = [] (uint32 y, uint8 spriteY, uint8 spriteHeight) -> bool
 	{
-		return (y >= spriteY && y < (spriteY + 8u) && spriteY < kScreenHeight);
+		return (y >= spriteY && y < static_cast<uint8>(spriteY + spriteHeight) && spriteY < kScreenHeight);
 	};
 
+	const bool isSprite8x16 = m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
+	const uint8 spriteHeight = isSprite8x16? 16 : 8;
+	
 	// Reset sprite vars for current scanline
 	m_numSpritesToRender = 0;
 	m_renderSprite0 = false;
@@ -736,7 +739,7 @@ void Ppu::PerformSpriteEvaluation(uint32 /*x*/, uint32 y) // OAM -> OAM2
 		const uint8 spriteY = oam[n][0];
 		oam2[n2][0] = spriteY; // (1)
 
-		if (IsSpriteInRangeY(y, spriteY)) // (1a)
+		if (IsSpriteInRangeY(y, spriteY, spriteHeight)) // (1a)
 		{
 			oam2[n2][1] = oam[n][1];
 			oam2[n2][2] = oam[n][2];
@@ -766,7 +769,7 @@ void Ppu::PerformSpriteEvaluation(uint32 /*x*/, uint32 y) // OAM -> OAM2
 		const uint8 spriteY = oam[n][m]; // (3) Evaluate OAM[n][m] as a Y-coordinate (it might not be)
 		IncAndWrap(m, 4);
 		
-		if (IsSpriteInRangeY(y, spriteY)) // (3a)
+		if (IsSpriteInRangeY(y, spriteY, spriteHeight)) // (3a)
 		{
 			m_ppuStatusReg->Set(PpuStatus::SpriteOverflow);
 
@@ -792,21 +795,76 @@ void Ppu::PerformSpriteEvaluation(uint32 /*x*/, uint32 y) // OAM -> OAM2
 	}
 }
 
-void Ppu::FetchSpriteData(uint32 y)
+void Ppu::FetchSpriteData(uint32 y) // OAM2 -> render (shift) registers
 {
 	// See http://wiki.nesdev.com/w/index.php/PPU_rendering#Cycles_257-320
+
+	static auto FlipBits = [] (uint8 v) -> uint8
+	{
+		return 
+			  ((v & BIT(0)) << 7)
+			| ((v & BIT(1)) << 5)
+			| ((v & BIT(2)) << 3)
+			| ((v & BIT(3)) << 1)
+			| ((v & BIT(4)) >> 1)
+			| ((v & BIT(5)) >> 3)
+			| ((v & BIT(6)) >> 5)
+			| ((v & BIT(7)) >> 7);
+	};
 
 	typedef uint8 SpriteData[4];
 	SpriteData* oam2 = m_oam2.RawPtrAs<SpriteData*>();
 
+	const bool isSprite8x16 = m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
+	const uint8 spriteHeight = isSprite8x16? 16 : 8;
+
 	for (uint8 n = 0; n < m_numSpritesToRender; ++n)
 	{
+		const uint8 spriteY = oam2[n][0];
+		const uint8 byte1 = oam2[n][1];
+		const uint8 attribs = oam2[n][2];
+		const bool flipHorz = TestBits(attribs, BIT(6));
+		const bool flipVert = TestBits(attribs, BIT(7));
+
 		uint16 patternTableAddress;
 		uint8 tileIndex;
-		std::tie(patternTableAddress, tileIndex) = GetSpritePatternTableAddressAndTileIndex(m_ppuControlReg1, oam2[n][1]);
+		if ( !isSprite8x16 ) // 8x8 sprite, oam byte 1 is tile index
+		{
+			patternTableAddress = m_ppuControlReg1->Test(PpuControl1::SpritePatternTableAddress8x8)? 0x1000 : 0x0000;
+			tileIndex = byte1;
+		}
+		else // 8x16 sprite, both address and tile index are stored in oam byte 1
+		{
+			patternTableAddress = TestBits(byte1, BIT(0))? 0x1000 : 0x0000;
+			tileIndex = ReadBits(byte1, ~BIT(0));
+		}
 
-		const uint8 spriteY = oam2[n][0];
-		const uint8 yOffset = static_cast<uint8>(y) - spriteY;
+		uint8 yOffset = static_cast<uint8>(y) - spriteY;
+		assert(yOffset < spriteHeight);
+
+		if (isSprite8x16)
+		{
+			// In 8x16 mode, first tile is at tileIndex, second tile (underneath) is at tileIndex + 1
+			uint8 nextTile = 0;
+			if (yOffset >= 8)
+			{
+				++nextTile;
+				yOffset -= 8;
+			}
+
+			// In 8x16 mode, vertical flip also flips the tile index order
+			if (flipVert)
+			{
+				nextTile = (nextTile + 1) % 2;
+			}
+
+			tileIndex += nextTile;
+		}
+
+		if (flipVert)
+		{
+			yOffset = 7 - yOffset;
+		}
 		assert(yOffset < 8);
 		
 		const uint16 tileOffset = TO16(tileIndex) * 16;
@@ -818,6 +876,12 @@ void Ppu::FetchSpriteData(uint32 y)
 		data.bmpHigh = m_ppuMemoryBus->Read(byte2Address);
 		data.attributes = oam2[n][2];
 		data.x = oam2[n][3];
+
+		if (flipHorz)
+		{
+			data.bmpLow = FlipBits(data.bmpLow);
+			data.bmpHigh = FlipBits(data.bmpHigh);
+		}
 	}
 }
 
@@ -876,31 +940,34 @@ void Ppu::RenderPixel(uint32 x, uint32 y)
 	uint8 sprPaletteHighBits = 0;
 	uint8 sprPaletteLowBits = 0;
 	{
-		for (uint8 n = 0; !foundSprite && n < m_numSpritesToRender; ++n)
+		for (uint8 n = 0; n < m_numSpritesToRender; ++n)
 		{
 			auto& spriteData = m_spriteFetchData[n];
 
 			if ( (x >= spriteData.x) && (x < (spriteData.x + 8u)) )
 			{
-				// Compose "sprite color" (0-3) from high bit in bitmap bytes
-				sprPaletteLowBits = (TestBits01(spriteData.bmpHigh, 0x80) << 1) | (TestBits01(spriteData.bmpLow, 0x80));
-
-				// Shift out high bits
-				spriteData.bmpLow <<= 1;
-				spriteData.bmpHigh <<= 1;
-
-				// First non-transparent pixel moves on to multiplexer
-				if (sprPaletteLowBits != 0)
+				if (!foundSprite)
 				{
-					foundSprite = true;
-					sprPaletteHighBits = ReadBits(spriteData.attributes, 0x3); //@TODO: cache this in spriteData
-					spriteHasBgPriority = TestBits(spriteData.attributes, BIT(5));
+					// Compose "sprite color" (0-3) from high bit in bitmap bytes
+					sprPaletteLowBits = (TestBits01(spriteData.bmpHigh, 0x80) << 1) | (TestBits01(spriteData.bmpLow, 0x80));
 
-					if (m_renderSprite0 && (n == 0)) // Rendering pixel from sprite 0?
+					// First non-transparent pixel moves on to multiplexer
+					if (sprPaletteLowBits != 0)
 					{
-						isSprite0 = true;
+						foundSprite = true;
+						sprPaletteHighBits = ReadBits(spriteData.attributes, 0x3); //@TODO: cache this in spriteData
+						spriteHasBgPriority = TestBits(spriteData.attributes, BIT(5));
+
+						if (m_renderSprite0 && (n == 0)) // Rendering pixel from sprite 0?
+						{
+							isSprite0 = true;
+						}
 					}
 				}
+
+				// Shift out high bits - do this for all (overlapping) sprites in range
+				spriteData.bmpLow <<= 1;
+				spriteData.bmpHigh <<= 1;
 			}
 		}
 	}
