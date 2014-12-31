@@ -67,6 +67,9 @@ void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus)
 {
 	m_cpuMemoryBus = &cpuMemoryBus;
 	m_controllerPorts.Initialize();
+
+	m_cycles = 0;
+	m_totalCycles = 0;	 
 }
 
 void Cpu::Reset()
@@ -106,7 +109,7 @@ void Cpu::Irq()
 void Cpu::Execute(uint32& cpuCyclesElapsed)
 {
 	ExecutePendingInterrupts(); // Handle when interrupts are called "between" CPU updates (e.g. PPU sends NMI)
-
+	
 	m_cycles = 0;
 
 	const uint8 opCode = Read8(PC);
@@ -125,6 +128,7 @@ void Cpu::Execute(uint32& cpuCyclesElapsed)
 	Debugger::PostCpuInstruction();		
 
 	cpuCyclesElapsed = m_cycles;
+	m_totalCycles += m_cycles;
 }
 
 uint8 Cpu::HandleCpuRead(uint16 cpuAddress)

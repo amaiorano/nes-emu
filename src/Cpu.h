@@ -87,6 +87,7 @@ private:
 	Bitfield8 P;	// Processor status (flags)
 
 	uint16 m_cycles; // Elapsed cycles of each fetch and execute of an instruction
+	uint64 m_totalCycles;
 
 	bool m_pendingNmi;
 	bool m_pendingIrq;

@@ -70,6 +70,7 @@ public:
 	{
 		if (g_trace)
 		{
+			PrintCycleCount();
 			PrintInstruction();
 			PrintRegisters();
 		#if !FCEUX_OUTPUT
@@ -264,6 +265,12 @@ private:
 	{
 		Cpu& cpu = m_nes->m_cpu;
 		TRACE(" (" ADDR_16 ")=" ADDR_8, cpu.m_operandAddress, cpu.Read8(cpu.m_operandAddress));
+	}
+
+	void PrintCycleCount()
+	{
+		Cpu& cpu = m_nes->m_cpu;
+		TRACE("c%-12d", cpu.m_totalCycles);
 	}
 
 	void PrintInstruction()
