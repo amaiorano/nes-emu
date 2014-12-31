@@ -45,7 +45,7 @@ struct RomHeader
 
 	uint8 GetMapperNumber() const
 	{
-		const uint8 result = ((flags7 & 0xF0) << 4) | (flags6 & 0xF0);
+		const uint8 result = (flags7 & 0xF0) | ((flags6 & 0xF0)>>4);
 		return result;
 	}
 
