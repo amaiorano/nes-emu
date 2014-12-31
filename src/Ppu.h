@@ -39,6 +39,8 @@ private:
 	void FetchSpriteData(uint32 y); // OAM2 -> render (shift) registers
 
 	void RenderPixel(uint32 x, uint32 y);
+	void SetVBlankFlag();
+	void PresentFrame();
 
 	PpuMemoryBus* m_ppuMemoryBus;
 	Nes* m_nes; //@TODO: Get rid of this dependency
@@ -84,6 +86,7 @@ private:
 
 	uint32 m_cycle;
 	bool m_evenFrame;
+	bool m_vblankFlagSetThisFrame;
 
 	struct BgTileFetchData
 	{

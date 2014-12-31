@@ -306,6 +306,7 @@ void Ppu::Reset()
 
 	m_cycle = 0;
 	m_evenFrame = true;
+	m_vblankFlagSetThisFrame = false;
 }
 
 void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
@@ -401,15 +402,8 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 				//@TODO: Do this on last frame of post-render line?
 				if (y == 239 && x == 339)
 				{
-					m_renderer->Present();
-					ClearBackground();
+					PresentFrame();
 					finishedRender = true;
-
-					// For odd frames, the cycle at the end of the scanline (340,239) is skipped
-					if (!m_evenFrame && renderingEnabled)
-						++m_cycle;
-
-					m_evenFrame = !m_evenFrame;
 				}
 			}
 		}
@@ -419,7 +413,7 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 
 			if (y == 241 && x == 1)
 			{
-				m_ppuStatusReg->Set(PpuStatus::InVBlank);
+				SetVBlankFlag();
 
 				if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
 					m_nes->SignalCpuNmi();
@@ -461,7 +455,7 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 			const uint32 kSetVBlankCycle = YXtoPpuCycle(241, 1);
 			if (m_cycle < kSetVBlankCycle && (m_cycle + CpuToPpuCycles(3) >= kSetVBlankCycle))
 			{
-				m_ppuStatusReg->Set(PpuStatus::InVBlank);
+				SetVBlankFlag();
 			}
 
 			result = ReadPpuRegister(cpuAddress);
@@ -1043,4 +1037,28 @@ void Ppu::RenderPixel(uint32 x, uint32 y)
 	}
 
 	m_renderer->DrawPixel(x, y, color);
+}
+
+void Ppu::SetVBlankFlag()
+{
+	if (!m_vblankFlagSetThisFrame)
+	{
+		m_ppuStatusReg->Set(PpuStatus::InVBlank);
+		m_vblankFlagSetThisFrame = true;
+	}
+}
+
+void Ppu::PresentFrame()
+{
+	m_renderer->Present();
+	ClearBackground();
+
+	const bool renderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites);
+	
+	// For odd frames, the cycle at the end of the scanline (340,239) is skipped
+	if (!m_evenFrame && renderingEnabled)
+		++m_cycle;
+
+	m_evenFrame = !m_evenFrame;
+	m_vblankFlagSetThisFrame = false;
 }
