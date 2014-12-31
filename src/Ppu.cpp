@@ -170,6 +170,16 @@ namespace
 		}
 		return false;
 	}
+
+	FORCEINLINE uint32 YXtoPpuCycle(uint32 y, uint32 x)
+	{
+		return y * 341 + x;
+	}
+
+	FORCEINLINE uint32 CpuToPpuCycles(uint32 cpuCycles)
+	{
+		return cpuCycles * 3;
+	}
 }
 
 namespace PpuControl1 // $2000 (W)
@@ -271,6 +281,8 @@ void Ppu::Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes)
 	m_nameTables.Initialize();
 	m_palette.Initialize();
 	m_ppuRegisters.Initialize();
+	m_oam.Initialize();
+	m_oam2.Initialize();
 
 	m_ppuControlReg1 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg1));
 	m_ppuControlReg2 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg2));
@@ -314,15 +326,18 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 
 		if ( (y >= 0 && y <= 239) || y == 261 ) // Visible and Pre-render scanlines
 		{
-			if (x == 64)
+			if (renderingEnabled) //@TODO: Not sure about this
 			{
-				// Cycles 1-64: Clear secondary OAM to $FF
-				ClearOAM2();
-			}
-			else if (x == 256)
-			{
-				// Cycles 65-256: Sprite evaluation
-				PerformSpriteEvaluation(x, y);
+				if (x == 64)
+				{
+					// Cycles 1-64: Clear secondary OAM to $FF
+					ClearOAM2();
+				}
+				else if (x == 256)
+				{
+					// Cycles 65-256: Sprite evaluation
+					PerformSpriteEvaluation(x, y);
+				}
 			}
 
 			if (x >= 257 && x <= 320) // "HBlank" (idle cycles)
@@ -404,9 +419,8 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 
 			if (y == 241 && x == 1)
 			{
-				m_ppuStatusReg->Set(PpuStatus::InVBlank);				
+				m_ppuStatusReg->Set(PpuStatus::InVBlank);
 
-				//@TODO: is this the right time?
 				if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
 					m_nes->SignalCpuNmi();
 			}
@@ -434,6 +448,22 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 	{
 	case CpuMemory::kPpuStatusReg: // $2002
 		{
+			//@HACK: Some games like Bomberman and Burger Time poll $2002.7 (VBlank flag) expecting the
+			// bit to be set before the NMI executes. On actual hardware, this results in a race condition
+			// where sometimes the bit won't be set, or the NMI won't occur. See:
+			// http://wiki.nesdev.com/w/index.php/NMI#Race_condition and
+			// http://forums.nesdev.com/viewtopic.php?t=5005
+			// In my emulator code, CPU and PPU execute sequentially, so this race condition does not occur;
+			// instead, $2002.7 will normally never be set before NMI is processed, breaking games that
+			// depend on it. To fix this, we assume the CPU instruction that executed this read will be at
+			// least 3 CPU cycles long, and we check if we _will_ set the VBlank flag on the next PPU update;
+			// if so, we set the flag right away and return it.
+			const uint32 kSetVBlankCycle = YXtoPpuCycle(241, 1);
+			if (m_cycle < kSetVBlankCycle && (m_cycle + CpuToPpuCycles(3) >= kSetVBlankCycle))
+			{
+				m_ppuStatusReg->Set(PpuStatus::InVBlank);
+			}
+
 			result = ReadPpuRegister(cpuAddress);
 
 			m_ppuStatusReg->Clear(PpuStatus::InVBlank);
@@ -497,9 +527,8 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 			// The PPU pulls /NMI low if and only if both NMI_occurred and NMI_output are true. By toggling NMI_output ($2000 bit 7)
 			// during vertical blank without reading $2002, a program can cause /NMI to be pulled low multiple times, causing multiple
 			// NMIs to be generated. (http://wiki.nesdev.com/w/index.php/NMI)
-			if ( !oldPpuControlReg1->Test(PpuControl1::NmiOnVBlank)
-				&& m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank) // NmiOnVBlank toggled
-				&& m_ppuStatusReg->Test(PpuStatus::InVBlank) ) // In vblank (and $2002 not read yet, which resets this bit)
+			const bool enabledNmiOnVBlank = !oldPpuControlReg1->Test(PpuControl1::NmiOnVBlank) && m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank);
+			if ( enabledNmiOnVBlank && m_ppuStatusReg->Test(PpuStatus::InVBlank) ) // In vblank (and $2002 not read yet, which resets this bit)
 			{
 				m_nes->SignalCpuNmi();
 			}
@@ -816,7 +845,6 @@ void Ppu::FetchSpriteData(uint32 y) // OAM2 -> render (shift) registers
 	SpriteData* oam2 = m_oam2.RawPtrAs<SpriteData*>();
 
 	const bool isSprite8x16 = m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
-	const uint8 spriteHeight = isSprite8x16? 16 : 8;
 
 	for (uint8 n = 0; n < m_numSpritesToRender; ++n)
 	{
@@ -840,7 +868,7 @@ void Ppu::FetchSpriteData(uint32 y) // OAM2 -> render (shift) registers
 		}
 
 		uint8 yOffset = static_cast<uint8>(y) - spriteY;
-		assert(yOffset < spriteHeight);
+		assert(yOffset < (isSprite8x16? 16 : 8));
 
 		if (isSprite8x16)
 		{
@@ -901,16 +929,22 @@ void Ppu::RenderPixel(uint32 x, uint32 y)
 		// Compute offset into palette memory that contains the palette index
 		const uint8 paletteOffset = (highBits << 2) | (lowBits & 0x3);
 
-		//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
+		//@NOTE: lowBits is never 0, so we don't have to worry about mapping every 4th byte to 0 (bg color) here.
+		// That case is handled specially in the multiplexer code.
 		const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(paletteBaseAddress + paletteOffset) );
 		assert(paletteIndex < kNumPaletteColors);
 
 		color = g_paletteColors[paletteIndex];
 	};
 
+	const bool bgRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground);
+	const bool spriteRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderSprites);
+	assert(bgRenderingEnabled || spriteRenderingEnabled);
+	
 	// Get the background pixel
 	uint8 bgPaletteHighBits = 0;
 	uint8 bgPaletteLowBits = 0;
+	if (bgRenderingEnabled)
 	{
 		// At this point, the data for the current and next tile are in m_bgTileFetchDataPipeline
 		const auto& currTile = m_bgTileFetchDataPipeline[0];
@@ -939,6 +973,7 @@ void Ppu::RenderPixel(uint32 x, uint32 y)
 	bool isSprite0 = false;
 	uint8 sprPaletteHighBits = 0;
 	uint8 sprPaletteLowBits = 0;
+	if (spriteRenderingEnabled)
 	{
 		for (uint8 n = 0; n < m_numSpritesToRender; ++n)
 		{
