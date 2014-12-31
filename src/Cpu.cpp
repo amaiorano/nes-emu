@@ -103,32 +103,28 @@ void Cpu::Irq()
 		m_pendingIrq = true;
 }
 
-void Cpu::Execute(uint32 cycles, uint32& actualCycles)
+void Cpu::Execute(uint32& cpuCyclesElapsed)
 {
-	ExecutePendingInterrupts(); // Handle wehen interrupts are called "between" CPU updates (e.g. PPU sends NMI)
+	ExecutePendingInterrupts(); // Handle when interrupts are called "between" CPU updates (e.g. PPU sends NMI)
 
-	actualCycles = 0;
-	while (actualCycles < cycles)
+	m_cycles = 0;
+
+	const uint8 opCode = Read8(PC);
+	m_opCodeEntry = g_opCodeTable[opCode];
+
+	if (m_opCodeEntry == nullptr)
 	{
-		m_cycles = 0;
-
-		const uint8 opCode = Read8(PC);
-		m_opCodeEntry = g_opCodeTable[opCode];
-
-		if (m_opCodeEntry == nullptr)
-		{
-			assert(false && "Unknown opcode");
-		}
-
-		UpdateOperandAddress();
-
-		Debugger::PreCpuInstruction();
-		ExecuteInstruction();
-		ExecutePendingInterrupts(); // Handle when instruction (memory read) causes interrupt
-		Debugger::PostCpuInstruction();		
-
-		actualCycles += m_cycles;
+		assert(false && "Unknown opcode");
 	}
+
+	UpdateOperandAddress();
+
+	Debugger::PreCpuInstruction();
+	ExecuteInstruction();
+	ExecutePendingInterrupts(); // Handle when instruction (memory read) causes interrupt
+	Debugger::PostCpuInstruction();		
+
+	cpuCyclesElapsed = m_cycles;
 }
 
 uint8 Cpu::HandleCpuRead(uint16 cpuAddress)

@@ -16,7 +16,7 @@ public:
 	void SetNameTableVerticalMirroring(bool enabled) { m_nameTableVerticalMirroring = enabled; }
 
 	void Reset();
-	void Execute(bool& finishedRender, uint32& numCpuCyclesToExecute);
+	void Execute(uint32 ppuCycles, bool& finishedRender);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
@@ -32,11 +32,18 @@ private:
 	void WritePpuRegister(uint16 cpuAddress, uint8 value);
 
 	void ClearBackground();
-	void Render();
+	void FetchBackgroundTileData();
+	
+	void ClearOAM2(); // OAM2 = $FF
+	void PerformSpriteEvaluation(uint32 x, uint32 y); // OAM -> OAM2
+	void FetchSpriteData(uint32 y); // OAM2 -> render (shift) registers
+
+	void RenderPixel(uint32 x, uint32 y);
 
 	PpuMemoryBus* m_ppuMemoryBus;
 	Nes* m_nes; //@TODO: Get rid of this dependency
-	std::shared_ptr<Renderer> m_renderer;
+	std::shared_ptr<Renderer> m_rendererHolder;
+	Renderer* m_renderer;
 
 	// Hardware wise, setting this to true is like connecting PPU A10 to CIRAM A10, else PPU A11 to CIRAM A10.
 	// This is done on cartridges by shorting the "V" or "H" solder pads.
@@ -52,8 +59,13 @@ private:
 	static const size_t kMaxSprites = 64;
 	static const size_t kSpriteDataSize = 4;
 	static const size_t kSpriteMemorySize = kMaxSprites * kSpriteDataSize;
-	typedef Memory<FixedSizeStorage<kSpriteMemorySize>> SpriteMemory; // (aka OAM or SPR-RAM)
-	SpriteMemory m_sprites;
+	typedef Memory<FixedSizeStorage<kSpriteMemorySize>> ObjectAttributeMemory; // Sprite memory
+	ObjectAttributeMemory m_oam;
+
+	typedef Memory<FixedSizeStorage<kSpriteDataSize * 8>> ObjectAttributeMemory2;
+	ObjectAttributeMemory2 m_oam2;
+	uint8 m_numSpritesToRender;
+	bool m_renderSprite0;
 	
 	// Memory mapped registers
 	typedef Memory<FixedSizeStorage<8>> PpuRegisterMemory; // $2000 - $2007
@@ -64,17 +76,43 @@ private:
 	Bitfield8* m_ppuControlReg2;	// $2001
 	Bitfield8* m_ppuStatusReg;		// $2002
 
-	bool m_vramAndScrollFirstWrite; // $2005/2006 flip-flop
-
-	uint16 m_vramAddress; // (V) - in PPU address space
+	bool m_vramAndScrollFirstWrite;	// $2005/2006 flip-flop, "Loopy w"
+	uint16 m_vramAddress;			// "Loopy v"
+	uint16 m_tempVRamAddress;		// "Loopy t"
+	uint8 m_fineX;					// Fine x scroll (3 bits), "Loopy x"
 	uint8 m_vramBufferedValue;
 
-	struct ScrollData
+	uint32 m_cycle;
+	bool m_evenFrame;
+
+	struct BgTileFetchData
 	{
-		uint8 fineOffsetX;
-		uint8 fineOffsetY;
-		uint8 coarseOffsetX;
-		uint8 coarseOffsetY;
+		uint8 bmpLow; //@TODO: rename bmpLow and bmpHigh
+		uint8 bmpHigh;
+		uint8 paletteHighBits;
+
+#if CONFIG_DEBUG
+		struct
+		{
+			uint16 vramAddress;
+			uint16 tileIndexAddress;
+			uint16 attributeAddress;
+			uint16 attributeShift;
+			uint16 byte1Address;
+		} debug;
+#endif
 	};
-	ScrollData m_scroll;
+	BgTileFetchData m_bgTileFetchDataPipeline[2];
+
+	struct SpriteFetchData
+	{
+		// Fetched from VRAM
+		uint8 bmpLow;
+		uint8 bmpHigh;
+		
+		// Copied from OAM2
+		uint8 attributes;
+		uint8 x;
+	};
+	SpriteFetchData m_spriteFetchData[8];
 };

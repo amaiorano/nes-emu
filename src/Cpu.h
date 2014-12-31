@@ -32,7 +32,7 @@ public:
 	void Nmi();
 	void Irq();
 
-	void Execute(uint32 cycles, uint32& actualCycles);
+	void Execute(uint32& cpuCyclesElapsed);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);

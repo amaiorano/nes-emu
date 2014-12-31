@@ -66,6 +66,120 @@ namespace
 		}
 	#endif
 	}
+
+	// EDC BA 98765 43210 *** NOTE bit 15 is missing because it's not used. PPU address space is 14 bits wide, but extra bit is used f or scrolling.
+	// yyy NN YYYYY XXXXX
+	// ||| || ||||| +++++-- coarse X scroll
+	// ||| || +++++-------- coarse Y scroll
+	// ||| ++-------------- nametable select
+	// +++----------------- fine Y scroll
+	FORCEINLINE void SetVRamAddressCoarseX(uint16& v, uint8 value)
+	{
+		v = (v & ~0x001F) | (TO16(value) & 0x001F);
+	}
+
+	FORCEINLINE uint8 GetVRamAddressCoarseX(const uint16& v)
+	{
+		return TO8(v & 0x001F);
+	}
+
+	FORCEINLINE void SetVRamAddressCoarseY(uint16& v, uint8 value)
+	{
+		v = (v & ~0x03E0) | (TO16(value) << 5);
+	}
+
+	FORCEINLINE uint8 GetVRamAddressCoarseY(const uint16& v)
+	{
+		return TO8((v >> 5) & 0x001F);
+	}
+
+	FORCEINLINE void SetVRamAddressNameTable(uint16& v, uint8 value)
+	{
+		v = (v & ~0x0C00) | (TO16(value) << 10);
+	}
+
+	FORCEINLINE void SetVRamAddressFineY(uint16& v, uint8 value)
+	{
+		v = (v & ~0x7000) | (TO16(value) << 12);
+	}
+
+	FORCEINLINE uint8 GetVRamAddressFineY(const uint16& v)
+	{
+		return TO8((v & 0x7000) >> 12);
+	}
+
+	FORCEINLINE void CopyVRamAddressHori(uint16& target, uint16& source)
+	{
+		// Copy coarse X (5 bits) and low nametable bit
+		target = (target & ~0x041F) | ((source & 0x041F));
+	}
+
+	FORCEINLINE void CopyVRamAddressVert(uint16& target, uint16& source)
+	{
+		// Copy coarse Y (5 bits), fine Y (3 bits), and high nametable bit
+		target = (target & 0x041F) | ((source & ~0x041F));
+	}
+
+	void IncHoriVRamAddress(uint16& v)
+	{
+		if ((v & 0x001F) == 31) // if coarse X == 31
+		{
+			v &= ~0x001F; // coarse X = 0
+			v ^= 0x0400; // switch horizontal nametable
+		}
+		else
+		{
+			v += 1; // increment coarse X
+		}
+	}
+
+	void IncVertVRamAddress(uint16& v)
+	{
+		if ((v & 0x7000) != 0x7000) // if fine Y < 7
+		{
+			v += 0x1000; // increment fine Y
+		}
+		else
+		{
+			v &= ~0x7000; // fine Y = 0
+			uint16 y = (v & 0x03E0) >> 5; // let y = coarse Y
+			if (y == 29)
+			{
+				y = 0; // coarse Y = 0
+				v ^= 0x0800; // switch vertical nametable
+			}
+			else if (y == 31)
+			{
+				y = 0; // coarse Y = 0, nametable not switched
+			}
+			else
+			{
+				y += 1; // increment coarse Y
+			}
+			v = (v & ~0x03E0) | (y << 5); // put coarse Y back into v
+		}
+	};
+
+	template <typename T, typename U>
+	bool IncAndWrap(T& v, U size)
+	{
+		if (++v == size)
+		{
+			v = 0;
+			return true;
+		}
+		return false;
+	}
+
+	FORCEINLINE uint32 YXtoPpuCycle(uint32 y, uint32 x)
+	{
+		return y * 341 + x;
+	}
+
+	FORCEINLINE uint32 CpuToPpuCycles(uint32 cpuCycles)
+	{
+		return cpuCycles * 3;
+	}
 }
 
 namespace PpuControl1 // $2000 (W)
@@ -122,7 +236,7 @@ namespace PpuStatus // $2002 (R)
 	enum Type : uint8
 	{
 		VRAMWritesIgnored	= BIT(4),
-		ScanlineSpritesGt8	= BIT(5),
+		SpriteOverflow		= BIT(5),
 		PpuHitSprite0		= BIT(6),
 		InVBlank			= BIT(7),
 	};
@@ -151,7 +265,8 @@ namespace
 Ppu::Ppu()
 	: m_ppuMemoryBus(nullptr)
 	, m_nes(nullptr)
-	, m_renderer(new Renderer())
+	, m_rendererHolder(new Renderer())
+	, m_renderer(m_rendererHolder.get())
 	, m_nameTableVerticalMirroring(false)
 {
 	InitPaletteColors();
@@ -166,6 +281,8 @@ void Ppu::Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes)
 	m_nameTables.Initialize();
 	m_palette.Initialize();
 	m_ppuRegisters.Initialize();
+	m_oam.Initialize();
+	m_oam2.Initialize();
 
 	m_ppuControlReg1 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg1));
 	m_ppuControlReg2 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg2));
@@ -184,58 +301,133 @@ void Ppu::Reset()
 
 	// Not necessary but helps with debugging
 	m_vramAddress = 0xDDDD;
+	m_tempVRamAddress = 0xDDDD;
 	m_vramBufferedValue = 0xDD;
+
+	m_cycle = 0;
+	m_evenFrame = true;
 }
 
-void Ppu::Execute(bool& finishedRender, uint32& numCpuCyclesToExecute)
+void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 {
+	const size_t kNumTotalScanlines = 262;
+	const size_t kNumHBlankAndBorderCycles = 85;
+	const size_t kNumScanlineCycles = kScreenWidth + kNumHBlankAndBorderCycles; // 256 + 85 = 341
+	const size_t kNumScreenCycles = kNumScanlineCycles * kNumTotalScanlines; // 89342 cycles per screen
+
 	finishedRender = false;
-	
-	const uint32 kNumVBlankCycles = 2273; // 20 scanlines
-	const uint32 kNumRenderCycles = 27507; // 242 scanlines (1 prerender + 240 render + 1 postrender)
 
-	enum State { Rendering, VBlanking };
-	static State currState;
-	static State nextState = VBlanking;
+	const bool renderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites);
 
-	currState = nextState;
+	for ( ; ppuCycles > 0; --ppuCycles)
+	{
+		const uint32 x = m_cycle % kNumScanlineCycles; // offset in current scanline
+		const uint32 y = m_cycle / kNumScanlineCycles; // scanline
 
-	switch (currState)
-	{	
-	case Rendering:
+		if ( (y >= 0 && y <= 239) || y == 261 ) // Visible and Pre-render scanlines
 		{
-			m_ppuStatusReg->Clear(PpuStatus::InVBlank); // cleared at dot 1 of line 261 (start of pre-render line)
-
-			if (m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites))
+			if (renderingEnabled) //@TODO: Not sure about this
 			{
-				Render();
-			}
-			else
-			{
-				// We're in "forced vblank"
-				ClearBackground();
-				m_renderer->Present();
+				if (x == 64)
+				{
+					// Cycles 1-64: Clear secondary OAM to $FF
+					ClearOAM2();
+				}
+				else if (x == 256)
+				{
+					// Cycles 65-256: Sprite evaluation
+					PerformSpriteEvaluation(x, y);
+				}
 			}
 
-			finishedRender = true;
-			numCpuCyclesToExecute = kNumRenderCycles;
+			if (x >= 257 && x <= 320) // "HBlank" (idle cycles)
+			{
+				if (renderingEnabled)
+				{
+					if (x == 257)
+					{
+						CopyVRamAddressHori(m_vramAddress, m_tempVRamAddress);
+					}
+					else if (y == 261 && x >= 280 && x <= 304)
+					{
+						//@TODO: could optimize by just doing this once on last cycle (x==304)
+						CopyVRamAddressVert(m_vramAddress, m_tempVRamAddress);
+					}
+					else if (x == 320)
+					{
+						// Cycles 257-320: sprite data fetch for next scanline
+						FetchSpriteData(y);
+					}
+				}
+			}
+			else // Fetch and render cycles
+			{
+				// Update VRAM address and fetch data
+				if (renderingEnabled)
+				{
+					// PPU fetches 4 bytes every 8 cycles for a given tile (NT, AT, LowBG, and HighBG).
+					// We want to know when we're on the last cycle of the HighBG tile byte (see Ntsc_timing.jpg)
+					const bool lastFetchCycle = (x >= 8) && (x % 8 == 0);
 
-			nextState = VBlanking;
+					if (lastFetchCycle)
+					{
+						FetchBackgroundTileData();
+
+						// Data for v was just fetched, so we can now increment it
+						if (x != 256)
+						{
+							IncHoriVRamAddress(m_vramAddress);
+						}
+						else
+						{
+							IncVertVRamAddress(m_vramAddress);
+						}
+					}
+
+					if (x < kScreenWidth && y < kScreenHeight)
+					{
+						// Render pixel at x,y using pipelined fetch data
+						RenderPixel(x, y);
+					}
+				}
+
+				// Clear flags on pre-render line at dot 1
+				if (y == 261 && x == 1)
+				{
+					m_ppuStatusReg->Clear(PpuStatus::InVBlank | PpuStatus::PpuHitSprite0 | PpuStatus::SpriteOverflow);
+				}
+
+				// Present on (second to) last cycle of last visible scanline
+				//@TODO: Do this on last frame of post-render line?
+				if (y == 239 && x == 339)
+				{
+					m_renderer->Present();
+					ClearBackground();
+					finishedRender = true;
+
+					// For odd frames, the cycle at the end of the scanline (340,239) is skipped
+					if (!m_evenFrame && renderingEnabled)
+						++m_cycle;
+
+					m_evenFrame = !m_evenFrame;
+				}
+			}
 		}
-		break;
-
-	case VBlanking:
+		else // Post-render and VBlank 240-260
 		{
-			m_ppuStatusReg->Set(PpuStatus::InVBlank); // set at dot 1 of line 241 (line *after* post-render line)
+			assert(y >= 240 && y <= 260);
 
-			if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
-				m_nes->SignalCpuNmi();
+			if (y == 241 && x == 1)
+			{
+				m_ppuStatusReg->Set(PpuStatus::InVBlank);
 
-			numCpuCyclesToExecute = kNumVBlankCycles;
-
-			nextState = Rendering;
+				if (m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank))
+					m_nes->SignalCpuNmi();
+			}
 		}
-		break;
+
+		// Update cycle
+		m_cycle = (m_cycle + 1) % kNumScreenCycles;
 	}
 }
 
@@ -256,12 +448,27 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 	{
 	case CpuMemory::kPpuStatusReg: // $2002
 		{
+			//@HACK: Some games like Bomberman and Burger Time poll $2002.7 (VBlank flag) expecting the
+			// bit to be set before the NMI executes. On actual hardware, this results in a race condition
+			// where sometimes the bit won't be set, or the NMI won't occur. See:
+			// http://wiki.nesdev.com/w/index.php/NMI#Race_condition and
+			// http://forums.nesdev.com/viewtopic.php?t=5005
+			// In my emulator code, CPU and PPU execute sequentially, so this race condition does not occur;
+			// instead, $2002.7 will normally never be set before NMI is processed, breaking games that
+			// depend on it. To fix this, we assume the CPU instruction that executed this read will be at
+			// least 3 CPU cycles long, and we check if we _will_ set the VBlank flag on the next PPU update;
+			// if so, we set the flag right away and return it.
+			const uint32 kSetVBlankCycle = YXtoPpuCycle(241, 1);
+			if (m_cycle < kSetVBlankCycle && (m_cycle + CpuToPpuCycles(3) >= kSetVBlankCycle))
+			{
+				m_ppuStatusReg->Set(PpuStatus::InVBlank);
+			}
+
 			result = ReadPpuRegister(cpuAddress);
 
 			m_ppuStatusReg->Clear(PpuStatus::InVBlank);
 			WritePpuRegister(CpuMemory::kPpuVRamAddressReg1, 0);
 			WritePpuRegister(CpuMemory::kPpuVRamAddressReg2, 0);
-			m_vramAddress = 0;
 			m_vramAndScrollFirstWrite = true;
 		}
 		break;
@@ -313,14 +520,15 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 	{
 	case CpuMemory::kPpuControlReg1: // $2000
 		{
+			SetVRamAddressNameTable(m_tempVRamAddress, value & 0x3);
+
 			const Bitfield8* oldPpuControlReg1 = reinterpret_cast<const Bitfield8*>(&oldValue);
 
 			// The PPU pulls /NMI low if and only if both NMI_occurred and NMI_output are true. By toggling NMI_output ($2000 bit 7)
 			// during vertical blank without reading $2002, a program can cause /NMI to be pulled low multiple times, causing multiple
 			// NMIs to be generated. (http://wiki.nesdev.com/w/index.php/NMI)
-			if ( !oldPpuControlReg1->Test(PpuControl1::NmiOnVBlank)
-				&& m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank) // NmiOnVBlank toggled
-				&& m_ppuStatusReg->Test(PpuStatus::InVBlank) ) // In vblank (and $2002 not read yet, which resets this bit)
+			const bool enabledNmiOnVBlank = !oldPpuControlReg1->Test(PpuControl1::NmiOnVBlank) && m_ppuControlReg1->Test(PpuControl1::NmiOnVBlank);
+			if ( enabledNmiOnVBlank && m_ppuStatusReg->Test(PpuStatus::InVBlank) ) // In vblank (and $2002 not read yet, which resets this bit)
 			{
 				m_nes->SignalCpuNmi();
 			}
@@ -331,7 +539,7 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		{
 			// Write value to sprite ram at address in $2003 (OAMADDR) and increment address
 			const uint8 spriteRamAddress = ReadPpuRegister(CpuMemory::kPpuSprRamAddressReg);
-			m_sprites.Write(spriteRamAddress, value);
+			m_oam.Write(spriteRamAddress, value);
 			WritePpuRegister(CpuMemory::kPpuSprRamAddressReg, spriteRamAddress + 1);
 		}
 		break;
@@ -340,13 +548,13 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		{
 			if (m_vramAndScrollFirstWrite) // First write: X scroll values
 			{
-				m_scroll.fineOffsetX = ReadBits(value, 0x07);
-				m_scroll.coarseOffsetX = ReadBits(value, ~0x07);
+				m_fineX = value & 0x07;
+				SetVRamAddressCoarseX(m_tempVRamAddress, (value & ~0x07) >> 3);
 			}
 			else // Second write: Y scroll values
 			{
-				m_scroll.fineOffsetY = ReadBits(value, 0x07);
-				m_scroll.coarseOffsetY = ReadBits(value, ~0x07);
+				SetVRamAddressFineY(m_tempVRamAddress, value & 0x07);
+				SetVRamAddressCoarseY(m_tempVRamAddress, (value & ~0x07) >> 3);
 			}
 
 			m_vramAndScrollFirstWrite = !m_vramAndScrollFirstWrite;
@@ -358,11 +566,13 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 			const uint16 halfAddress = TO16(value);
 			if (m_vramAndScrollFirstWrite) // First write: high byte
 			{
-				m_vramAddress = (halfAddress << 8) | (m_vramAddress & 0x00FF);
+				// Write 6 bits to high byte - note that technically we shouldn't touch bit 15, but whatever
+				m_tempVRamAddress = ((halfAddress & 0x3F) << 8) | (m_tempVRamAddress & 0x00FF);
 			}
-			else // Second write: low byte
+			else
 			{
-				m_vramAddress = halfAddress | (m_vramAddress & 0xFF00);
+				m_tempVRamAddress = (m_tempVRamAddress & 0xFF00) | halfAddress;
+				m_vramAddress = m_tempVRamAddress; // Update v from t on second write
 			}
 
 			m_vramAndScrollFirstWrite = !m_vramAndScrollFirstWrite;
@@ -382,7 +592,7 @@ void Ppu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 			{
 				m_ppuMemoryBus->Write(m_vramAddress, value);
 			}
-				
+
 			const uint16 advanceOffset = PpuControl1::GetPpuAddressIncrementSize( m_ppuControlReg1->Value() );
 			m_vramAddress += advanceOffset;
 		}
@@ -481,254 +691,356 @@ void Ppu::ClearBackground()
 	m_renderer->Clear(g_paletteColors[m_palette.Read(0)]);
 }
 
-void Ppu::Render()
+void Ppu::FetchBackgroundTileData()
 {
-	static auto GetTilePaletteUpperBits = [&] (uint16 attributeTableAddress, uint8 x, uint8 y)
+	// Load bg tile row data (2 bytes) at v into pipeline
+	const auto& v = m_vramAddress;
+	const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
+	const uint16 tileIndexAddress = 0x2000 | (v & 0x0FFF);
+	const uint16 attributeAddress = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
+	assert(attributeAddress >= PpuMemory::kAttributeTable0 && attributeAddress < PpuMemory::kNameTablesEnd);
+	const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
+	const uint16 tileOffset = TO16(tileIndex) * 16;
+	const uint8 fineY = GetVRamAddressFineY(v);
+	const uint16 byte1Address = patternTableAddress + tileOffset + fineY;
+	const uint16 byte2Address = byte1Address + 8;
+
+	// Load attribute byte then compute and store the high palette bits from it for this tile
+	// The high palette bits are 2 consecutive bits in the attribute byte. We need to shift it right
+	// by 0, 2, 4, or 6 and read the 2 low bits. The amount to shift by is can be computed from the
+	// VRAM address as follows: [bit 6, bit 2, 0]
+	const uint8 attribute = m_ppuMemoryBus->Read(attributeAddress);
+	const uint8 attributeShift = ((v & 0x40) >> 4) | (v & 0x2);
+	assert(attributeShift == 0 || attributeShift == 2 || attributeShift == 4 || attributeShift == 6);
+	const uint8 paletteHighBits = (attribute >> attributeShift) & 0x3;
+
+	auto& currTile = m_bgTileFetchDataPipeline[0];
+	auto& nextTile = m_bgTileFetchDataPipeline[1];
+
+	currTile = nextTile; // Shift pipelined data
+
+	// Push results at top of pipeline
+	nextTile.bmpLow = m_ppuMemoryBus->Read(byte1Address);
+	nextTile.bmpHigh = m_ppuMemoryBus->Read(byte2Address);
+	nextTile.paletteHighBits = paletteHighBits;
+
+#if CONFIG_DEBUG
+	nextTile.debug.vramAddress = m_vramAddress;
+	nextTile.debug.tileIndexAddress = tileIndexAddress;
+	nextTile.debug.attributeAddress = attributeAddress;
+	nextTile.debug.attributeShift = attributeShift;
+	nextTile.debug.byte1Address = byte1Address;
+#endif
+}
+
+void Ppu::ClearOAM2() // OAM2 = $FF
+{
+	//@NOTE: We don't actually need this step as we track number of sprites to render per scanline
+	memset(m_oam2.RawPtr(), 0xFF, m_oam2.Size());
+}
+
+void Ppu::PerformSpriteEvaluation(uint32 /*x*/, uint32 y) // OAM -> OAM2
+{
+	// See http://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
+
+	static auto IsSpriteInRangeY = [] (uint32 y, uint8 spriteY, uint8 spriteHeight) -> bool
 	{
-		const uint8 groupsPerScreenX = 8;
-		const uint8 tilesPerGroupAxis = 4; // 4x4 = 16 tiles per group
-		const uint8 tilesPerSquareAxis = 2; // 2x2 = 4 tiles per square (and 4x4 squares per group)
-		const uint8 squaresPerGroupAxis = 2;
-
-		// Get attribute byte for current group
-		const uint8 groupX = x / tilesPerGroupAxis; assert(groupX < 8);
-		const uint8 groupY = y / tilesPerGroupAxis; assert(groupY < 8);
-		const uint8 groupIndex = groupY * groupsPerScreenX + groupX; assert(groupIndex < 64);
-		const uint8 attributeByte = m_ppuMemoryBus->Read(attributeTableAddress + groupIndex);
-
-		// Get square x,y relative to current group
-		const uint8 squareX = (x - (groupX * tilesPerGroupAxis)) / squaresPerGroupAxis; assert(squareX < 2);
-		const uint8 squareY = (y - (groupY * tilesPerGroupAxis))  / squaresPerGroupAxis; assert(squareY < 2);
-		const uint8 squareIndex = squareY * tilesPerSquareAxis + squareX; assert(squareIndex < 4);
-
-		// Compute tile's upper 2 palette bits (lower 2 bits are in tile data itself)
-		const uint8 paletteUpperBits = (attributeByte >> (squareIndex*2)) & 0x3;
-		assert(paletteUpperBits < 4);
-
-		return paletteUpperBits;
+		return (y >= spriteY && y < static_cast<uint8>(spriteY + spriteHeight) && spriteY < kScreenHeight);
 	};
 
-	static auto ReadTile = [&] (uint16 patternTableAddress, uint8 tileIndex, uint8 paletteUpperBits, uint8 tile[8][8])
+	const bool isSprite8x16 = m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
+	const uint8 spriteHeight = isSprite8x16? 16 : 8;
+	
+	// Reset sprite vars for current scanline
+	m_numSpritesToRender = 0;
+	m_renderSprite0 = false;
+
+	uint16 n = 0; // Sprite [0-63] in OAM
+	auto& n2 = m_numSpritesToRender; // Sprite [0-7] in OAM2
+
+	typedef uint8 SpriteData[4]; //@TODO: Maybe we should just store m_oam and m_oam2 as arrays of this
+	SpriteData* oam = m_oam.RawPtrAs<SpriteData*>();
+	SpriteData* oam2 = m_oam2.RawPtrAs<SpriteData*>();
+
+	// Attempt to find up to 8 sprites on current scanline
+	while (n2 < 8)
 	{
-		// Every 16 bytes is 1 8x8 tile
-		const uint16 tileOffset = TO16(tileIndex) * 16;
-		assert(tileOffset+16 < KB(16) && "Indexing outside of current pattern table");
+		const uint8 spriteY = oam[n][0];
+		oam2[n2][0] = spriteY; // (1)
 
-		uint16 byte1Address = patternTableAddress + tileOffset + 0;
-		uint16 byte2Address = patternTableAddress + tileOffset + 8;
-
-		for (uint16 y = 0; y < 8; ++y)
+		if (IsSpriteInRangeY(y, spriteY, spriteHeight)) // (1a)
 		{
-			const uint8 b1 = m_ppuMemoryBus->Read(byte1Address);
-			const uint8 b2 = m_ppuMemoryBus->Read(byte2Address);
-			const Bitfield8& byte1 = reinterpret_cast<const Bitfield8&>(b1);
-			const Bitfield8& byte2 = reinterpret_cast<const Bitfield8&>(b2);
+			oam2[n2][1] = oam[n][1];
+			oam2[n2][2] = oam[n][2];
+			oam2[n2][3] = oam[n][3];
 
-			tile[0][y] = (paletteUpperBits << 2) | (byte1.TestPos01(7) | (byte2.TestPos01(7) << 1));
-			tile[1][y] = (paletteUpperBits << 2) | (byte1.TestPos01(6) | (byte2.TestPos01(6) << 1));
-			tile[2][y] = (paletteUpperBits << 2) | (byte1.TestPos01(5) | (byte2.TestPos01(5) << 1));
-			tile[3][y] = (paletteUpperBits << 2) | (byte1.TestPos01(4) | (byte2.TestPos01(4) << 1));
-			tile[4][y] = (paletteUpperBits << 2) | (byte1.TestPos01(3) | (byte2.TestPos01(3) << 1));
-			tile[5][y] = (paletteUpperBits << 2) | (byte1.TestPos01(2) | (byte2.TestPos01(2) << 1));
-			tile[6][y] = (paletteUpperBits << 2) | (byte1.TestPos01(1) | (byte2.TestPos01(1) << 1));
-			tile[7][y] = (paletteUpperBits << 2) | (byte1.TestPos01(0) | (byte2.TestPos01(0) << 1));
-
-			++byte1Address;
-			++byte2Address;
-		}
-	};
-
-	static auto DrawBackgroundTile = [&] (Renderer& renderer, int32 x, int32 y, uint8 tile[8][8])
-	{
-		for (uint16 ty = 0; ty < 8; ++ty)
-		{
-			for (uint16 tx = 0; tx < 8; ++tx)
+			if (n == 0) // If we're going to render sprite 0, set flag so we can detect sprite 0 hit when we render
 			{
-				const uint8 paletteOffset = tile[tx][ty];
-
-				if (paletteOffset % 4 == 0) // Don't draw bg color pixel as screen was already cleared with that color
-					continue;
-
-				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
-				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kImagePalette + paletteOffset) );
-				assert(paletteIndex < kNumPaletteColors);
-
-				const Color4& color = g_paletteColors[paletteIndex];
-
-				const int32 xf = x + tx;
-				const int32 yf = y + ty;
-
-				// Clip x against right screen edge and y against bottom screen edge
-				if (xf >= kScreenWidth || yf >= kScreenHeight)
-					continue;
-
-				renderer.DrawPixel(xf, yf, color);
+				m_renderSprite0 = true;
 			}
-		}
-	};
 
-	static auto DrawSpriteTile = [&] (Renderer& renderer, int32 x, int32 y, uint8 tile[8][8], bool flipHorz, bool flipVert)
-	{
-		for (uint16 ty = 0; ty < 8; ++ty)
+			++n2;
+		}
+
+		++n; // (2)
+		if (n == 64) // (2a)
 		{
-			for (uint16 tx = 0; tx < 8; ++tx)
-			{
-				const uint8 paletteOffset = tile[tx][ty];
-
-				if (paletteOffset % 4 == 0) // Don't draw transparent pixel
-					continue;
-
-				//@TODO: Need a separate MapPpuToPalette that always maps every 4th byte to 0 (bg color)
-				const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(PpuMemory::kSpritePalette + paletteOffset) );
-				assert(paletteIndex < kNumPaletteColors);
-
-				const Color4& color = g_paletteColors[paletteIndex];
-				
-				int32 xf = x + (flipHorz? 7 - tx : tx);
-				int32 yf = y + (flipVert? 7 - ty : ty);
-
-				// Clip x against right screen edge and y against bottom screen edge
-				if (xf >= kScreenWidth || yf >= kScreenHeight)
-					continue;
-
-				renderer.DrawPixel(xf, yf, color);
-			}
-		}
-	};
-
-	static auto RenderSprites = [&] (bool behindBackground)
-	{
-		if (m_ppuControlReg2->Test(PpuControl2::RenderSprites))
-		{
-			const bool spriteSize8x8 = !m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
-
-			// Iterate backwards for sprite rendering priority (smaller indices draw over larger indices)
-			for (size_t i = kMaxSprites; i-- > 0; )
-			{
-				const uint8* spriteData = m_sprites.RawPtr(static_cast<uint16>(i * kSpriteDataSize));
-
-				// Note that sprites are drawn one scanline late, so we must add 1 to the y provided.
-				// Client code must subtract 1 from the desired Y. This also implies that sprites can
-				// never be drawn at the first visible scanline (Y = 0).
-				const uint8 y = spriteData[0];
-				if (y >= 239) // Don't render sprites clipped by bottom of screen
-					continue;
-
-				const uint8 x = spriteData[3];
-				if (x < 8 && !m_ppuControlReg2->Test(PpuControl2::SpritesShowLeft8))
-					continue;
-
-				const uint8 attribs = spriteData[2];
-				const bool currBehindBackground = TestBits(attribs, BIT(5));
-				if (behindBackground != currBehindBackground)
-					continue;
-
-				uint16 patternTableAddress;
-				uint8 tileIndex;
-				std::tie(patternTableAddress, tileIndex) = GetSpritePatternTableAddressAndTileIndex(m_ppuControlReg1, spriteData[1]);
-
-				uint8 tile[8][8] = {0};
-				const uint8 paletteUpperBits = ReadBits(attribs, 0x3);
-				const bool flipHorz = TestBits(attribs, BIT(6));
-				const bool flipVert = TestBits(attribs, BIT(7));
-
-				if (spriteSize8x8)
-				{
-					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
-					DrawSpriteTile(*m_renderer, x, y + 1, tile, flipHorz, flipVert);
-				}
-				else
-				{
-					const int32 y1 = flipVert? y + 1 + 8 : y + 1;
-					const int32 y2 = flipVert? y + 1 : y + 1 + 8;
-
-					ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
-					DrawSpriteTile(*m_renderer, x, y1, tile, flipHorz, flipVert);
-
-					ReadTile(patternTableAddress, tileIndex + 1, paletteUpperBits, tile);
-					DrawSpriteTile(*m_renderer, x, y2, tile, flipHorz, flipVert);
-				}
-			}
-		}
-	};
-
-	static auto RenderBackground = [&] ()
-	{
-		const uint8 kScreenTilesX = 32;
-		const uint8 kScreenTilesY = 30;
-
-		if (!m_ppuControlReg2->Test(PpuControl2::RenderBackground))
+			// We didn't find 8 sprites, OAM2 contains what we've found so far, so we can bail
 			return;
+		}
+	}
 
-		const uint16 patternTableAddress = PpuControl1::GetBackgroundPatternTableAddress(m_ppuControlReg1->Value());
-		const uint16 nameTableAddress = PpuControl1::GetNameTableAddress(m_ppuControlReg1->Value());
-		const uint16 attributeTableAddress = PpuControl1::GetAttributeTableAddress(m_ppuControlReg1->Value());
-
-		const uint8 initialX = m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8)? 0 : 1;
-
-		uint8 tile[8][8] = {0};
-
-		uint8 scrollTileOffsetX = m_scroll.coarseOffsetX / 8;
-		uint8 scrollTileOffsetY = m_scroll.coarseOffsetY / 8;
-
-		// Render 32x30 tiles for the screen, plus 1 extra on each side for scrolling (we can see 33x31 tiles)
-		for (uint8 screenTileY = 0; screenTileY < kScreenTilesY + 1; ++screenTileY)
+	// We found 8 sprites above. Let's see if there are any more so we can set sprite overflow flag.
+	uint16 m = 0; // Byte in sprite data [0-3]
+	
+	while (n < 64)
+	{
+		const uint8 spriteY = oam[n][m]; // (3) Evaluate OAM[n][m] as a Y-coordinate (it might not be)
+		IncAndWrap(m, 4);
+		
+		if (IsSpriteInRangeY(y, spriteY, spriteHeight)) // (3a)
 		{
-			for (uint8 screenTileX = initialX; screenTileX < kScreenTilesX + 1; ++screenTileX)
+			m_ppuStatusReg->Set(PpuStatus::SpriteOverflow);
+
+			// PPU reads next 3 bytes from OAM. Because of the hardware bug (below), m might not be 1 here, so
+			// we carefully increment n when m overflows.
+			for (int i = 0; i < 3; ++i)
 			{
-				// Compute actual tile coordinate, taking scrolling offsets into account
-				uint8 tileX = screenTileX + scrollTileOffsetX;
-				uint8 tileY = screenTileY + scrollTileOffsetY;
-
-				// The "virtual" tile space is 4x4 screens, so we need to adjust base nameTableAddress
-				// and tile coordinates if the tile falls onto another screen
-				uint16 addressOffset = 0;
-
-				if (scrollTileOffsetY >= kScreenTilesY)
+				if (IncAndWrap(m, 4))
 				{
-					// Special case for when Y coarse scroll is set outside of valid range [0,29]
-					// In that case, we don't switch name tables, but instead, address into attribute memory.
-					// The effect is rendering one or two rows of attribute data as tiles at the top of the screen.
-					// See: http://wiki.nesdev.com/w/index.php/The_skinny_on_NES_scrolling#Y_increment
-					tileY %= 32; // Wrap around (5 bits hold this value in hardware)
+					++n;
 				}
-				else if (tileY >= kScreenTilesY) // If below current screen, switch vertical nametable
-				{
-					addressOffset += PpuMemory::kNameAttributeTableSize * 2;
-					tileY %= kScreenTilesY; // Tile Y within next screen
-				}
-				
-				if (tileX >= kScreenTilesX) // If to the right of current screen, switch horizontal nametable
-				{
-					addressOffset += PpuMemory::kNameAttributeTableSize;
-					tileX %= kScreenTilesX; // Tile X within next screen
-				}
-
-				const uint16 tileIndexAddress = (nameTableAddress + addressOffset) + (tileY * kScreenTilesX) + tileX;
-				const uint8 tileIndex = m_ppuMemoryBus->Read(tileIndexAddress);
-				const uint8 paletteUpperBits = GetTilePaletteUpperBits(attributeTableAddress + addressOffset, tileX, tileY);
-
-				ReadTile(patternTableAddress, tileIndex, paletteUpperBits, tile);
-
-				const int32 xf = screenTileX * 8 - m_scroll.fineOffsetX;
-				const int32 yf = screenTileY * 8 - m_scroll.fineOffsetY;
-				DrawBackgroundTile(*m_renderer, xf, yf, tile);
 			}
 		}
+		else
+		{
+			// (3b) If the value is not in range, increment n and m (without carry). If n overflows to 0, go to 4; otherwise go to 3
+			// The m increment is a hardware bug - if only n was incremented, the overflow flag would be set whenever more than 8
+			// sprites were present on the same scanline, as expected.
+			++n;
+			
+			IncAndWrap(m, 4); // This increment is a hardware bug
+		}
+	}
+}
+
+void Ppu::FetchSpriteData(uint32 y) // OAM2 -> render (shift) registers
+{
+	// See http://wiki.nesdev.com/w/index.php/PPU_rendering#Cycles_257-320
+
+	static auto FlipBits = [] (uint8 v) -> uint8
+	{
+		return 
+			  ((v & BIT(0)) << 7)
+			| ((v & BIT(1)) << 5)
+			| ((v & BIT(2)) << 3)
+			| ((v & BIT(3)) << 1)
+			| ((v & BIT(4)) >> 1)
+			| ((v & BIT(5)) >> 3)
+			| ((v & BIT(6)) >> 5)
+			| ((v & BIT(7)) >> 7);
 	};
 
-	// Always clear using palette color 0. When rendering bg tiles, we don't render color 0 so that
-	// sprites below bg remain there.	
-	ClearBackground();
+	typedef uint8 SpriteData[4];
+	SpriteData* oam2 = m_oam2.RawPtrAs<SpriteData*>();
 
-	// Sprites behind background
-	RenderSprites(true);
+	const bool isSprite8x16 = m_ppuControlReg1->Test(PpuControl1::SpriteSize8x16);
 
-	// Background
-	RenderBackground();
+	for (uint8 n = 0; n < m_numSpritesToRender; ++n)
+	{
+		const uint8 spriteY = oam2[n][0];
+		const uint8 byte1 = oam2[n][1];
+		const uint8 attribs = oam2[n][2];
+		const bool flipHorz = TestBits(attribs, BIT(6));
+		const bool flipVert = TestBits(attribs, BIT(7));
 
-	// Sprites above background
-	RenderSprites(false);
+		uint16 patternTableAddress;
+		uint8 tileIndex;
+		if ( !isSprite8x16 ) // 8x8 sprite, oam byte 1 is tile index
+		{
+			patternTableAddress = m_ppuControlReg1->Test(PpuControl1::SpritePatternTableAddress8x8)? 0x1000 : 0x0000;
+			tileIndex = byte1;
+		}
+		else // 8x16 sprite, both address and tile index are stored in oam byte 1
+		{
+			patternTableAddress = TestBits(byte1, BIT(0))? 0x1000 : 0x0000;
+			tileIndex = ReadBits(byte1, ~BIT(0));
+		}
 
-	m_renderer->Present();
+		uint8 yOffset = static_cast<uint8>(y) - spriteY;
+		assert(yOffset < (isSprite8x16? 16 : 8));
+
+		if (isSprite8x16)
+		{
+			// In 8x16 mode, first tile is at tileIndex, second tile (underneath) is at tileIndex + 1
+			uint8 nextTile = 0;
+			if (yOffset >= 8)
+			{
+				++nextTile;
+				yOffset -= 8;
+			}
+
+			// In 8x16 mode, vertical flip also flips the tile index order
+			if (flipVert)
+			{
+				nextTile = (nextTile + 1) % 2;
+			}
+
+			tileIndex += nextTile;
+		}
+
+		if (flipVert)
+		{
+			yOffset = 7 - yOffset;
+		}
+		assert(yOffset < 8);
+		
+		const uint16 tileOffset = TO16(tileIndex) * 16;
+		const uint16 byte1Address = patternTableAddress + tileOffset + yOffset;
+		const uint16 byte2Address = byte1Address + 8;
+
+		auto& data = m_spriteFetchData[n];
+		data.bmpLow = m_ppuMemoryBus->Read(byte1Address);
+		data.bmpHigh = m_ppuMemoryBus->Read(byte2Address);
+		data.attributes = oam2[n][2];
+		data.x = oam2[n][3];
+
+		if (flipHorz)
+		{
+			data.bmpLow = FlipBits(data.bmpLow);
+			data.bmpHigh = FlipBits(data.bmpHigh);
+		}
+	}
+}
+
+void Ppu::RenderPixel(uint32 x, uint32 y)
+{
+	// See http://wiki.nesdev.com/w/index.php/PPU_rendering
+
+	static auto GetBackgroundColor = [&] (Color4& color)
+	{
+		color = g_paletteColors[m_palette.Read(0)]; // BG ($3F00)
+	};
+
+	static auto GetPaletteColor = [&] (uint8 highBits, uint8 lowBits, uint16 paletteBaseAddress, Color4& color)
+	{
+		assert(lowBits != 0);
+
+		// Compute offset into palette memory that contains the palette index
+		const uint8 paletteOffset = (highBits << 2) | (lowBits & 0x3);
+
+		//@NOTE: lowBits is never 0, so we don't have to worry about mapping every 4th byte to 0 (bg color) here.
+		// That case is handled specially in the multiplexer code.
+		const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(paletteBaseAddress + paletteOffset) );
+		assert(paletteIndex < kNumPaletteColors);
+
+		color = g_paletteColors[paletteIndex];
+	};
+
+	const bool bgRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground);
+	const bool spriteRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderSprites);
+	assert(bgRenderingEnabled || spriteRenderingEnabled);
+	
+	// Get the background pixel
+	uint8 bgPaletteHighBits = 0;
+	uint8 bgPaletteLowBits = 0;
+	if (bgRenderingEnabled)
+	{
+		// At this point, the data for the current and next tile are in m_bgTileFetchDataPipeline
+		const auto& currTile = m_bgTileFetchDataPipeline[0];
+		const auto& nextTile = m_bgTileFetchDataPipeline[1];
+
+		// Mux uses fine X to select a bit from shift registers
+		const uint16 muxMask = 1 << (7 - m_fineX);
+
+		// Instead of actually shifting every cycle, we rebuild the shift register values
+		// for the current cycle (using the x value)
+		//@TODO: Optimize by storing 16 bit values for low and high bitmap bytes and shifting every cycle
+		const uint8 xShift = x % 8;
+		const uint8 shiftRegLow = (currTile.bmpLow << xShift) | (nextTile.bmpLow >> (8 - xShift));
+		const uint8 shiftRegHigh = (currTile.bmpHigh << xShift) | (nextTile.bmpHigh >> (8 - xShift));
+
+		bgPaletteLowBits = (TestBits01(shiftRegHigh, muxMask) << 1) | (TestBits01(shiftRegLow, muxMask));
+
+		// Technically, the mux would index 2 8-bit registers containing replicated values for the current
+		// and next tile palette high bits (from attribute bytes), but this is faster.
+		bgPaletteHighBits = (xShift + m_fineX < 8)? currTile.paletteHighBits : nextTile.paletteHighBits;
+	}
+
+	// Get the potential sprite pixel
+	bool foundSprite = false;
+	bool spriteHasBgPriority = false;
+	bool isSprite0 = false;
+	uint8 sprPaletteHighBits = 0;
+	uint8 sprPaletteLowBits = 0;
+	if (spriteRenderingEnabled)
+	{
+		for (uint8 n = 0; n < m_numSpritesToRender; ++n)
+		{
+			auto& spriteData = m_spriteFetchData[n];
+
+			if ( (x >= spriteData.x) && (x < (spriteData.x + 8u)) )
+			{
+				if (!foundSprite)
+				{
+					// Compose "sprite color" (0-3) from high bit in bitmap bytes
+					sprPaletteLowBits = (TestBits01(spriteData.bmpHigh, 0x80) << 1) | (TestBits01(spriteData.bmpLow, 0x80));
+
+					// First non-transparent pixel moves on to multiplexer
+					if (sprPaletteLowBits != 0)
+					{
+						foundSprite = true;
+						sprPaletteHighBits = ReadBits(spriteData.attributes, 0x3); //@TODO: cache this in spriteData
+						spriteHasBgPriority = TestBits(spriteData.attributes, BIT(5));
+
+						if (m_renderSprite0 && (n == 0)) // Rendering pixel from sprite 0?
+						{
+							isSprite0 = true;
+						}
+					}
+				}
+
+				// Shift out high bits - do this for all (overlapping) sprites in range
+				spriteData.bmpLow <<= 1;
+				spriteData.bmpHigh <<= 1;
+			}
+		}
+	}
+
+	// Multiplexer selects background or sprite pixel (see "Priority multiplexer decision table")
+	Color4 color;
+
+	if (bgPaletteLowBits == 0)
+	{
+		if (!foundSprite || sprPaletteLowBits == 0)
+		{
+			// Background color 0
+			GetBackgroundColor(color);
+		}
+		else
+		{
+			// Sprite color
+			GetPaletteColor(sprPaletteHighBits, sprPaletteLowBits, PpuMemory::kSpritePalette, color);
+		}
+	}
+	else
+	{
+		if (foundSprite && !spriteHasBgPriority)
+		{
+			// Sprite color
+			GetPaletteColor(sprPaletteHighBits, sprPaletteLowBits, PpuMemory::kSpritePalette, color);
+		}
+		else
+		{
+			// BG color
+			GetPaletteColor(bgPaletteHighBits, bgPaletteLowBits, PpuMemory::kImagePalette, color);
+		}
+
+		if (isSprite0)
+		{
+			m_ppuStatusReg->Set(PpuStatus::PpuHitSprite0);
+		}
+	}
+
+	m_renderer->DrawPixel(x, y, color);
 }
