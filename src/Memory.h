@@ -55,6 +55,11 @@ public:
 		return &m_memory[address];
 	}
 
+	uint8& RawRef(uint16 address = 0)
+	{
+		return m_memory[address];
+	}
+
 	template <typename T>
 	T RawPtrAs(uint16 address = 0)
 	{

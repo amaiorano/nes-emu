@@ -2,11 +2,11 @@
 #include "FileStream.h"
 #include "Rom.h"
 #include "MemoryMap.h"
+#include "MapperImpls.h"
 #include "Debugger.h"
 
 void Cartridge::Initialize()
 {
-	m_sram.Initialize();
 }
 
 RomHeader Cartridge::LoadRom(const char* file)
@@ -26,18 +26,45 @@ RomHeader Cartridge::LoadRom(const char* file)
 	if ( romHeader.IsPlayChoice10() || romHeader.IsVSUnisystem() )
 		throw std::exception("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
 
-	if ( romHeader.GetMapperNumber() != 0 )
-		throw std::exception(FormattedString<>("Unsupported mapper: %d", romHeader.GetMapperNumber()));
-
-	// Next is PRG-ROM data (16K or 32K)
+	// PRG-ROM
 	const size_t prgRomSize = romHeader.GetPrgRomSizeBytes();
-	m_prgRom.Initialize(prgRomSize);
-	fs.Read(m_prgRom.RawPtr(), prgRomSize);
+	assert(prgRomSize % kPrgBankSize == 0);
+	const size_t numPrgBanks = prgRomSize / kPrgBankSize;
+	for (size_t i = 0; i < numPrgBanks; ++i)
+	{
+		fs.Read(m_prgBanks[i].RawPtr(), kPrgBankSize);
+	}
 
-	// Next is CHR-ROM data (8K)
+	// CHR-ROM data
 	const size_t chrRomSize = romHeader.GetChrRomSizeBytes();
-	m_chrRom.Initialize(chrRomSize);
-	fs.Read(m_chrRom.RawPtr(), chrRomSize);
+	assert(chrRomSize % kChrBankSize == 0);
+	const size_t numChrBanks = chrRomSize / kChrBankSize;
+
+	if (chrRomSize > 0)
+	{
+		for (size_t i = 0; i < numChrBanks; ++i)
+		{
+			fs.Read(m_chrBanks[i].RawPtr(), kChrBankSize);
+		}
+	}
+	else // No CHR-ROM, zero out CHR-RAM
+	{
+		for (auto& bank : m_chrBanks)
+		{
+			bank.Initialize();
+		}
+	}
+
+	switch (romHeader.GetMapperNumber())
+	{
+	case 0: m_mapperHolder.reset(new Mapper0()); break;
+	case 2: m_mapperHolder.reset(new Mapper2()); break;
+	default:
+		throw std::exception(FormattedString<>("Unsupported mapper: %d", romHeader.GetMapperNumber()));
+	}
+	m_mapper = m_mapperHolder.get();
+	
+	m_mapper->Initialize(numPrgBanks, numChrBanks);
 
 	m_screenArrangement = romHeader.GetScreenArrangement();
 
@@ -48,7 +75,7 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 {
 	if (cpuAddress >= CpuMemory::kPrgRomBase)
 	{
-		return m_prgRom.Read(MapCpuToPrgRom(cpuAddress));
+		return AccessPrgMem(cpuAddress);
 	}
 	else if (cpuAddress >= CpuMemory::kSaveRamBase)
 	{
@@ -65,50 +92,59 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 
 void Cartridge::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 {
+	m_mapper->OnCpuWrite(cpuAddress, value);
+
 	if (cpuAddress >= CpuMemory::kPrgRomBase)
 	{
-		printf("Mapper 0 doesn't support writes to PRG-ROM! " ADDR_16 " = " ADDR_8 "\n", cpuAddress, value);
-		//m_prgRom.Write(MapCpuToPrgRom(cpuAddress), value);
-		return;
+		if (m_mapper->CanWritePrgMemory())
+		{
+			AccessPrgMem(cpuAddress) = value;
+		}
 	}
 	else if (cpuAddress >= CpuMemory::kSaveRamBase)
 	{
 		m_sram.Write(MapCpuToSram(cpuAddress), value);
-		return;
 	}
-	
-	assert(Debugger::IsExecuting() || (false && "Mapper doesn't handle this address"));
+	else
+	{
+#if CONFIG_DEBUG
+		if (!Debugger::IsExecuting())
+			printf("Unhandled by mapper - write: $%04X\n", cpuAddress);
+	}
+#endif
 }
 
 uint8 Cartridge::HandlePpuRead(uint16 ppuAddress)
 {
-	return m_chrRom.Read(MapPpuToChrRom(ppuAddress));
+	return AccessChrMem(ppuAddress);
 }
 
 void Cartridge::HandlePpuWrite(uint16 ppuAddress, uint8 value)
 {
-	printf("Mapper 0 doesn't support writes to CHR-ROM! " ADDR_16 " = " ADDR_8 "\n", ppuAddress, value);
-	//m_chrRom.Write(MapPpuToChrRom(ppuAddress), value);
+	if (m_mapper->CanWriteChrMemory())
+	{
+		AccessChrMem(ppuAddress) = value;
+	}
 }
 
-uint16 Cartridge::MapCpuToPrgRom(uint16 cpuAddress)
+uint8& Cartridge::AccessPrgMem(uint16 cpuAddress)
 {
-	// Mapper 0 supports either 16K or 32K of PRG-ROM
-	// If 16K, mirror upper bank to lower (C000-FFFF -> 8000-BFFF)
-	assert(cpuAddress >= CpuMemory::kPrgRomBase);
-	const size_t kPrgRomBankSize = m_prgRom.Size();
-	return static_cast<uint16>((cpuAddress - CpuMemory::kPrgRomBase) % kPrgRomBankSize);
+	const size_t cpuBankIndex = (cpuAddress / kPrgBankSize) - 8; // PRG-ROM/RAM starts at $8000, so subtract $8000/4K = 8 to get zero-based index
+	const uint16 offset = cpuAddress & (kPrgBankSize - 1);
+	const size_t mappedBankIndex = m_mapper->GetMappedPrgBankIndex(cpuBankIndex);
+	return m_prgBanks[mappedBankIndex].RawRef(offset);
+}
+
+uint8& Cartridge::AccessChrMem(uint16 ppuAddress)
+{
+	const size_t ppuBankIndex = (ppuAddress / kChrBankSize);
+	const uint16 offset = ppuAddress & (kChrBankSize - 1);
+	const size_t mappedBankIndex = m_mapper->GetMappedChrBankIndex(ppuBankIndex);
+	return m_chrBanks[mappedBankIndex].RawRef(offset);
 }
 
 uint16 Cartridge::MapCpuToSram(uint16 cpuAddress)
 {
 	assert(cpuAddress >= CpuMemory::kSaveRamBase && cpuAddress < CpuMemory::kSaveRamEnd);
 	return cpuAddress - CpuMemory::kSaveRamBase;
-}
-
-uint16 Cartridge::MapPpuToChrRom(uint16 ppuAddress)
-{
-	assert(ppuAddress < PpuMemory::kChrRomEnd);
-	// Mapper 0 only supports 8K CHR-ROM, so no mapping to do
-	return ppuAddress;
 }

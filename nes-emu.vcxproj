@@ -19,6 +19,8 @@
     <ClInclude Include="src\CpuInternalRam.h" />
     <ClInclude Include="src\Debugger.h" />
     <ClInclude Include="src\FrameTimer.h" />
+    <ClInclude Include="src\Mapper.h" />
+    <ClInclude Include="src\MapperImpls.h" />
     <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />
     <ClInclude Include="src\MemoryBus.h" />

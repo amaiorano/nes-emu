@@ -2,6 +2,8 @@
 #include "Base.h"
 #include "Memory.h"
 #include "Rom.h"
+#include "Mapper.h"
+#include <memory>
 
 class Cartridge
 {
@@ -17,13 +19,23 @@ public:
 	ScreenArrangement GetScreenArrangement() { return m_screenArrangement; }
 
 private:
-	uint16 MapCpuToPrgRom(uint16 cpuAddress);
-	uint16 MapCpuToSram(uint16 cpuAddress);
-	uint16 MapPpuToChrRom(uint16 ppuAddress);
-
+	uint8& AccessPrgMem(uint16 cpuAddress);
+	uint8& AccessChrMem(uint16 ppuAddress);
+	uint16 Cartridge::MapCpuToSram(uint16 cpuAddress);
+	
 	ScreenArrangement m_screenArrangement;
+	std::shared_ptr<Mapper> m_mapperHolder;
+	Mapper* m_mapper;
 
-	Memory<DynamicSizeStorage> m_prgRom;
-	Memory<DynamicSizeStorage> m_chrRom;
-	Memory<FixedSizeStorage<KB(8)>> m_sram; // Mapper 0 doesn't support SRAM, but we keep have it anyway for instr_test
+	// Set arbitrarily large max number of banks
+	static const size_t kMaxPrgBanks = 128;
+	static const size_t kMaxChrBanks = 128;
+
+	typedef Memory<FixedSizeStorage<kPrgBankSize>> PrgBankMemory;
+	typedef Memory<FixedSizeStorage<kChrBankSize>> ChrBankMemory;
+
+	std::array<PrgBankMemory, kMaxPrgBanks> m_prgBanks;
+	std::array<ChrBankMemory, kMaxChrBanks> m_chrBanks;	
+
+	Memory<FixedSizeStorage<KB(8)>> m_sram;
 };

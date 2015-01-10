@@ -46,13 +46,13 @@ int main(int argc, char* argv[])
 
 		const char* inputFile = argv[1];
 
-		Nes nes;
-		nes.Initialize();
+		std::shared_ptr<Nes> nes = std::make_shared<Nes>();
+		nes->Initialize();
 
-		const RomHeader romHeader = nes.LoadRom(inputFile);
+		const RomHeader romHeader = nes->LoadRom(inputFile);
 		PrintRomInfo(inputFile, romHeader);
-		nes.Reset();
-		nes.Run();
+		nes->Reset();
+		nes->Run();
 	}
 	catch (const std::exception& ex)
 	{

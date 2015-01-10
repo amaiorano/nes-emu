@@ -61,6 +61,12 @@
     <ClInclude Include="src\ControllerPorts.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Mapper.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\MapperImpls.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
