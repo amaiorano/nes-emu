@@ -60,6 +60,13 @@ public:
 		m_nes = &nes;
 	}
 
+	void Shutdown()
+	{
+#if TRACE_TO_FILE
+		CloseTraceFile();
+#endif
+	}
+
 	void DumpMemory()
 	{
 		MemoryDumpPpu(m_nes->m_ppuMemoryBus);
@@ -451,6 +458,7 @@ namespace Debugger
 	};
 
 	void Initialize(Nes& nes) { g_debugger.Initialize(nes); }
+	void Shutdown() { g_debugger.Shutdown(); }
 	void DumpMemory() { ScopedExecuting se; g_debugger.DumpMemory(); }
 	void PreCpuInstruction() { ScopedExecuting se; g_debugger.PreCpuInstruction(); }
 	void PostCpuInstruction() { ScopedExecuting se; g_debugger.PostCpuInstruction(); }

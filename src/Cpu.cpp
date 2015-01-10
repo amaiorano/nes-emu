@@ -117,6 +117,7 @@ void Cpu::Execute(uint32& cpuCyclesElapsed)
 
 	if (m_opCodeEntry == nullptr)
 	{
+		Debugger::Shutdown();
 		assert(false && "Unknown opcode");
 	}
 

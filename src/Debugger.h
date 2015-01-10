@@ -11,12 +11,14 @@ namespace Debugger
 {
 #if DEBUGGING_ENABLED
 	void Initialize(Nes& nes);
+	void Shutdown();
 	void DumpMemory();
 	void PreCpuInstruction();
 	void PostCpuInstruction();
 	bool IsExecuting();
 #else
 	FORCEINLINE void Initialize(Nes&) {}
+	FORCEINLINE void Shutdown() {}
 	FORCEINLINE void DumpMemory() {}
 	FORCEINLINE void PreCpuInstruction() {}
 	FORCEINLINE void PostCpuInstruction() {}
