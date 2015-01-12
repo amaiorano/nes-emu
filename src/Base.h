@@ -55,6 +55,24 @@ static_assert(sizeof(float64)==8, "Invalid type size");
 
 #define BIT(n) (1<<n)
 
+// BITS macro evaluates to a size_t with the specified bits set
+// Example: BITS(0,2,4) evaluates 10101
+namespace Internal
+{
+	template <size_t value> struct ShiftLeft1 { static const size_t Result = 1 << value; };
+	template <> struct ShiftLeft1<~0> { static const size_t Result = 0; };
+
+	template <size_t b0, size_t b1=~0, size_t b2=~0, size_t b3=~0> struct BitMask
+	{
+		static const size_t Result =
+			ShiftLeft1<b0>::Result |
+			ShiftLeft1<b1>::Result |
+			ShiftLeft1<b2>::Result |
+			ShiftLeft1<b3>::Result;
+	};
+}
+#define BITS(...) Internal::BitMask<__VA_ARGS__>::Result
+
 #define ARRAYSIZE(arr) (sizeof(arr)/sizeof(arr[0]))
 
 // Little utility to have compiler spit out the size of a type. Declare dummy var of this type,

@@ -20,6 +20,8 @@ public:
 		m_cpu.Nmi();
 	}
 
+	NameTableMirroring GetNameTableMirroring() const { return m_cartridge.GetNameTableMirroring(); }
+
 private:
 	friend class DebuggerImpl;
 

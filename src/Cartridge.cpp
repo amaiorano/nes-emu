@@ -2,8 +2,10 @@
 #include "FileStream.h"
 #include "Rom.h"
 #include "MemoryMap.h"
-#include "MapperImpls.h"
 #include "Debugger.h"
+#include "Mapper0.h"
+#include "Mapper1.h"
+#include "Mapper2.h"
 
 void Cartridge::Initialize()
 {
@@ -58,6 +60,7 @@ RomHeader Cartridge::LoadRom(const char* file)
 	switch (romHeader.GetMapperNumber())
 	{
 	case 0: m_mapperHolder.reset(new Mapper0()); break;
+	case 1: m_mapperHolder.reset(new Mapper1()); break;
 	case 2: m_mapperHolder.reset(new Mapper2()); break;
 	default:
 		throw std::exception(FormattedString<>("Unsupported mapper: %d", romHeader.GetMapperNumber()));
@@ -66,9 +69,20 @@ RomHeader Cartridge::LoadRom(const char* file)
 	
 	m_mapper->Initialize(numPrgBanks, numChrBanks);
 
-	m_screenArrangement = romHeader.GetScreenArrangement();
+	m_cartNameTableMirroring = romHeader.GetNameTableMirroring();
 
 	return romHeader;
+}
+
+NameTableMirroring Cartridge::GetNameTableMirroring() const
+{
+	// Some mappers control mirroring, otherwise it's hard-wired on the cart
+	auto result = m_mapper->GetNameTableMirroring();
+	if (result != NameTableMirroring::Undefined)
+	{
+		return result;
+	}
+	return m_cartNameTableMirroring;
 }
 
 uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
@@ -110,8 +124,8 @@ void Cartridge::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 #if CONFIG_DEBUG
 		if (!Debugger::IsExecuting())
 			printf("Unhandled by mapper - write: $%04X\n", cpuAddress);
-	}
 #endif
+	}
 }
 
 uint8 Cartridge::HandlePpuRead(uint16 ppuAddress)

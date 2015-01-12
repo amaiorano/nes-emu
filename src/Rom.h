@@ -3,11 +3,15 @@
 #include "Base.h"
 #include <cstring> 
 
-enum class ScreenArrangement
+enum class NameTableMirroring
 {
-	Vertical,		// Horizontal mirroring (CIRAM A10 = PPU A11)
-	Horizontal,		// Vertical mirroring (CIRAM A10 = PPU A10)
-	FourScreen		// Four-screen VRAM
+	Horizontal,
+	Vertical,
+	FourScreen,
+	OneScreenUpper,
+	OneScreenLower,
+
+	Undefined
 };
 
 #pragma pack(push)
@@ -35,12 +39,12 @@ struct RomHeader
 		return chrRomUnits * KB(8);
 	}
 
-	ScreenArrangement GetScreenArrangement() const
+	NameTableMirroring GetNameTableMirroring() const
 	{
 		if (flags6 & 0x80)
-			return ScreenArrangement::FourScreen;
+			return NameTableMirroring::FourScreen;
 
-		return (flags6 & 0x01)==1? ScreenArrangement::Horizontal : ScreenArrangement::Vertical;
+		return (flags6 & 0x01)==1? NameTableMirroring::Vertical : NameTableMirroring::Horizontal;
 	}
 
 	uint8 GetMapperNumber() const

@@ -64,7 +64,13 @@
     <ClInclude Include="src\Mapper.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\MapperImpls.h">
+    <ClInclude Include="src\Mapper0.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Mapper1.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Mapper2.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
@@ -103,6 +109,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\ControllerPorts.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Mapper1.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

@@ -11,19 +11,19 @@ public:
 	void Initialize();
 	RomHeader LoadRom(const char* file);
 
+	NameTableMirroring GetNameTableMirroring() const;
+
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
 	uint8 HandlePpuRead(uint16 ppuAddress);
 	void HandlePpuWrite(uint16 ppuAddress, uint8 value);
-
-	ScreenArrangement GetScreenArrangement() { return m_screenArrangement; }
 
 private:
 	uint8& AccessPrgMem(uint16 cpuAddress);
 	uint8& AccessChrMem(uint16 ppuAddress);
 	uint16 Cartridge::MapCpuToSram(uint16 cpuAddress);
 	
-	ScreenArrangement m_screenArrangement;
+	NameTableMirroring m_cartNameTableMirroring;
 	std::shared_ptr<Mapper> m_mapperHolder;
 	Mapper* m_mapper;
 

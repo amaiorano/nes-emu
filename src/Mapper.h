@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Base.h"
+#include "Rom.h"
 #include <array>
 
 const size_t kPrgBankCount = 8;
@@ -21,16 +22,26 @@ public:
 
 	void Initialize(size_t numPrgBanks, size_t numChrBanks)
 	{
+		m_nametableMirroring = NameTableMirroring::Undefined;
 		m_numPrgBanks = numPrgBanks;
 		m_numChrBanks = numChrBanks;
 		m_canWritePrgMemory = false;
 		m_canWriteChrMemory = false;
+
+		if (m_numChrBanks == 0)
+		{
+			m_numChrBanks = 8; // 8K of CHR-RAM
+			m_canWriteChrMemory = true;
+		}
+
 		PostInitialize();
 	}
 
 	virtual const char* MapperName() const = 0;
 	virtual void PostInitialize() = 0;
 	virtual void OnCpuWrite(uint16 cpuAddress, uint8 value) = 0;
+
+	NameTableMirroring GetNameTableMirroring() const { return m_nametableMirroring; }
 
 	bool CanWritePrgMemory() const { return m_canWritePrgMemory; }
 	bool CanWriteChrMemory() const { return m_canWriteChrMemory; }
@@ -41,24 +52,31 @@ public:
 protected:
 	// Protected interface for derived Mapper implementations
 
+	void SetNameTableMirroring(NameTableMirroring value) { m_nametableMirroring = value; }
+		
 	size_t NumPrgBanks4k() const { return m_numPrgBanks; }
 	size_t NumPrgBanks8k() const { return m_numPrgBanks / 2; }
 	size_t NumPrgBanks16k() const { return m_numPrgBanks / 4; }
+	size_t NumPrgBanks32k() const { return m_numPrgBanks / 8; }
 
 	size_t NumChrBanks1k() const { return m_numChrBanks; }
+	size_t NumChrBanks4k() const { return m_numChrBanks / 4; }
 	size_t NumChrBanks8k() const { return m_numChrBanks / 8; }
 
 	void SetPrgBankIndex4k(size_t cpuBankIndex, size_t cartBankIndex);
 	void SetPrgBankIndex8k(size_t cpuBankIndex, size_t cartBankIndex);
 	void SetPrgBankIndex16k(size_t cpuBankIndex, size_t cartBankIndex);
+	void SetPrgBankIndex32k(size_t cpuBankIndex, size_t cartBankIndex);
 
 	void SetChrBankIndex1k(size_t ppuBankIndex, size_t cartBankIndex);
+	void SetChrBankIndex4k(size_t ppuBankIndex, size_t cartBankIndex);
 	void SetChrBankIndex8k(size_t ppuBankIndex, size_t cartBankIndex);
 
 	void SetCanWritePrgMemory(bool enabled) { m_canWritePrgMemory = enabled; }
 	void SetCanWriteChrMemory(bool enabled) { m_canWriteChrMemory = enabled; }
 
 private:
+	NameTableMirroring m_nametableMirroring;
 	size_t m_numPrgBanks;
 	size_t m_numChrBanks;
 	std::array<size_t, kPrgBankCount> m_prgBankIndices;
@@ -77,7 +95,7 @@ FORCEINLINE void Mapper::SetPrgBankIndex8k(size_t cpuBankIndex, size_t cartBankI
 {
 	cpuBankIndex *= 2;
 	cartBankIndex *= 2;
-	m_prgBankIndices[cpuBankIndex] = cartBankIndex++;
+	m_prgBankIndices[cpuBankIndex] = cartBankIndex;
 	m_prgBankIndices[cpuBankIndex + 1] = cartBankIndex + 1;
 }
 
@@ -91,16 +109,40 @@ FORCEINLINE void Mapper::SetPrgBankIndex16k(size_t cpuBankIndex, size_t cartBank
 	m_prgBankIndices[cpuBankIndex + 3] = cartBankIndex + 3;
 }
 
+FORCEINLINE void Mapper::SetPrgBankIndex32k(size_t cpuBankIndex, size_t cartBankIndex)
+{
+	cpuBankIndex *= 8;
+	cartBankIndex *= 8;
+	m_prgBankIndices[cpuBankIndex] = cartBankIndex;
+	m_prgBankIndices[cpuBankIndex + 1] = cartBankIndex + 1;
+	m_prgBankIndices[cpuBankIndex + 2] = cartBankIndex + 2;
+	m_prgBankIndices[cpuBankIndex + 3] = cartBankIndex + 3;
+	m_prgBankIndices[cpuBankIndex + 4] = cartBankIndex + 4;
+	m_prgBankIndices[cpuBankIndex + 5] = cartBankIndex + 5;
+	m_prgBankIndices[cpuBankIndex + 6] = cartBankIndex + 6;
+	m_prgBankIndices[cpuBankIndex + 7] = cartBankIndex + 7;
+}
+
 FORCEINLINE void Mapper::SetChrBankIndex1k(size_t ppuBankIndex, size_t cartBankIndex)
 {
 	m_chrBankIndices[ppuBankIndex] = cartBankIndex;
+}
+
+FORCEINLINE void Mapper::SetChrBankIndex4k(size_t ppuBankIndex, size_t cartBankIndex)
+{
+	ppuBankIndex *= 4;
+	cartBankIndex *= 4;
+	m_chrBankIndices[ppuBankIndex] = cartBankIndex;
+	m_chrBankIndices[ppuBankIndex + 1] = cartBankIndex + 1;
+	m_chrBankIndices[ppuBankIndex + 2] = cartBankIndex + 2;
+	m_chrBankIndices[ppuBankIndex + 3] = cartBankIndex + 3;
 }
 
 FORCEINLINE void Mapper::SetChrBankIndex8k(size_t ppuBankIndex, size_t cartBankIndex)
 {
 	ppuBankIndex *= 8;
 	cartBankIndex *= 8;
-	m_chrBankIndices[ppuBankIndex] = cartBankIndex++;
+	m_chrBankIndices[ppuBankIndex] = cartBankIndex;
 	m_chrBankIndices[ppuBankIndex + 1] = cartBankIndex + 1;
 	m_chrBankIndices[ppuBankIndex + 2] = cartBankIndex + 2;
 	m_chrBankIndices[ppuBankIndex + 3] = cartBankIndex + 3;

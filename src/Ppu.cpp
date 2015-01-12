@@ -267,7 +267,6 @@ Ppu::Ppu()
 	, m_nes(nullptr)
 	, m_rendererHolder(new Renderer())
 	, m_renderer(m_rendererHolder.get())
-	, m_nameTableVerticalMirroring(false)
 {
 	InitPaletteColors();
 	m_renderer->Create();
@@ -617,17 +616,18 @@ uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 
 	const uint16 virtualVRamAddress = (ppuAddress - PpuMemory::kVRamBase) % PpuMemory::kVRamSize;
 	
-	uint16 physicalVRamAddress = 0;
-	if (m_nameTableVerticalMirroring)
+	uint16 physicalVRamAddress = 0;	
+	switch (m_nes->GetNameTableMirroring())
 	{
+	case NameTableMirroring::Vertical:
 		// Vertical mirroring (horizontal scrolling)
 		// A B
 		// A B
 		// Simplest case, just wrap >= 2K
 		physicalVRamAddress = virtualVRamAddress % NameTableMemory::kSize;
-	}
-	else
-	{
+		break;
+
+	case NameTableMirroring::Horizontal:
 		// Horizontal mirroring (vertical scrolling)
 		// A A
 		// B B		
@@ -647,6 +647,25 @@ uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 		{
 			physicalVRamAddress = virtualVRamAddress;
 		}
+		break;
+
+	case NameTableMirroring::OneScreenUpper:
+		// A A
+		// A A
+		physicalVRamAddress = virtualVRamAddress % (NameTableMemory::kSize / 2);
+		assert(false && "NameTableMirroring::OneScreenUpper");
+		break;
+
+	case NameTableMirroring::OneScreenLower:
+		// B B
+		// B B
+		physicalVRamAddress = (virtualVRamAddress % (NameTableMemory::kSize / 2)) + (NameTableMemory::kSize / 2);
+		assert(false && "NameTableMirroring::OneScreenLower");
+		break;
+
+	default:
+		assert(false);
+		break;
 	}
 
 	return physicalVRamAddress;
@@ -926,9 +945,7 @@ void Ppu::RenderPixel(uint32 x, uint32 y)
 		//@NOTE: lowBits is never 0, so we don't have to worry about mapping every 4th byte to 0 (bg color) here.
 		// That case is handled specially in the multiplexer code.
 		const uint8 paletteIndex = m_palette.Read( MapPpuToPalette(paletteBaseAddress + paletteOffset) );
-		assert(paletteIndex < kNumPaletteColors);
-
-		color = g_paletteColors[paletteIndex];
+		color = g_paletteColors[paletteIndex & (kNumPaletteColors-1)]; // Mask in only required bits, some roms write values > 64
 	};
 
 	const bool bgRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground);

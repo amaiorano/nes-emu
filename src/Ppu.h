@@ -13,7 +13,6 @@ class Ppu
 public:
 	Ppu();
 	void Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes);
-	void SetNameTableVerticalMirroring(bool enabled) { m_nameTableVerticalMirroring = enabled; }
 
 	void Reset();
 	void Execute(uint32 ppuCycles, bool& finishedRender);
@@ -43,13 +42,9 @@ private:
 	void PresentFrame();
 
 	PpuMemoryBus* m_ppuMemoryBus;
-	Nes* m_nes; //@TODO: Get rid of this dependency
+	Nes* m_nes;
 	std::shared_ptr<Renderer> m_rendererHolder;
 	Renderer* m_renderer;
-
-	// Hardware wise, setting this to true is like connecting PPU A10 to CIRAM A10, else PPU A11 to CIRAM A10.
-	// This is done on cartridges by shorting the "V" or "H" solder pads.
-	bool m_nameTableVerticalMirroring;
 
 	// Memory used to store name/attribute tables (aka CIRAM)
 	typedef Memory<FixedSizeStorage<KB(2)>> NameTableMemory;
