@@ -21,7 +21,7 @@ public:
 private:
 	uint8& AccessPrgMem(uint16 cpuAddress);
 	uint8& AccessChrMem(uint16 ppuAddress);
-	uint16 Cartridge::MapCpuToSram(uint16 cpuAddress);
+	uint8& AccessSavMem(uint16 cpuAddress);
 	
 	NameTableMirroring m_cartNameTableMirroring;
 	std::shared_ptr<Mapper> m_mapperHolder;
@@ -30,12 +30,13 @@ private:
 	// Set arbitrarily large max number of banks
 	static const size_t kMaxPrgBanks = 128;
 	static const size_t kMaxChrBanks = 128;
+	static const size_t kMaxSavBanks = 4;
 
 	typedef Memory<FixedSizeStorage<kPrgBankSize>> PrgBankMemory;
 	typedef Memory<FixedSizeStorage<kChrBankSize>> ChrBankMemory;
+	typedef Memory<FixedSizeStorage<KB(8)>> SavBankMemory;
 
 	std::array<PrgBankMemory, kMaxPrgBanks> m_prgBanks;
-	std::array<ChrBankMemory, kMaxChrBanks> m_chrBanks;	
-
-	Memory<FixedSizeStorage<KB(8)>> m_sram;
+	std::array<ChrBankMemory, kMaxChrBanks> m_chrBanks;
+	std::array<SavBankMemory, kMaxSavBanks> m_savBanks;
 };

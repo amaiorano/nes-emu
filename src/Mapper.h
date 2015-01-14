@@ -6,25 +6,30 @@
 
 const size_t kPrgBankCount = 8;
 const size_t kPrgBankSize = KB(4);
+
 const size_t kChrBankCount = 8;
 const size_t kChrBankSize = KB(1);
 
+const size_t kSavBankCount = 1;
+const size_t kSavBankSize = KB(8);
+
 // Mapper is used to map cartridge (physical) memory banks to CPU/PPU (virtual) memory banks.
-// A bank is a chunk of memory of fixed size, 4K for CPU and 1K for PPU. In the virtual address
-// space of the CPU/PPU, the number of banks are limited to 8 each, but there may be more physical
-// banks on the cartridge; thus the mapper's job is to detect when it needs to remap (switch) certain
-// banks by snooping for specific writes on the CPU/PPU memory bus.
+// A bank is a chunk of memory of fixed size (e.g. 4K for CPU). In the virtual address space of 
+// the CPU/PPU, the number of banks are limited, but there may be more physical banks on the cartridge;
+// thus the mapper's job is to detect when it needs to remap (switch) certain banks by snooping for
+// specific writes on the CPU/PPU memory bus.
 
 class Mapper
 {
 public:
 	// Public interface mostly for Cartridge
 
-	void Initialize(size_t numPrgBanks, size_t numChrBanks)
+	void Initialize(size_t numPrgBanks, size_t numChrBanks, size_t numSavBanks)
 	{
 		m_nametableMirroring = NameTableMirroring::Undefined;
 		m_numPrgBanks = numPrgBanks;
 		m_numChrBanks = numChrBanks;
+		m_numSavBanks = numSavBanks;
 		m_canWritePrgMemory = false;
 		m_canWriteChrMemory = false;
 
@@ -33,6 +38,9 @@ public:
 			m_numChrBanks = 8; // 8K of CHR-RAM
 			m_canWriteChrMemory = true;
 		}
+
+		// Default init sram banks to most common mapping
+		SetSavBankIndex8k(0, 0);
 
 		PostInitialize();
 	}
@@ -48,7 +56,8 @@ public:
 
 	size_t GetMappedPrgBankIndex(size_t cpuBankIndex) { return m_prgBankIndices[cpuBankIndex]; }
 	size_t GetMappedChrBankIndex(size_t ppuBankIndex) { return m_chrBankIndices[ppuBankIndex]; }
-
+	size_t GetMappedSavBankIndex(size_t cpuBankIndex) { return m_savBankIndices[cpuBankIndex]; }
+	
 protected:
 	// Protected interface for derived Mapper implementations
 
@@ -63,6 +72,8 @@ protected:
 	size_t NumChrBanks4k() const { return m_numChrBanks / 4; }
 	size_t NumChrBanks8k() const { return m_numChrBanks / 8; }
 
+	size_t NumSavBanks8k() const { return m_numSavBanks; }
+
 	void SetPrgBankIndex4k(size_t cpuBankIndex, size_t cartBankIndex);
 	void SetPrgBankIndex8k(size_t cpuBankIndex, size_t cartBankIndex);
 	void SetPrgBankIndex16k(size_t cpuBankIndex, size_t cartBankIndex);
@@ -72,6 +83,8 @@ protected:
 	void SetChrBankIndex4k(size_t ppuBankIndex, size_t cartBankIndex);
 	void SetChrBankIndex8k(size_t ppuBankIndex, size_t cartBankIndex);
 
+	void SetSavBankIndex8k(size_t cpuBankIndex, size_t cartBankIndex);
+
 	void SetCanWritePrgMemory(bool enabled) { m_canWritePrgMemory = enabled; }
 	void SetCanWriteChrMemory(bool enabled) { m_canWriteChrMemory = enabled; }
 
@@ -79,8 +92,10 @@ private:
 	NameTableMirroring m_nametableMirroring;
 	size_t m_numPrgBanks;
 	size_t m_numChrBanks;
+	size_t m_numSavBanks;
 	std::array<size_t, kPrgBankCount> m_prgBankIndices;
 	std::array<size_t, kChrBankCount> m_chrBankIndices;
+	std::array<size_t, kSavBankCount> m_savBankIndices;
 	bool m_canWritePrgMemory;
 	bool m_canWriteChrMemory;
 };
@@ -97,6 +112,11 @@ FORCEINLINE void Mapper::SetPrgBankIndex8k(size_t cpuBankIndex, size_t cartBankI
 	cartBankIndex *= 2;
 	m_prgBankIndices[cpuBankIndex] = cartBankIndex;
 	m_prgBankIndices[cpuBankIndex + 1] = cartBankIndex + 1;
+}
+
+FORCEINLINE void Mapper::SetSavBankIndex8k(size_t cpuBankIndex, size_t cartBankIndex)
+{
+	m_savBankIndices[cpuBankIndex] = cartBankIndex;
 }
 
 FORCEINLINE void Mapper::SetPrgBankIndex16k(size_t cpuBankIndex, size_t cartBankIndex)

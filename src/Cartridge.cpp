@@ -7,6 +7,20 @@
 #include "Mapper1.h"
 #include "Mapper2.h"
 
+namespace
+{
+	FORCEINLINE size_t GetBankIndex(uint16 address, uint16 baseAddress, size_t bankSize)
+	{
+		const size_t firstBankIndex = baseAddress / bankSize;
+		return (address / bankSize) - firstBankIndex;
+	}
+
+	FORCEINLINE uint16 GetBankOffset(uint16 address, size_t bankSize)
+	{
+		return address & (bankSize - 1);
+	}
+}
+
 void Cartridge::Initialize()
 {
 }
@@ -27,6 +41,11 @@ RomHeader Cartridge::LoadRom(const char* file)
 
 	if ( romHeader.IsPlayChoice10() || romHeader.IsVSUnisystem() )
 		throw std::exception("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
+
+	// Zero out memory banks to ease debugging (not required)
+	std::for_each(begin(m_prgBanks), end(m_prgBanks), [] (PrgBankMemory& m) { m.Initialize(); });
+	std::for_each(begin(m_chrBanks), end(m_chrBanks), [] (ChrBankMemory& m) { m.Initialize(); });
+	std::for_each(begin(m_savBanks), end(m_savBanks), [] (SavBankMemory& m) { m.Initialize(); });
 
 	// PRG-ROM
 	const size_t prgRomSize = romHeader.GetPrgRomSizeBytes();
@@ -49,13 +68,8 @@ RomHeader Cartridge::LoadRom(const char* file)
 			fs.Read(m_chrBanks[i].RawPtr(), kChrBankSize);
 		}
 	}
-	else // No CHR-ROM, zero out CHR-RAM
-	{
-		for (auto& bank : m_chrBanks)
-		{
-			bank.Initialize();
-		}
-	}
+
+	size_t numSavBanks = 1; // @TODO: Some boards switch sram banks (SOROM)
 
 	switch (romHeader.GetMapperNumber())
 	{
@@ -66,8 +80,8 @@ RomHeader Cartridge::LoadRom(const char* file)
 		throw std::exception(FormattedString<>("Unsupported mapper: %d", romHeader.GetMapperNumber()));
 	}
 	m_mapper = m_mapperHolder.get();
-	
-	m_mapper->Initialize(numPrgBanks, numChrBanks);
+
+	m_mapper->Initialize(numPrgBanks, numChrBanks, numSavBanks);
 
 	m_cartNameTableMirroring = romHeader.GetNameTableMirroring();
 
@@ -93,7 +107,7 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 	}
 	else if (cpuAddress >= CpuMemory::kSaveRamBase)
 	{
-		return m_sram.Read(MapCpuToSram(cpuAddress));
+		return AccessSavMem(cpuAddress);
 	}
 	
 #if CONFIG_DEBUG
@@ -117,7 +131,7 @@ void Cartridge::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 	}
 	else if (cpuAddress >= CpuMemory::kSaveRamBase)
 	{
-		m_sram.Write(MapCpuToSram(cpuAddress), value);
+		AccessSavMem(cpuAddress) = value;
 	}
 	else
 	{
@@ -143,22 +157,24 @@ void Cartridge::HandlePpuWrite(uint16 ppuAddress, uint8 value)
 
 uint8& Cartridge::AccessPrgMem(uint16 cpuAddress)
 {
-	const size_t cpuBankIndex = (cpuAddress / kPrgBankSize) - 8; // PRG-ROM/RAM starts at $8000, so subtract $8000/4K = 8 to get zero-based index
-	const uint16 offset = cpuAddress & (kPrgBankSize - 1);
-	const size_t mappedBankIndex = m_mapper->GetMappedPrgBankIndex(cpuBankIndex);
+	const size_t bankIndex = GetBankIndex(cpuAddress, CpuMemory::kPrgRomBase, kPrgBankSize);
+	const auto offset = GetBankOffset(cpuAddress, kPrgBankSize);
+	const size_t mappedBankIndex = m_mapper->GetMappedPrgBankIndex(bankIndex);
 	return m_prgBanks[mappedBankIndex].RawRef(offset);
 }
 
 uint8& Cartridge::AccessChrMem(uint16 ppuAddress)
 {
-	const size_t ppuBankIndex = (ppuAddress / kChrBankSize);
-	const uint16 offset = ppuAddress & (kChrBankSize - 1);
-	const size_t mappedBankIndex = m_mapper->GetMappedChrBankIndex(ppuBankIndex);
+	const size_t bankIndex = GetBankIndex(ppuAddress, PpuMemory::kChrRomBase, kChrBankSize);
+	const uint16 offset = GetBankOffset(ppuAddress, kChrBankSize);
+	const size_t mappedBankIndex = m_mapper->GetMappedChrBankIndex(bankIndex);
 	return m_chrBanks[mappedBankIndex].RawRef(offset);
 }
 
-uint16 Cartridge::MapCpuToSram(uint16 cpuAddress)
+uint8& Cartridge::AccessSavMem(uint16 cpuAddress)
 {
-	assert(cpuAddress >= CpuMemory::kSaveRamBase && cpuAddress < CpuMemory::kSaveRamEnd);
-	return cpuAddress - CpuMemory::kSaveRamBase;
+	const size_t bankIndex = GetBankIndex(cpuAddress, CpuMemory::kSaveRamBase, kSavBankSize);
+	const uint16 offset = GetBankOffset(cpuAddress, kSavBankSize);
+	const size_t mappedBankIndex = m_mapper->GetMappedSavBankIndex(bankIndex);
+	return m_savBanks[mappedBankIndex].RawRef(offset);
 }
