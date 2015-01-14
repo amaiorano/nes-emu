@@ -286,6 +286,8 @@ void Ppu::Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes)
 	m_ppuControlReg1 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg1));
 	m_ppuControlReg2 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg2));
 	m_ppuStatusReg = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuStatusReg));
+
+	m_numSpritesToRender = 0;
 }
 
 void Ppu::Reset()
@@ -653,14 +655,13 @@ uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 		// A A
 		// A A
 		physicalVRamAddress = virtualVRamAddress % (NameTableMemory::kSize / 2);
-		assert(false && "NameTableMirroring::OneScreenUpper");
+		assert(false && "TODO-VALIDATE: NameTableMirroring::OneScreenUpper");
 		break;
 
 	case NameTableMirroring::OneScreenLower:
 		// B B
 		// B B
 		physicalVRamAddress = (virtualVRamAddress % (NameTableMemory::kSize / 2)) + (NameTableMemory::kSize / 2);
-		assert(false && "NameTableMirroring::OneScreenLower");
 		break;
 
 	default:
