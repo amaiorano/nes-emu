@@ -13,6 +13,11 @@
 
 #define FCEUX_OUTPUT 0
 #define TRACE_TO_FILE 0
+#define ENABLE_POST_TRACE 0
+
+#if FCEUX_OUTPUT
+#define ENABLE_POST_TRACE 0
+#endif
 
 namespace
 {
@@ -82,6 +87,7 @@ public:
 			PrintRegisters();
 		#if !FCEUX_OUTPUT
 			PrintOperandValue();
+			PrintStack();
 		#endif
 			TRACE("\n");
 		}
@@ -93,7 +99,7 @@ public:
 
 	void PostCpuInstruction()
 	{
-	#if !FCEUX_OUTPUT
+	#if ENABLE_POST_TRACE
 		if (g_trace)
 		{
 			TRACE("  Post: ");
@@ -272,6 +278,17 @@ private:
 	{
 		Cpu& cpu = m_nes->m_cpu;
 		TRACE(" (" ADDR_16 ")=" ADDR_8, cpu.m_operandAddress, cpu.Read8(cpu.m_operandAddress));
+	}
+
+	void PrintStack()
+	{
+		Cpu& cpu = m_nes->m_cpu;
+		TRACE(" Stack:[ ");
+		for (int sp = 0xFF; sp > cpu.SP; --sp)
+		{
+			TRACE("%02X ", cpu.Read8(CpuMemory::kStackBase + (uint8)sp));
+		}
+		TRACE("]");
 	}
 
 	void PrintCycleCount()
