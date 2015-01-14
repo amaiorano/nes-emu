@@ -15,11 +15,13 @@ namespace
 		printf(text);
 	}
 
+	inline size_t BytesToKB(size_t bytes) { return bytes / 1024; }
+
 	void PrintRomInfo(const char* inputFile, const RomHeader& header)
 	{
 		printf("; Input file: %s\n", inputFile);
-		printf("; PRG ROM size: %d bytes\n", header.GetPrgRomSizeBytes());
-		printf("; CHR ROM size: %d bytes\n", header.GetChrRomSizeBytes());
+		printf("; PRG ROM size: %d kb\n", BytesToKB(header.GetPrgRomSizeBytes()));
+		printf("; CHR ROM size: %d kb\n", BytesToKB(header.GetChrRomSizeBytes()));
 		printf("; Mapper number: %d\n", header.GetMapperNumber());
 		printf("; Has SRAM: %s\n", header.HasSRAM()? "yes" : "no");
 		printf("\n");
