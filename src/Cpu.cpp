@@ -408,7 +408,10 @@ void Cpu::ExecuteInstruction()
 
 	case BRK: // Force break (Forced Interrupt PC + 2 toS P toS) (used with RTI)
 		{
-			uint16 returnAddr = PC + m_opCodeEntry->numBytes;
+			// Note that BRK is weird in that the instruction is 1 byte, but the return address
+			// we store is 2 bytes after the instruction, so the byte after BRK will be skipped
+			// upon return (RTI). Usually an NOP is inserted after a BRK for this reason.
+			uint16 returnAddr = PC + 2;
 			Push16(returnAddr);
 			PushProcessorStatus(true);
 			P.Set(IrqDisabled); // Disable hardware IRQs
@@ -803,6 +806,14 @@ void Cpu::Push8(uint8 value)
 {
 	Write8(CpuMemory::kStackBase + SP, value);
 	--SP;
+	
+#if CONFIG_DEBUG
+	if (SP == 0xFF)
+	{
+		Debugger::Shutdown();
+		assert(!"Stack overflow!");
+	}
+#endif
 }
 
 void Cpu::Push16(uint16 value)
@@ -814,6 +825,15 @@ void Cpu::Push16(uint16 value)
 uint8 Cpu::Pop8()
 {
 	++SP;
+
+#if CONFIG_DEBUG
+	if (SP == 0)
+	{
+		Debugger::Shutdown();
+		assert(!"Stack underflow!");
+	}
+#endif
+
 	return Read8(CpuMemory::kStackBase + SP);
 }
 
