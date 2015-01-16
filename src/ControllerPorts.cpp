@@ -1,9 +1,8 @@
 #include "ControllerPorts.h"
 #include "MemoryMap.h"
 #include "Debugger.h"
+#include "Input.h"
 #include <string>
-
-#include "SDL_keyboard.h"
 
 namespace ControllerButtons
 {
@@ -52,20 +51,14 @@ namespace
 		};
 		static_assert(ARRAYSIZE(buttonMapping) == ControllerButtons::Size, "Mismatched size");
 
-		if (SDL_GetKeyboardFocus() == nullptr) // Ignore input if window is not focused
-			return false;
-
-		const Uint8* stateByScanCode = SDL_GetKeyboardState(nullptr);
-
 		// For second controller, hold alternate key
-		const bool alt = stateByScanCode[SDL_SCANCODE_LALT] || stateByScanCode[SDL_SCANCODE_LCTRL];
-		if ((controllerIndex == 1) != alt)
+		if ((controllerIndex == 1) != Input::AltDown())
 			return false;
 
-		const bool isDown = stateByScanCode[ buttonMapping[button] ] != 0;
+		const bool isDown = Input::KeyDown(buttonMapping[button]);
 
 		//if (isDown)
-		//	printf("%d: KeyDown: %s -> %s\n", controllerIndex, SDL_GetScancodeName(buttonMapping[button]), ControllerButtons::Names[button]);
+		//	printf("%d: KeyDown: %s -> %s\n", controllerIndex, Input::GetScancodeName(buttonMapping[button]), ControllerButtons::Names[button]);
 
 		return isDown;
 	}

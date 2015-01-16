@@ -7,13 +7,15 @@ namespace Input
 	// Call once per frame
 	void Update();
 
-	bool KeyDown(Uint8 scanCode);
-	bool KeyUp(Uint8 scanCode);
+	bool KeyDown(SDL_Scancode scanCode);
+	bool KeyUp(SDL_Scancode scanCode);
 
-	bool KeyPressed(Uint8 scanCode);
-	bool KeyReleased(Uint8 scanCode);
+	bool KeyPressed(SDL_Scancode scanCode);
+	bool KeyReleased(SDL_Scancode scanCode);
 
 	bool AltDown();
 	bool CtrlDown();
 	bool ShiftDown();
+
+	const char* GetScancodeName(SDL_Scancode scanCode);
 }

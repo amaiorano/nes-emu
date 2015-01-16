@@ -16,7 +16,7 @@ namespace Input
 		memcpy(g_currState, SDL_GetKeyboardState(nullptr), sizeof(g_currState));
 	}
 
-	bool KeyDown(Uint8 scanCode)
+	bool KeyDown(SDL_Scancode scanCode)
 	{
 		if (SDL_GetKeyboardFocus() == nullptr)
 			return false;
@@ -24,7 +24,7 @@ namespace Input
 		return g_currState[scanCode] != 0;
 	}
 
-	bool KeyUp(Uint8 scanCode)
+	bool KeyUp(SDL_Scancode scanCode)
 	{
 		if (SDL_GetKeyboardFocus() == nullptr)
 			return false;
@@ -32,7 +32,7 @@ namespace Input
 		return g_currState[scanCode] == 0;
 	}
 
-	bool KeyPressed(Uint8 scanCode)
+	bool KeyPressed(SDL_Scancode scanCode)
 	{
 		if (SDL_GetKeyboardFocus() == nullptr)
 			return false;
@@ -40,7 +40,7 @@ namespace Input
 		return g_lastState[scanCode] == 0 && g_currState[scanCode] != 0;
 	}
 
-	bool KeyReleased(Uint8 scanCode)
+	bool KeyReleased(SDL_Scancode scanCode)
 	{
 		if (SDL_GetKeyboardFocus() == nullptr)
 			return false;
@@ -61,5 +61,10 @@ namespace Input
 	bool ShiftDown()
 	{
 		return KeyDown(SDL_SCANCODE_LSHIFT) || KeyDown(SDL_SCANCODE_RSHIFT);
+	}
+
+	const char* GetScancodeName(SDL_Scancode scanCode)
+	{
+		return SDL_GetScancodeName(scanCode);
 	}
 }
