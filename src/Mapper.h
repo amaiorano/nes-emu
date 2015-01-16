@@ -32,6 +32,7 @@ public:
 		m_numSavBanks = numSavBanks;
 		m_canWritePrgMemory = false;
 		m_canWriteChrMemory = false;
+		m_canReadWriteSavMemory = true;
 
 		if (m_numChrBanks == 0)
 		{
@@ -53,16 +54,12 @@ public:
 
 	bool CanWritePrgMemory() const { return m_canWritePrgMemory; }
 	bool CanWriteChrMemory() const { return m_canWriteChrMemory; }
+	bool CanReadWriteSavMemory() const { return m_canReadWriteSavMemory; }
 
 	size_t GetMappedPrgBankIndex(size_t cpuBankIndex) { return m_prgBankIndices[cpuBankIndex]; }
 	size_t GetMappedChrBankIndex(size_t ppuBankIndex) { return m_chrBankIndices[ppuBankIndex]; }
 	size_t GetMappedSavBankIndex(size_t cpuBankIndex) { return m_savBankIndices[cpuBankIndex]; }
-	
-protected:
-	// Protected interface for derived Mapper implementations
 
-	void SetNameTableMirroring(NameTableMirroring value) { m_nametableMirroring = value; }
-		
 	size_t NumPrgBanks4k() const { return m_numPrgBanks; }
 	size_t NumPrgBanks8k() const { return m_numPrgBanks / 2; }
 	size_t NumPrgBanks16k() const { return m_numPrgBanks / 4; }
@@ -73,6 +70,11 @@ protected:
 	size_t NumChrBanks8k() const { return m_numChrBanks / 8; }
 
 	size_t NumSavBanks8k() const { return m_numSavBanks; }
+	
+protected:
+	// Protected interface for derived Mapper implementations
+
+	void SetNameTableMirroring(NameTableMirroring value) { m_nametableMirroring = value; }
 
 	void SetPrgBankIndex4k(size_t cpuBankIndex, size_t cartBankIndex);
 	void SetPrgBankIndex8k(size_t cpuBankIndex, size_t cartBankIndex);
@@ -87,6 +89,7 @@ protected:
 
 	void SetCanWritePrgMemory(bool enabled) { m_canWritePrgMemory = enabled; }
 	void SetCanWriteChrMemory(bool enabled) { m_canWriteChrMemory = enabled; }
+	void SetCanReadWriteSavMemory(bool enabled) { m_canReadWriteSavMemory = enabled; }
 
 private:
 	NameTableMirroring m_nametableMirroring;
@@ -98,6 +101,7 @@ private:
 	std::array<size_t, kSavBankCount> m_savBankIndices;
 	bool m_canWritePrgMemory;
 	bool m_canWriteChrMemory;
+	bool m_canReadWriteSavMemory;
 };
 
 

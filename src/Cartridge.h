@@ -4,6 +4,7 @@
 #include "Rom.h"
 #include "Mapper.h"
 #include <memory>
+#include <string>
 
 class Cartridge
 {
@@ -18,11 +19,19 @@ public:
 	uint8 HandlePpuRead(uint16 ppuAddress);
 	void HandlePpuWrite(uint16 ppuAddress, uint8 value);
 
+	void WriteSaveRamFile();
+	
 private:
+	void LoadSaveRamFile();
+
 	uint8& AccessPrgMem(uint16 cpuAddress);
 	uint8& AccessChrMem(uint16 ppuAddress);
 	uint8& AccessSavMem(uint16 cpuAddress);
 	
+	std::string m_romDirectory;
+	std::string m_romFileNameNoExt;
+	std::string m_saveRamPath;
+
 	NameTableMirroring m_cartNameTableMirroring;
 	std::shared_ptr<Mapper> m_mapperHolder;
 	Mapper* m_mapper;

@@ -38,6 +38,11 @@ public:
 		}
 	}
 
+	void SetPos(size_t pos)
+	{
+		fseek(m_file, pos, 0);
+	}
+
 	template <typename T>
 	size_t Read(T* destBuffer, int count = 1)
 	{
@@ -45,7 +50,7 @@ public:
 	}
 
 	template <typename T>
-	size_t Write(T value)
+	size_t WriteValue(T value)
 	{
 		return fwrite(&value, sizeof(T), 1, m_file);
 	}

@@ -95,7 +95,8 @@ void Mapper1::UpdatePrgBanks()
 		}
 	}
 
-	//@TODO: handle bit 4 -> PRG RAM chip enable (0: enabled; 1: disabled; ignored on MMC1A)
+	const bool bSavRamChipEnabled = m_prgReg.ReadPos(4) == 0;
+	SetCanReadWriteSavMemory(bSavRamChipEnabled);
 }
 
 void Mapper1::UpdateChrBanks()

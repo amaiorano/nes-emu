@@ -19,6 +19,8 @@
     <ClInclude Include="src\CpuInternalRam.h" />
     <ClInclude Include="src\Debugger.h" />
     <ClInclude Include="src\FrameTimer.h" />
+    <ClInclude Include="src\Input.h" />
+    <ClInclude Include="src\IO.h" />
     <ClInclude Include="src\Mapper.h" />
     <ClInclude Include="src\Mapper0.h" />
     <ClInclude Include="src\Mapper1.h" />
@@ -40,6 +42,7 @@
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\Debugger.cpp" />
     <ClCompile Include="src\FileStream.cpp" />
+    <ClCompile Include="src\Input.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Mapper1.cpp" />
     <ClCompile Include="src\MemoryBus.cpp" />

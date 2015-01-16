@@ -25,6 +25,8 @@ public:
 private:
 	friend class DebuggerImpl;
 
+	void ExecuteCpuAndPpuFrame();
+
 	Cpu m_cpu;
 	Ppu m_ppu;
 	Cartridge m_cartridge;

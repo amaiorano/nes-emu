@@ -5,6 +5,7 @@
 #include "System.h"
 #include "FrameTimer.h"
 #include "Renderer.h"
+#include "Input.h"
 
 void Nes::Initialize()
 {
@@ -35,6 +36,32 @@ void Nes::Run()
 	const float32 minFrameTime = 1.0f/60.0f;
 	FrameTimer frameTimer;
 
+	bool quit = false;
+
+	while (!quit)
+	{
+		Input::Update();
+
+		ExecuteCpuAndPpuFrame();
+
+		// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
+		frameTimer.Update(minFrameTime);
+		Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", frameTimer.GetFps()).Value() );
+
+		if (Input::KeyPressed(SDL_SCANCODE_F9))
+		{
+			m_cartridge.WriteSaveRamFile();
+		}
+
+		if (Input::AltDown() && Input::KeyPressed(SDL_SCANCODE_F4))
+		{
+			quit = true;
+		}
+	}
+}
+
+void Nes::ExecuteCpuAndPpuFrame()
+{
 	for (;;)
 	{
 		// Update CPU, get number of cycles elapsed
@@ -47,10 +74,6 @@ void Nes::Run()
 		m_ppu.Execute(ppuCycles, finishedRender);
 
 		if (finishedRender)
-		{
-			// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
-			frameTimer.Update(minFrameTime);
-			Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", frameTimer.GetFps()).Value() );
-		}
+			return;
 	}
 }
