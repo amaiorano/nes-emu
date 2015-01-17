@@ -62,18 +62,16 @@ void Nes::Run()
 
 void Nes::ExecuteCpuAndPpuFrame()
 {
-	for (;;)
+	bool finishedRender = false;
+
+	while (!finishedRender)
 	{
 		// Update CPU, get number of cycles elapsed
 		uint32 cpuCycles;
 		m_cpu.Execute(cpuCycles);
 
 		// Update PPU with that many cycles
-		bool finishedRender = false;
 		const uint32 ppuCycles = cpuCycles * 3;
 		m_ppu.Execute(ppuCycles, finishedRender);
-
-		if (finishedRender)
-			return;
 	}
 }
