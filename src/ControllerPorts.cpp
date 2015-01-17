@@ -4,36 +4,6 @@
 #include "Input.h"
 #include <string>
 
-namespace ControllerButtons
-{
-	enum Type
-	{
-		Left,
-		Right,
-		Up,
-		Down,
-		A,
-		B,
-		Select,
-		Start,
-
-		Size
-	};
-
-	const char* Names[] =
-	{
-		"Left",
-		"Right",
-		"Up",
-		"Down",
-		"A",
-		"B",
-		"Select",
-		"Start"
-	};
-	static_assert(ARRAYSIZE(Names) == Size, "Mismatched size");
-}
-
 namespace
 {
 	bool ReadInputDown(uint16 controllerIndex, ControllerButtons::Type button)
@@ -74,15 +44,18 @@ void ControllerPorts::Reset()
 	m_strobe = true;
 	m_ports[0] = m_ports[1] = 0;
 	m_readIndex[0] = m_readIndex[1] = 0;
+	memset(m_lastIsButtonDown, 0, sizeof(m_lastIsButtonDown));
 }
 
 uint8 ControllerPorts::HandleCpuRead(uint16 cpuAddress)
 {
 	const uint16 controllerIndex = MapCpuToPorts(cpuAddress);
+
 	uint8& port = m_ports[controllerIndex];
 	uint8& readIndex = m_readIndex[controllerIndex];
+	auto& lastIsButtonDown = m_lastIsButtonDown[controllerIndex];
 
-	if (Debugger::IsExecuting())
+	if (Debugger::IsExecuting()) // For debugger, return last port value
 	{
 		return port;
 	}
@@ -90,12 +63,24 @@ uint8 ControllerPorts::HandleCpuRead(uint16 cpuAddress)
 	using namespace ControllerButtons;
 	static const ControllerButtons::Type reportOrder[] = { A, B, Select, Start, Up, Down, Left, Right };
 
+	const ControllerButtons::Type button = reportOrder[readIndex];
+
 	bool isButtonDown = true; // Return 1 after returning state of all buttons
+	
 	if (readIndex < ARRAYSIZE(reportOrder))
 	{
-		const ControllerButtons::Type button = reportOrder[readIndex];
 		isButtonDown = ReadInputDown(controllerIndex, button);
 	}
+
+	// NES d-pad doesn't allow both left and right, nor up and down to be pressed at the same
+	// time, and many games assume this, leading to wonky behaviour if both are reported as
+	// down (e.g. Zelda 2). Detect this case and make sure they are exclusively set.
+	if ( (button == Down && lastIsButtonDown[Up]) || (button == Right && lastIsButtonDown[Left]) )
+	{
+		isButtonDown = false;
+	}
+	
+	lastIsButtonDown[button] = isButtonDown;
 
 	// From http://wiki.nesdev.com/w/index.php/Standard_controller
 	//  In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus.

@@ -2,6 +2,36 @@
 
 #include "Base.h"
 
+namespace ControllerButtons
+{
+	enum Type
+	{
+		Left,
+		Right,
+		Up,
+		Down,
+		A,
+		B,
+		Select,
+		Start,
+
+		Size
+	};
+
+	static const char* Names[] =
+	{
+		"Left",
+		"Right",
+		"Up",
+		"Down",
+		"A",
+		"B",
+		"Select",
+		"Start"
+	};
+	static_assert(ARRAYSIZE(Names) == Size, "Mismatched size");
+}
+
 class ControllerPorts
 {
 public:
@@ -18,4 +48,5 @@ private:
 	const static size_t kNumControllers = 2;
 	uint8 m_ports[kNumControllers]; // For read only
 	uint8 m_readIndex[kNumControllers];
+	bool m_lastIsButtonDown[kNumControllers][ControllerButtons::Size];
 };
