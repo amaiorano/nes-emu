@@ -7,6 +7,7 @@
 #include "Mapper0.h"
 #include "Mapper1.h"
 #include "Mapper2.h"
+#include "Mapper4.h"
 
 namespace
 {
@@ -81,6 +82,7 @@ RomHeader Cartridge::LoadRom(const char* file)
 	case 0: m_mapperHolder.reset(new Mapper0()); break;
 	case 1: m_mapperHolder.reset(new Mapper1()); break;
 	case 2: m_mapperHolder.reset(new Mapper2()); break;
+	case 4: m_mapperHolder.reset(new Mapper4()); break;
 	default:
 		throw std::exception(FormattedString<>("Unsupported mapper: %d", romHeader.GetMapperNumber()));
 	}
@@ -114,10 +116,8 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 	}
 	else if (cpuAddress >= CpuMemory::kSaveRamBase)
 	{
-		if (m_mapper->CanReadWriteSavMemory())
-			return AccessSavMem(cpuAddress);
-		else
-			return 0; //@TODO: Should return the last value on the CPU?
+		// We don't bother with SRAM chip disable
+		return AccessSavMem(cpuAddress);
 	}
 	
 #if CONFIG_DEBUG
@@ -141,7 +141,7 @@ void Cartridge::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 	}
 	else if (cpuAddress >= CpuMemory::kSaveRamBase)
 	{
-		if (m_mapper->CanReadWriteSavMemory())
+		if (m_mapper->CanWriteSavMemory())
 		{
 			AccessSavMem(cpuAddress) = value;
 		}

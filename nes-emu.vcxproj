@@ -25,6 +25,7 @@
     <ClInclude Include="src\Mapper0.h" />
     <ClInclude Include="src\Mapper1.h" />
     <ClInclude Include="src\Mapper2.h" />
+    <ClInclude Include="src\Mapper4.h" />
     <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />
     <ClInclude Include="src\MemoryBus.h" />
@@ -45,6 +46,7 @@
     <ClCompile Include="src\Input.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Mapper1.cpp" />
+    <ClCompile Include="src\Mapper4.cpp" />
     <ClCompile Include="src\MemoryBus.cpp" />
     <ClCompile Include="src\Nes.cpp" />
     <ClCompile Include="src\OpCodeTable.cpp" />
@@ -98,6 +100,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

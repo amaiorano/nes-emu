@@ -79,6 +79,9 @@
     <ClInclude Include="src\IO.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Mapper4.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
@@ -121,6 +124,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\Input.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Mapper4.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

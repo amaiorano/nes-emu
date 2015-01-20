@@ -38,7 +38,7 @@ private:
 
 	// Set arbitrarily large max number of banks
 	static const size_t kMaxPrgBanks = 128;
-	static const size_t kMaxChrBanks = 128;
+	static const size_t kMaxChrBanks = 256;
 	static const size_t kMaxSavBanks = 4;
 
 	typedef Memory<FixedSizeStorage<kPrgBankSize>> PrgBankMemory;

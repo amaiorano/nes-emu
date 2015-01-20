@@ -96,7 +96,7 @@ void Mapper1::UpdatePrgBanks()
 	}
 
 	const bool bSavRamChipEnabled = m_prgReg.ReadPos(4) == 0;
-	SetCanReadWriteSavMemory(bSavRamChipEnabled);
+	SetCanWriteSavMemory(bSavRamChipEnabled); // Technically is chip enable/disable
 }
 
 void Mapper1::UpdateChrBanks()

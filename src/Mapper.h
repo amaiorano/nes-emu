@@ -32,7 +32,7 @@ public:
 		m_numSavBanks = numSavBanks;
 		m_canWritePrgMemory = false;
 		m_canWriteChrMemory = false;
-		m_canReadWriteSavMemory = true;
+		m_canWriteSavMemory = true;
 
 		if (m_numChrBanks == 0)
 		{
@@ -54,7 +54,7 @@ public:
 
 	bool CanWritePrgMemory() const { return m_canWritePrgMemory; }
 	bool CanWriteChrMemory() const { return m_canWriteChrMemory; }
-	bool CanReadWriteSavMemory() const { return m_canReadWriteSavMemory; }
+	bool CanWriteSavMemory() const { return m_canWriteSavMemory; }
 
 	size_t GetMappedPrgBankIndex(size_t cpuBankIndex) { return m_prgBankIndices[cpuBankIndex]; }
 	size_t GetMappedChrBankIndex(size_t ppuBankIndex) { return m_chrBankIndices[ppuBankIndex]; }
@@ -89,7 +89,7 @@ protected:
 
 	void SetCanWritePrgMemory(bool enabled) { m_canWritePrgMemory = enabled; }
 	void SetCanWriteChrMemory(bool enabled) { m_canWriteChrMemory = enabled; }
-	void SetCanReadWriteSavMemory(bool enabled) { m_canReadWriteSavMemory = enabled; }
+	void SetCanWriteSavMemory(bool enabled) { m_canWriteSavMemory = enabled; }
 
 private:
 	NameTableMirroring m_nametableMirroring;
@@ -101,7 +101,7 @@ private:
 	std::array<size_t, kSavBankCount> m_savBankIndices;
 	bool m_canWritePrgMemory;
 	bool m_canWriteChrMemory;
-	bool m_canReadWriteSavMemory;
+	bool m_canWriteSavMemory;
 };
 
 

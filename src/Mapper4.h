@@ -1,0 +1,23 @@
+#pragma once
+
+#include "Mapper.h"
+
+class Mapper4 : public Mapper
+{
+public:
+	virtual const char* MapperName() const
+	{
+		return "MMC3,MMC6";
+	}
+
+	virtual void PostInitialize();
+	virtual void OnCpuWrite(uint16 cpuAddress, uint8 value);
+
+private:
+	void UpdateFixedBanks();
+	void UpdateBank(uint8 value);
+
+	uint8 m_prgBankMode;
+	uint8 m_chrBankMode;
+	uint8 m_nextBankToUpdate;
+};
