@@ -5,7 +5,7 @@
 
 namespace
 {
-	const char* g_windowTitle = "nes-emu";
+	std::string g_windowTitle = "nes-emu";
 
 	class BackBuffer
 	{
@@ -98,7 +98,7 @@ void Renderer::Create()
 	const size_t windowWidth = static_cast<size_t>(kScreenWidth * windowScale);
 	const size_t windowHeight = static_cast<size_t>(kScreenHeight * windowScale);
 	
-	m_impl->m_window = SDL_CreateWindow(g_windowTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
+	m_impl->m_window = SDL_CreateWindow(g_windowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
 	if (!m_impl->m_window)
 		throw std::exception("SDL_CreateWindow failed");
 
@@ -136,7 +136,7 @@ void Renderer::Present()
 {
 	m_impl->m_backbuffer.Flip(m_impl->m_renderer);
 
-	SDL_SetWindowTitle(m_impl->m_window, g_windowTitle);
+	SDL_SetWindowTitle(m_impl->m_window, g_windowTitle.c_str());
 
 	// Need to consume all events for window to be responsive
 	SDL_Event e;
