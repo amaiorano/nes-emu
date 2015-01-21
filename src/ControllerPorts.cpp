@@ -36,7 +36,6 @@ namespace
 
 void ControllerPorts::Initialize()
 {
-	Reset();
 }
 
 void ControllerPorts::Reset()

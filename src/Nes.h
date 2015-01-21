@@ -6,27 +6,31 @@
 #include "Memory.h"
 #include "CpuInternalRam.h"
 #include "MemoryBus.h"
+#include "FrameTimer.h"
 
 class Nes
 {
 public:
 	void Initialize();
+	
 	RomHeader LoadRom(const char* file);
 	void Reset();
-	void Run();
+
+	void ExecuteFrame();
 
 	void SignalCpuNmi() { m_cpu.Nmi(); }
 	void SignalCpuIrq() { m_cpu.Irq(); }
 
-	void HACK_OnScanline() { m_cartridge.HACK_OnScanline(); }
-
 	NameTableMirroring GetNameTableMirroring() const { return m_cartridge.GetNameTableMirroring(); }
+	void WriteSaveRamFile() { m_cartridge.WriteSaveRamFile(); }
+	void HACK_OnScanline() { m_cartridge.HACK_OnScanline(); }
 
 private:
 	friend class DebuggerImpl;
 
 	void ExecuteCpuAndPpuFrame();
 
+	FrameTimer m_frameTimer;
 	Cpu m_cpu;
 	Ppu m_ppu;
 	Cartridge m_cartridge;

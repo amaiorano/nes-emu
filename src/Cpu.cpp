@@ -67,9 +67,6 @@ void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus)
 {
 	m_cpuMemoryBus = &cpuMemoryBus;
 	m_controllerPorts.Initialize();
-
-	m_cycles = 0;
-	m_totalCycles = 0;	 
 }
 
 void Cpu::Reset()
@@ -85,6 +82,8 @@ void Cpu::Reset()
 	// Entry point is located at the Reset interrupt location
 	PC = Read16(CpuMemory::kResetVector);
 
+	m_cycles = 0;
+	m_totalCycles = 0;	 
 	m_pendingNmi = m_pendingIrq = false;
 
 	m_controllerPorts.Reset();

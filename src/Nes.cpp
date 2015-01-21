@@ -3,9 +3,7 @@
 #include "Rom.h"
 #include "Debugger.h"
 #include "System.h"
-#include "FrameTimer.h"
 #include "Renderer.h"
-#include "Input.h"
 
 void Nes::Initialize()
 {
@@ -27,37 +25,21 @@ RomHeader Nes::LoadRom(const char* file)
 
 void Nes::Reset()
 {
+	m_frameTimer.Reset();
 	m_cpu.Reset();
 	m_ppu.Reset();
+	//@TODO: Maybe reset cartridge (and mapper)?
 }
 
-void Nes::Run()
+void Nes::ExecuteFrame()
 {
 	const float32 minFrameTime = 1.0f/60.0f;
-	FrameTimer frameTimer;
 
-	bool quit = false;
+	ExecuteCpuAndPpuFrame();
 
-	while (!quit)
-	{
-		Input::Update();
-
-		ExecuteCpuAndPpuFrame();
-
-		// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
-		frameTimer.Update(minFrameTime);
-		Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", frameTimer.GetFps()).Value() );
-
-		if (Input::KeyPressed(SDL_SCANCODE_F9))
-		{
-			m_cartridge.WriteSaveRamFile();
-		}
-
-		if (Input::AltDown() && Input::KeyPressed(SDL_SCANCODE_F4))
-		{
-			quit = true;
-		}
-	}
+	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
+	m_frameTimer.Update(minFrameTime);
+	Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", m_frameTimer.GetFps()).Value() );
 }
 
 void Nes::ExecuteCpuAndPpuFrame()

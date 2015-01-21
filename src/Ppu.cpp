@@ -286,8 +286,6 @@ void Ppu::Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes)
 	m_ppuControlReg1 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg1));
 	m_ppuControlReg2 = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuControlReg2));
 	m_ppuStatusReg = m_ppuRegisters.RawPtrAs<Bitfield8*>(MapCpuToPpuRegister(CpuMemory::kPpuStatusReg));
-
-	m_numSpritesToRender = 0;
 }
 
 void Ppu::Reset()
@@ -304,6 +302,8 @@ void Ppu::Reset()
 	m_vramAddress = 0xDDDD;
 	m_tempVRamAddress = 0xDDDD;
 	m_vramBufferedValue = 0xDD;
+
+	m_numSpritesToRender = 0;
 
 	m_cycle = 0;
 	m_evenFrame = true;
