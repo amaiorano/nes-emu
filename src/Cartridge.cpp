@@ -27,6 +27,7 @@ namespace
 void Cartridge::Initialize(Nes& nes)
 {
 	m_nes = &nes;
+	m_mapper = nullptr;
 }
 
 RomHeader Cartridge::LoadRom(const char* file)
@@ -172,8 +173,10 @@ void Cartridge::HandlePpuWrite(uint16 ppuAddress, uint8 value)
 
 void Cartridge::WriteSaveRamFile()
 {
-	const size_t numSavBanks = m_mapper->NumSavBanks8k();
+	if (!IsRomLoaded())
+		return;
 
+	const size_t numSavBanks = m_mapper->NumSavBanks8k();
 	if (numSavBanks == 0)
 		return;
 

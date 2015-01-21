@@ -5,6 +5,12 @@
 #include "System.h"
 #include "Renderer.h"
 
+Nes::~Nes()
+{
+	// Save sram on exit
+	m_cartridge.WriteSaveRamFile();
+}
+
 void Nes::Initialize()
 {
 	Debugger::Initialize(*this);
@@ -19,6 +25,9 @@ void Nes::Initialize()
 
 RomHeader Nes::LoadRom(const char* file)
 {
+	// Save sram of current cart before loading a new one
+	m_cartridge.WriteSaveRamFile();
+
 	RomHeader romHeader = m_cartridge.LoadRom(file);
 	return romHeader;
 }
@@ -29,6 +38,8 @@ void Nes::Reset()
 	m_cpu.Reset();
 	m_ppu.Reset();
 	//@TODO: Maybe reset cartridge (and mapper)?
+
+	m_lastSaveRamTime = System::GetTimeSec();
 }
 
 void Nes::ExecuteFrame()
@@ -40,6 +51,15 @@ void Nes::ExecuteFrame()
 	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
 	m_frameTimer.Update(minFrameTime);
 	Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", m_frameTimer.GetFps()).Value() );
+
+	// Auto-save sram at fixed intervals
+	const float64 saveInterval = 5.0;
+	float64 currTime = System::GetTimeSec();
+	if (currTime - m_lastSaveRamTime >= saveInterval)
+	{
+		m_cartridge.WriteSaveRamFile();
+		m_lastSaveRamTime = currTime;
+	}
 }
 
 void Nes::ExecuteCpuAndPpuFrame()

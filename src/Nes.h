@@ -11,6 +11,8 @@
 class Nes
 {
 public:
+	~Nes();
+
 	void Initialize();
 	
 	RomHeader LoadRom(const char* file);
@@ -22,7 +24,6 @@ public:
 	void SignalCpuIrq() { m_cpu.Irq(); }
 
 	NameTableMirroring GetNameTableMirroring() const { return m_cartridge.GetNameTableMirroring(); }
-	void WriteSaveRamFile() { m_cartridge.WriteSaveRamFile(); }
 	void HACK_OnScanline() { m_cartridge.HACK_OnScanline(); }
 
 private:
@@ -37,4 +38,6 @@ private:
 	CpuInternalRam m_cpuInternalRam;
 	CpuMemoryBus m_cpuMemoryBus;
 	PpuMemoryBus m_ppuMemoryBus;
+
+	float64 m_lastSaveRamTime;
 };

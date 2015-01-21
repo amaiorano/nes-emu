@@ -75,11 +75,6 @@ int main(int argc, char* argv[])
 			{
 				quit = true;
 			}
-
-			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_S))
-			{
-				nes->WriteSaveRamFile();
-			}
 		}
 	}
 	catch (const std::exception& ex)
