@@ -77,7 +77,7 @@ RomHeader Cartridge::LoadRom(const char* file)
 		}
 	}
 
-	size_t numSavBanks = 1; // @TODO: Some boards switch sram banks (SOROM)
+	size_t numSavBanks = romHeader.HasSRAM()? 1 : 0; // @TODO: Some boards switch sram banks (SOROM)
 
 	switch (romHeader.GetMapperNumber())
 	{
