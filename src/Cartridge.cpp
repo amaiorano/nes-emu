@@ -1,4 +1,5 @@
 #include "Cartridge.h"
+#include "Nes.h"
 #include "FileStream.h"
 #include "Rom.h"
 #include "MemoryMap.h"
@@ -23,8 +24,9 @@ namespace
 	}
 }
 
-void Cartridge::Initialize()
+void Cartridge::Initialize(Nes& nes)
 {
+	m_nes = &nes;
 }
 
 RomHeader Cartridge::LoadRom(const char* file)
@@ -186,6 +188,18 @@ void Cartridge::WriteSaveRamFile()
 		saveFS.Close();
 
 		printf("Saved save ram file: %s\n", m_saveRamPath.c_str());
+	}
+}
+
+void Cartridge::HACK_OnScanline()
+{
+	if (auto* mapper4 = dynamic_cast<Mapper4*>(m_mapper))
+	{
+		mapper4->HACK_OnScanline();
+		if (mapper4->TestAndClearIrqPending())
+		{
+			m_nes->SignalCpuIrq();
+		}
 	}
 }
 

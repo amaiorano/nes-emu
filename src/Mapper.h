@@ -40,7 +40,9 @@ public:
 			m_canWriteChrMemory = true;
 		}
 
-		// Default init sram banks to most common mapping
+		// Default init banks to most common mapping
+		SetPrgBankIndex32k(0, 0);
+		SetChrBankIndex8k(0, 0);
 		SetSavBankIndex8k(0, 0);
 
 		PostInitialize();

@@ -4,11 +4,12 @@
 
 void Mapper4::PostInitialize()
 {
-	SetPrgBankIndex32k(0, 0);
-	SetChrBankIndex8k(0, 0);
-
 	// Last virtual bank ($E000-$FFFF) is always fixed to last physical bank
 	SetPrgBankIndex8k(3, NumPrgBanks8k() - 1);
+
+	m_irqEnabled = false;
+	m_irqReloadPending = false;
+	m_irqPending = false;
 }
 
 void Mapper4::OnCpuWrite(uint16 cpuAddress, uint8 value)
@@ -46,15 +47,22 @@ void Mapper4::OnCpuWrite(uint16 cpuAddress, uint8 value)
 		break;
 
 	case 0xC000:
+		// Value copied to counter when counter == 0 OR reload is pending
+		// (at next rising edge)
+		m_irqReloadValue = value;
 		break;
 
 	case 0xC001:
+		m_irqReloadPending = true;
 		break;
 
 	case 0xE000:
+		m_irqEnabled = false;
+		m_irqPending = false;
 		break;
 
 	case 0xE001:
+		m_irqEnabled = true;
 		break;
 	};
 }
@@ -90,5 +98,23 @@ void Mapper4::UpdateBank(uint8 value)
 	// value is 8K PRG bank index
 	case 6: SetPrgBankIndex8k(m_prgBankMode * 2 + 0, value & prgBankMask8k); break;
 	case 7: SetPrgBankIndex8k(1, value & prgBankMask8k); break;
+	}
+}
+
+void Mapper4::HACK_OnScanline()
+{
+	if (m_irqCounter == 0 || m_irqReloadPending)
+	{
+		m_irqCounter = m_irqReloadValue;
+		m_irqReloadPending = false;
+	}
+	else
+	{
+		--m_irqCounter;
+		if (m_irqCounter == 0 && m_irqEnabled)
+		{
+			// Trigger IRQ - for now set the flag...
+			m_irqPending = true;
+		}
 	}
 }

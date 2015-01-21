@@ -6,10 +6,12 @@
 #include <memory>
 #include <string>
 
+class Nes;
+
 class Cartridge
 {
 public:
-	void Initialize();
+	void Initialize(Nes& nes);
 	RomHeader LoadRom(const char* file);
 
 	NameTableMirroring GetNameTableMirroring() const;
@@ -20,6 +22,7 @@ public:
 	void HandlePpuWrite(uint16 ppuAddress, uint8 value);
 
 	void WriteSaveRamFile();
+	void HACK_OnScanline();
 	
 private:
 	void LoadSaveRamFile();
@@ -27,6 +30,8 @@ private:
 	uint8& AccessPrgMem(uint16 cpuAddress);
 	uint8& AccessChrMem(uint16 ppuAddress);
 	uint8& AccessSavMem(uint16 cpuAddress);
+
+	Nes* m_nes;
 	
 	std::string m_romDirectory;
 	std::string m_romFileNameNoExt;

@@ -340,6 +340,14 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 					// Cycles 65-256: Sprite evaluation
 					PerformSpriteEvaluation(x, y);
 				}
+				else if (x == 260)
+				{
+					//@TODO: This is a dirty hack for Mapper4 (MMC3) and the like to get around the fact that
+					// my PPU implementation doesn't perform Sprite fetches as expected (must fetch even if no
+					// sprites found on scanline, and fetch each sprite separately like I do for tiles). For now
+					// this mostly works.
+					m_nes->HACK_OnScanline();
+				}
 			}
 
 			if (x >= 257 && x <= 320) // "HBlank" (idle cycles)
@@ -364,6 +372,8 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 			}
 			else // Fetch and render cycles
 			{
+				assert(x <= 256 || (x >= 321 && x <= 340));
+
 				// Update VRAM address and fetch data
 				if (renderingEnabled)
 				{

@@ -15,10 +15,10 @@ public:
 	void Reset();
 	void Run();
 
-	void SignalCpuNmi()
-	{
-		m_cpu.Nmi();
-	}
+	void SignalCpuNmi() { m_cpu.Nmi(); }
+	void SignalCpuIrq() { m_cpu.Irq(); }
+
+	void HACK_OnScanline() { m_cartridge.HACK_OnScanline(); }
 
 	NameTableMirroring GetNameTableMirroring() const { return m_cartridge.GetNameTableMirroring(); }
 
