@@ -237,12 +237,28 @@ private:
 				}
 			}
 		}
-		else if (System::GetKeyPress(key))
+		else // not in step mode, check if we should be
 		{
-			g_stepMode = true;
+			// Checking for input every instruction slows the game down to a crawl,
+			// so we check after a certain number of instructions
+			bool checkForBreakIntoDebugger = false;
+			{
+				static int kInstructionInterval = 200;
+				static int numElapsedInstructions = 0;
+				if (++numElapsedInstructions == kInstructionInterval)
+				{
+					numElapsedInstructions = 0;
+					checkForBreakIntoDebugger = true;
+				}
+			}
+			
+			if (checkForBreakIntoDebugger && System::GetKeyPress(key))
+			{
+				g_stepMode = true;
 
-			if (!g_trace)
-				printf("[Stopped]\n");
+				if (!g_trace)
+					printf("[Stopped]\n");
+			}
 		}
 	}
 
