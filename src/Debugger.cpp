@@ -9,7 +9,6 @@
 #include "FileStream.h"
 #include <cstdio>
 #include <cassert>
-#include <stdexcept>
 
 #define FCEUX_OUTPUT 0
 #define TRACE_TO_FILE 0
@@ -215,7 +214,7 @@ private:
 
 				case 'q':
 					printf("[User Quit]\n");
-					throw std::exception("User quit from debugger");
+					FAIL("User quit from debugger");
 					break;
 
 				case 'g':

@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
 		if (argc != 2)
 		{
 			ShowUsage(argv[0]);
-			throw std::exception("Missing argument(s)");
+			FAIL("Missing argument(s)");
 		}
 
 		const char* romFile = argv[1];

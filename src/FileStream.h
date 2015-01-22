@@ -2,7 +2,6 @@
 
 #include "Base.h"
 #include <cstdio>
-#include <stdexcept>
 
 class FileStream
 {
@@ -19,7 +18,7 @@ public:
 	FileStream(const char* name, const char* mode) : m_file(nullptr)
 	{
 		if (!Open(name, mode))
-			throw std::exception(FormattedString<>("Failed to open file: %s", name));
+			FAIL("Failed to open file: %s", name);
 	}
 
 	bool Open(const char* name, const char* mode)

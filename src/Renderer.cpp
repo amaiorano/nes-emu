@@ -1,7 +1,6 @@
 #include "Renderer.h"
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
 #include "SDL.h"
-#include <stdexcept>
 
 namespace
 {
@@ -92,7 +91,7 @@ void Renderer::Create()
 	m_impl = new PIMPL();
 
 	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
-		throw std::exception("SDL_Init failed");
+		FAIL("SDL_Init failed");
 
 	const float windowScale = 3.0f;
 	const size_t windowWidth = static_cast<size_t>(kScreenWidth * windowScale);
@@ -100,11 +99,11 @@ void Renderer::Create()
 	
 	m_impl->m_window = SDL_CreateWindow(g_windowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
 	if (!m_impl->m_window)
-		throw std::exception("SDL_CreateWindow failed");
+		FAIL("SDL_CreateWindow failed");
 
 	m_impl->m_renderer = SDL_CreateRenderer(m_impl->m_window, -1, SDL_RENDERER_ACCELERATED);
 	if (!m_impl->m_renderer)
-		throw std::exception("SDL_CreateRenderer failed");
+		FAIL("SDL_CreateRenderer failed");
 
 	m_impl->m_backbuffer.Create(kScreenWidth, kScreenHeight, m_impl->m_renderer);
 

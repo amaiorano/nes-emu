@@ -42,14 +42,14 @@ RomHeader Cartridge::LoadRom(const char* file)
 	fs.Read((uint8*)&romHeader, sizeof(RomHeader));
 
 	if ( !romHeader.IsValidHeader() )
-		throw std::exception("Invalid romHeader");
+		FAIL("Invalid romHeader");
 
 	// Next is Trainer, if present (0 or 512 bytes)
 	if ( romHeader.HasTrainer() )
-		throw std::exception("Not supporting trainer roms");
+		FAIL("Not supporting trainer roms");
 
 	if ( romHeader.IsPlayChoice10() || romHeader.IsVSUnisystem() )
-		throw std::exception("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
+		FAIL("Not supporting arcade roms (Playchoice10 / VS Unisystem)");
 
 	// Zero out memory banks to ease debugging (not required)
 	std::for_each(begin(m_prgBanks), end(m_prgBanks), [] (PrgBankMemory& m) { m.Initialize(); });
@@ -87,7 +87,7 @@ RomHeader Cartridge::LoadRom(const char* file)
 	case 2: m_mapperHolder.reset(new Mapper2()); break;
 	case 4: m_mapperHolder.reset(new Mapper4()); break;
 	default:
-		throw std::exception(FormattedString<>("Unsupported mapper: %d", romHeader.GetMapperNumber()));
+		FAIL("Unsupported mapper: %d", romHeader.GetMapperNumber());
 	}
 	m_mapper = m_mapperHolder.get();
 

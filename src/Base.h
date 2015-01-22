@@ -2,6 +2,7 @@
 
 #include <cstdarg>
 #include <cassert>
+#include <stdexcept>
 
 // Platform defines
 #ifdef _MSC_VER
@@ -103,6 +104,22 @@ struct FormattedString
 
 	char buffer[MaxLength];
 };
+
+// FAIL macro
+
+namespace System { extern void DebugBreak(); }
+
+inline void FailHandler(const char* msg)
+{
+#if CONFIG_DEBUG
+	printf("FAIL: %s\n", msg);
+	System::DebugBreak();
+#else
+	throw std::logic_error(msg);
+#endif
+}
+
+#define FAIL(msg, ...) FailHandler(FormattedString<>(msg, __VA_ARGS__))
 
 // Bit operations
 
