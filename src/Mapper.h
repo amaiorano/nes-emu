@@ -62,6 +62,10 @@ public:
 	size_t GetMappedChrBankIndex(size_t ppuBankIndex) { return m_chrBankIndices[ppuBankIndex]; }
 	size_t GetMappedSavBankIndex(size_t cpuBankIndex) { return m_savBankIndices[cpuBankIndex]; }
 
+	size_t PrgMemorySize() const { return m_numPrgBanks * kPrgBankSize; }
+	size_t ChrMemorySize() const { return m_numChrBanks * kChrBankSize; }
+	size_t SavMemorySize() const { return m_numSavBanks * kSavBankSize; }
+
 	size_t NumPrgBanks4k() const { return m_numPrgBanks; }
 	size_t NumPrgBanks8k() const { return m_numPrgBanks / 2; }
 	size_t NumPrgBanks16k() const { return m_numPrgBanks / 4; }

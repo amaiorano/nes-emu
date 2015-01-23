@@ -55,4 +55,7 @@ private:
 	Bitfield8 m_chrReg0;
 	Bitfield8 m_chrReg1;
 	Bitfield8 m_prgReg;
+
+	enum BoardType { DEFAULT, SUROM };
+	BoardType m_boardType;
 };

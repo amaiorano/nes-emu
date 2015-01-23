@@ -1,7 +1,12 @@
 #include "Mapper1.h"
+#include <algorithm>
 
 void Mapper1::PostInitialize()
 {
+	m_boardType = DEFAULT;
+	if (PrgMemorySize() == KB(512))
+		m_boardType = SUROM;
+
 	m_loadReg.Reset();
 
 	m_controlReg.SetValue(BITS(2,3)); // Bits 2,3 of $8000 are set (16k PRG mode, $8000 swappable)
@@ -44,6 +49,10 @@ void Mapper1::OnCpuWrite(uint16 cpuAddress, uint8 value)
 
 			case 0xA000:
 				m_chrReg0.SetValue(m_loadReg.Value());
+				if (m_boardType == SUROM) // Hijacks CHR reg bit 4 to select PRG 256k bank
+				{
+					UpdatePrgBanks();
+				}
 				UpdateChrBanks();
 				break;
 
@@ -80,18 +89,34 @@ void Mapper1::UpdatePrgBanks()
 	}
 	else // 16k mode
 	{
-		const size_t mask = NumPrgBanks16k() - 1;
-		const uint8 cartBankIndex = m_prgReg.Read(BITS(0,1,2,3)) & mask;
+		// There are at most 16 banks of 16K (256K); we take the min here because
+		// SUROM returns 32 banks as it has 2 x 256K PRG-ROM chips, but we treat
+		// each bank separately (a bit in chrReg0 selects which 256K chip.)
+		const size_t mask = std::min<size_t>(16, NumPrgBanks16k()) - 1;
+		
+		size_t cartBankIndex = m_prgReg.Read(BITS(0,1,2,3)) & mask;
+		size_t firstBankIndex = 0;
+		size_t lastBankIndex = (NumPrgBanks16k() - 1) & mask;
+
+		// SUROM hijacks bit 4 of chrReg0 to select one of two 256K PRG banks
+		// (this applies to the "fixed" banks as well)
+		if (m_boardType == SUROM)
+		{
+			const uint8 prgBankSelect256k = m_chrReg0.Read(BIT(4));
+			cartBankIndex |= prgBankSelect256k;
+			firstBankIndex |= prgBankSelect256k;
+			lastBankIndex |= prgBankSelect256k;
+		}
 
 		if (bankMode == 2)
 		{
-			SetPrgBankIndex16k(0, 0);
+			SetPrgBankIndex16k(0, firstBankIndex);
 			SetPrgBankIndex16k(1, cartBankIndex);
 		}
 		else
 		{
 			SetPrgBankIndex16k(0, cartBankIndex);
-			SetPrgBankIndex16k(1, NumPrgBanks16k() - 1);
+			SetPrgBankIndex16k(1, lastBankIndex);
 		}
 	}
 
