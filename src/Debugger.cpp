@@ -214,7 +214,7 @@ private:
 
 				case 'q':
 					printf("[User Quit]\n");
-					FAIL("User quit from debugger");
+					throw std::logic_error("User quit from debugger");
 					break;
 
 				case 'g':

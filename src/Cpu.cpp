@@ -116,8 +116,7 @@ void Cpu::Execute(uint32& cpuCyclesElapsed)
 
 	if (m_opCodeEntry == nullptr)
 	{
-		Debugger::Shutdown();
-		assert(false && "Unknown opcode");
+		FAIL("Unknown opcode");
 	}
 
 	UpdateOperandAddress();
@@ -809,8 +808,7 @@ void Cpu::Push8(uint8 value)
 #if CONFIG_DEBUG
 	if (SP == 0xFF)
 	{
-		Debugger::Shutdown();
-		assert(!"Stack overflow!");
+		FAIL("Stack overflow!");
 	}
 #endif
 }
@@ -828,8 +826,7 @@ uint8 Cpu::Pop8()
 #if CONFIG_DEBUG
 	if (SP == 0)
 	{
-		Debugger::Shutdown();
-		assert(!"Stack underflow!");
+		FAIL("Stack underflow!");
 	}
 #endif
 

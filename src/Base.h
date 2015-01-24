@@ -108,9 +108,12 @@ struct FormattedString
 // FAIL macro
 
 namespace System { extern void DebugBreak(); }
+namespace Debugger { extern void Shutdown(); }
 
 inline void FailHandler(const char* msg)
 {
+	Debugger::Shutdown(); // Flush buffered output to trace file
+
 #if CONFIG_DEBUG
 	printf("FAIL: %s\n", msg);
 	System::DebugBreak();

@@ -7,6 +7,8 @@
 
 Nes::~Nes()
 {
+	Debugger::Shutdown();
+
 	// Save sram on exit
 	m_cartridge.WriteSaveRamFile();
 }
