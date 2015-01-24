@@ -227,6 +227,13 @@ void Cartridge::LoadSaveRamFile()
 	}
 }
 
+size_t Cartridge::GetPrgBankIndex16k(uint16 cpuAddress) const
+{
+	const size_t bankIndex4k = GetBankIndex(cpuAddress, CpuMemory::kPrgRomBase, kPrgBankSize);
+	const size_t mappedBankIndex4k = m_mapper->GetMappedPrgBankIndex(bankIndex4k);
+	return mappedBankIndex4k * KB(4) / KB(16);
+}
+
 uint8& Cartridge::AccessPrgMem(uint16 cpuAddress)
 {
 	const size_t bankIndex = GetBankIndex(cpuAddress, CpuMemory::kPrgRomBase, kPrgBankSize);

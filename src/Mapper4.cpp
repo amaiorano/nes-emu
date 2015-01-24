@@ -76,7 +76,6 @@ void Mapper4::UpdateFixedBanks()
 void Mapper4::UpdateBank(uint8 value)
 {
 	const size_t chrBankMask1k = NumChrBanks1k() - 1;
-	//const size_t chrBankMask2k = NumChrBanks2k() - 1;
 	const size_t prgBankMask8k = NumPrgBanks8k() - 1;
 
 	switch (m_nextBankToUpdate)

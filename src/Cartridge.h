@@ -26,6 +26,8 @@ public:
 	void WriteSaveRamFile();
 	void HACK_OnScanline();
 	
+	size_t GetPrgBankIndex16k(uint16 cpuAddress) const;
+	
 private:
 	void LoadSaveRamFile();
 

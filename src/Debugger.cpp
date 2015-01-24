@@ -319,6 +319,14 @@ private:
 		const uint16 PC = cpu.PC;
 		const uint16 operandAddress = cpu.m_operandAddress; // Expected to be updated for current instruction
 
+		// Print current PRG 16K bank/page
+	#if !FCEUX_OUTPUT
+		if (PC > 0x8000)
+			TRACE("%02X:", m_nes->m_cartridge.GetPrgBankIndex16k(PC));
+		else
+			TRACE("  :");
+	#endif
+
 		// Print PC
 		TRACE(ADDR_16 ":", PC);
 
