@@ -69,17 +69,17 @@ uint8 ControllerPorts::HandleCpuRead(uint16 cpuAddress)
 	if (readIndex < ARRAYSIZE(reportOrder))
 	{
 		isButtonDown = ReadInputDown(controllerIndex, button);
-	}
 
-	// NES d-pad doesn't allow both left and right, nor up and down to be pressed at the same
-	// time, and many games assume this, leading to wonky behaviour if both are reported as
-	// down (e.g. Zelda 2). Detect this case and make sure they are exclusively set.
-	if ( (button == Down && lastIsButtonDown[Up]) || (button == Right && lastIsButtonDown[Left]) )
-	{
-		isButtonDown = false;
-	}
+		// NES d-pad doesn't allow both left and right, nor up and down to be pressed at the same
+		// time, and many games assume this, leading to wonky behaviour if both are reported as
+		// down (e.g. Zelda 2). Detect this case and make sure they are exclusively set.
+		if ( (button == Down && lastIsButtonDown[Up]) || (button == Right && lastIsButtonDown[Left]) )
+		{
+			isButtonDown = false;
+		}
 	
-	lastIsButtonDown[button] = isButtonDown;
+		lastIsButtonDown[button] = isButtonDown;
+	}
 
 	// From http://wiki.nesdev.com/w/index.php/Standard_controller
 	//  In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus.
