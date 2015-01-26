@@ -117,9 +117,8 @@ inline void FailHandler(const char* msg)
 #if CONFIG_DEBUG
 	printf("FAIL: %s\n", msg);
 	System::DebugBreak();
-#else
-	throw std::logic_error(msg);
 #endif
+	throw std::logic_error(msg);
 }
 
 #define FAIL(msg, ...) FailHandler(FormattedString<>(msg, __VA_ARGS__))

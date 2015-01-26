@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #undef ARRAYSIZE // Already defined in a Windows header
 #include <Windows.h>
+#include <commdlg.h>
 #include <conio.h>
 #include <cstdio>
 
@@ -54,6 +55,31 @@ namespace System
 	{
 		printf(FormattedString<>("%s: %s\n", title, message).Value());
 		::MessageBoxA(::GetActiveWindow(), message, title, MB_OK);
+	}
+
+	bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter)
+	{
+		char file[_MAX_PATH] = "";
+
+		char currDir[_MAX_PATH] = "";
+		::GetCurrentDirectoryA(sizeof(currDir), currDir);
+
+		OPENFILENAMEA ofn = {0};
+		ofn.lStructSize = sizeof(ofn);
+		ofn.lpstrFile = file;
+		ofn.nMaxFile = sizeof(file);
+		ofn.lpstrTitle = title;
+		ofn.lpstrFilter = filter;
+		ofn.nFilterIndex = 0;
+		ofn.lpstrInitialDir = currDir;
+		ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+		if (::GetOpenFileNameA(&ofn) == TRUE)
+		{
+			fileSelected = ofn.lpstrFile;
+			return true;
+		}
+		return false;
 	}
 
 	static float64 GetPerfCountTicksPerSec()

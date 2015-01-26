@@ -34,6 +34,11 @@ namespace
 		printf("Usage: %s <nes rom>\n\n", appPath);
 		return -1;
 	}
+
+	bool OpenRomFileDialog(std::string& fileSelected)
+	{
+		return System::OpenFileDialog(fileSelected, "Open NES rom", "*.nes");
+	}
 }
 
 int main(int argc, char* argv[])
@@ -42,22 +47,33 @@ int main(int argc, char* argv[])
 	{
 		PrintAppInfo();
 
-		if (argc != 2)
+		std::string romFile;
+
+		if (argc == 1)
+		{
+			std::string fileSelected;
+			if (OpenRomFileDialog(fileSelected))
+			{
+				romFile = fileSelected;
+			}
+		}
+		else if (argc == 2)
+		{
+			romFile = argv[1];
+		}
+		
+		if (romFile.empty())
 		{
 			ShowUsage(argv[0]);
-			FAIL("Missing argument(s)");
+			FAIL("No rom file to load");
 		}
-
-		const char* romFile = argv[1];
 
 		std::shared_ptr<Nes> nes = std::make_shared<Nes>();
 		nes->Initialize();
 
-		{
-			const RomHeader romHeader = nes->LoadRom(romFile);
-			PrintRomInfo(romFile, romHeader);
-			nes->Reset();
-		}
+		RomHeader romHeader = nes->LoadRom(romFile.c_str());
+		PrintRomInfo(romFile.c_str(), romHeader);
+		nes->Reset();
 
 		bool quit = false;
 		while (!quit)
@@ -65,6 +81,18 @@ int main(int argc, char* argv[])
 			Input::Update();
 
 			nes->ExecuteFrame();
+
+			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_O))
+			{
+				std::string fileSelected;
+				if (OpenRomFileDialog(fileSelected))
+				{
+					romFile = fileSelected;
+					romHeader = nes->LoadRom(romFile.c_str());
+					PrintRomInfo(romFile.c_str(), romHeader);
+					nes->Reset();
+				}
+			}
 
 			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_R))
 			{
