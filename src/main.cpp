@@ -3,17 +3,26 @@
 #include "System.h"
 #include "Input.h"
 
+#define kVersionMajor 1
+#define kVersionMinor 0
+#if CONFIG_DEBUG
+	#define kVersionConfig "d"
+#else
+	#define kVersionConfig ""
+#endif
+const char* kVersionString = "v" STRINGIZE(kVersionMajor) "." STRINGIZE(kVersionMinor) kVersionConfig;
+
 namespace
 {
 	void PrintAppInfo()
 	{
 		const char* text =
-			"### nes-emu - Nintendo Entertainment System Emulator\n"
+			"### nes-emu %s - Nintendo Entertainment System Emulator\n"
 			"### Author: Antonio Maiorano (amaiorano at gmail dot com)\n"
 			"### Source code available at http://github.com/amaiorano/nes-emu/ \n"
 			"\n";
 
-		printf(text);
+		printf(text, kVersionString);
 	}
 
 	inline size_t BytesToKB(size_t bytes) { return bytes / 1024; }

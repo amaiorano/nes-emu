@@ -45,6 +45,10 @@ static_assert(sizeof(int64)==8, "Invalid type size");
 static_assert(sizeof(float32)==4, "Invalid type size");
 static_assert(sizeof(float64)==8, "Invalid type size");
 
+// Use to make a macro value into a string
+#define STRINGIZE(v) __STRINGIZE(v)
+#define __STRINGIZE(v) #v
+
 #define KB(n) (n*1024)
 #define MB(n) (n*1024*1024)
 

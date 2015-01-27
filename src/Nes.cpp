@@ -52,7 +52,9 @@ void Nes::ExecuteFrame()
 
 	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
 	m_frameTimer.Update(minFrameTime);
-	Renderer::SetWindowTitle( FormattedString<>("nes-emu [FPS: %2.2f]", m_frameTimer.GetFps()).Value() );
+
+	extern const char* kVersionString;
+	Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f]", kVersionString, m_frameTimer.GetFps()).Value() );
 
 	// Auto-save sram at fixed intervals
 	const float64 saveInterval = 5.0;
