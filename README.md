@@ -5,6 +5,21 @@ A Nintendo Entertainment System (NES) emulator written in C++
 As this is just a pet project, don't expect a full-featured emulator. There is no GUI, many typical features are missing, and only a few mappers have been implemented. However, the code is pretty clean and straightforward, and I think can be useful to learn from. Of course, if someone wanted to fork this code to write a full-featured emulator, that would be cool as well :)
 
 
+## Controls
+
+Input     | Keyboard Key(s)
+----------|----------------
+D-Pad     | arrows
+A         | A
+B         | S
+Select    | Tab
+Start     | Enter
+          |
+Open Rom  | Ctrl + O
+Reset     | Ctrl + R
+Quit      | Alt + F4
+
+
 ## Challenge
 
 As with most pet projects, the purpose of writing this emulator was mainly to learn. My background is not in hardware, but I have always had a keen interest in computer architecture, so part of my goals was to learn more about how a console works at the hardware level. The NES is simple enough in that respect, although it has enough quirks to make it interesting to emulate.
