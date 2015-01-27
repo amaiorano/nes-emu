@@ -82,6 +82,9 @@
     <ClInclude Include="src\Mapper4.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Mapper3.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">

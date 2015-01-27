@@ -8,6 +8,7 @@
 #include "Mapper0.h"
 #include "Mapper1.h"
 #include "Mapper2.h"
+#include "Mapper3.h"
 #include "Mapper4.h"
 
 namespace
@@ -85,6 +86,7 @@ RomHeader Cartridge::LoadRom(const char* file)
 	case 0: m_mapperHolder.reset(new Mapper0()); break;
 	case 1: m_mapperHolder.reset(new Mapper1()); break;
 	case 2: m_mapperHolder.reset(new Mapper2()); break;
+	case 3: m_mapperHolder.reset(new Mapper3()); break;
 	case 4: m_mapperHolder.reset(new Mapper4()); break;
 	default:
 		FAIL("Unsupported mapper: %d", romHeader.GetMapperNumber());

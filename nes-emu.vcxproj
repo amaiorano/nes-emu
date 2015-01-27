@@ -25,6 +25,7 @@
     <ClInclude Include="src\Mapper0.h" />
     <ClInclude Include="src\Mapper1.h" />
     <ClInclude Include="src\Mapper2.h" />
+    <ClInclude Include="src\Mapper3.h" />
     <ClInclude Include="src\Mapper4.h" />
     <ClInclude Include="src\Memory.h" />
     <ClInclude Include="src\FileStream.h" />
