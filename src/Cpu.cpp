@@ -4,6 +4,10 @@
 #include "MemoryMap.h"
 #include "Debugger.h"
 
+// Some retail games overflow (on purpose?) like Battletoads
+// so we can't leave this on
+#define FAIL_ON_STACK_OVERFLOW 0
+
 namespace
 {
 	OpCodeEntry** g_opCodeTable = GetOpCodeTable();
@@ -805,7 +809,7 @@ void Cpu::Push8(uint8 value)
 	Write8(CpuMemory::kStackBase + SP, value);
 	--SP;
 	
-#if CONFIG_DEBUG
+#if FAIL_ON_STACK_OVERFLOW
 	if (SP == 0xFF)
 	{
 		FAIL("Stack overflow!");
@@ -823,7 +827,7 @@ uint8 Cpu::Pop8()
 {
 	++SP;
 
-#if CONFIG_DEBUG
+#if FAIL_ON_STACK_OVERFLOW
 	if (SP == 0)
 	{
 		FAIL("Stack underflow!");
