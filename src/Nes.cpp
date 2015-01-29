@@ -44,7 +44,7 @@ void Nes::Reset()
 	m_lastSaveRamTime = System::GetTimeSec();
 }
 
-void Nes::ExecuteFrame(bool paused)
+void Nes::ExecuteFrame(bool paused, bool turbo)
 {
 	const float32 minFrameTime = 1.0f/60.0f;
 
@@ -55,8 +55,9 @@ void Nes::ExecuteFrame(bool paused)
 
 	m_ppu.RenderFrame();
 
-	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
-	m_frameTimer.Update(minFrameTime);
+	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast).
+	// If turbo mode is enabled, it won't wait.
+	m_frameTimer.Update(turbo? 0.0f : minFrameTime);
 
 	extern const char* kVersionString;
 	Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f] %s", kVersionString, m_frameTimer.GetFps(), paused? "*PAUSED*" : "").Value() );

@@ -87,12 +87,13 @@ int main(int argc, char* argv[])
 		bool quit = false;
 		bool paused = false;
 		bool stepOneFrame = false;
+		bool turbo = false;
 
 		while (!quit)
 		{
 			Input::Update();
 
-			nes->ExecuteFrame(paused && !stepOneFrame);
+			nes->ExecuteFrame(paused && !stepOneFrame, turbo);
 
 			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_O))
 			{
@@ -128,6 +129,8 @@ int main(int argc, char* argv[])
 				paused = true;
 				stepOneFrame = true;
 			}
+
+			turbo = Input::KeyDown(SDL_SCANCODE_GRAVE); // tilde '~' key
 		}
 	}
 	catch (const std::exception& ex)
