@@ -958,9 +958,20 @@ void Ppu::RenderPixel(uint32 x, uint32 y)
 		color = g_paletteColors[paletteIndex & (kNumPaletteColors-1)]; // Mask in only required bits, some roms write values > 64
 	};
 
-	const bool bgRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground);
-	const bool spriteRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderSprites);
+	bool bgRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground);
+	bool spriteRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderSprites);
 	assert(bgRenderingEnabled || spriteRenderingEnabled);
+	
+	// Consider bg/sprites as disabled (for this pixel) if we're not supposed to render it in the left-most 8 pixels
+	if ( !m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8) && x < 8 )
+	{
+		bgRenderingEnabled = false;
+	}
+
+	if ( !m_ppuControlReg2->Test(PpuControl2::SpritesShowLeft8) && x < 8 )
+	{
+		spriteRenderingEnabled = false;
+	}
 	
 	// Get the background pixel
 	uint8 bgPaletteHighBits = 0;
