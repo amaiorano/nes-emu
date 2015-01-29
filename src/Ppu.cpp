@@ -665,7 +665,6 @@ uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 		// A A
 		// A A
 		physicalVRamAddress = virtualVRamAddress % (NameTableMemory::kSize / 2);
-		assert(false && "TODO-VALIDATE: NameTableMirroring::OneScreenUpper");
 		break;
 
 	case NameTableMirroring::OneScreenLower:
