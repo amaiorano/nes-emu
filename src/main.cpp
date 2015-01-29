@@ -85,11 +85,14 @@ int main(int argc, char* argv[])
 		nes->Reset();
 
 		bool quit = false;
+		bool paused = false;
+		bool stepOneFrame = false;
+
 		while (!quit)
 		{
 			Input::Update();
 
-			nes->ExecuteFrame();
+			nes->ExecuteFrame(paused && !stepOneFrame);
 
 			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_O))
 			{
@@ -106,11 +109,24 @@ int main(int argc, char* argv[])
 			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_R))
 			{
 				nes->Reset();
+				paused = false;
 			}
 
 			if (Input::AltDown() && Input::KeyPressed(SDL_SCANCODE_F4))
 			{
 				quit = true;
+			}
+
+			if (Input::KeyPressed(SDL_SCANCODE_P))
+			{
+				paused = !paused;
+			}
+
+			stepOneFrame = false;
+			if (Input::KeyPressed(SDL_SCANCODE_LEFTBRACKET) || Input::KeyDown(SDL_SCANCODE_RIGHTBRACKET))
+			{
+				paused = true;
+				stepOneFrame = true;
 			}
 		}
 	}

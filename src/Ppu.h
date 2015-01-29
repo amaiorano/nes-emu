@@ -15,7 +15,8 @@ public:
 	void Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes);
 
 	void Reset();
-	void Execute(uint32 ppuCycles, bool& finishedRender);
+	void Execute(uint32 ppuCycles, bool& completedFrame);
+	void RenderFrame(); // Call when Execute() sets completedFrame to true
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
@@ -39,7 +40,7 @@ private:
 
 	void RenderPixel(uint32 x, uint32 y);
 	void SetVBlankFlag();
-	void PresentFrame();
+	void OnFrameComplete();
 
 	PpuMemoryBus* m_ppuMemoryBus;
 	Nes* m_nes;

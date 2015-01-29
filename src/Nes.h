@@ -18,7 +18,7 @@ public:
 	RomHeader LoadRom(const char* file);
 	void Reset();
 
-	void ExecuteFrame();
+	void ExecuteFrame(bool paused);
 
 	void SignalCpuNmi() { m_cpu.Nmi(); }
 	void SignalCpuIrq() { m_cpu.Irq(); }

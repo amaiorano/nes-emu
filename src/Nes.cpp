@@ -44,17 +44,22 @@ void Nes::Reset()
 	m_lastSaveRamTime = System::GetTimeSec();
 }
 
-void Nes::ExecuteFrame()
+void Nes::ExecuteFrame(bool paused)
 {
 	const float32 minFrameTime = 1.0f/60.0f;
 
-	ExecuteCpuAndPpuFrame();
+	if (!paused)
+	{
+		ExecuteCpuAndPpuFrame();
+	}
+
+	m_ppu.RenderFrame();
 
 	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast)
 	m_frameTimer.Update(minFrameTime);
 
 	extern const char* kVersionString;
-	Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f]", kVersionString, m_frameTimer.GetFps()).Value() );
+	Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f] %s", kVersionString, m_frameTimer.GetFps(), paused? "*PAUSED*" : "").Value() );
 
 	// Auto-save sram at fixed intervals
 	const float64 saveInterval = 5.0;
@@ -68,9 +73,9 @@ void Nes::ExecuteFrame()
 
 void Nes::ExecuteCpuAndPpuFrame()
 {
-	bool finishedRender = false;
+	bool completedFrame = false;
 
-	while (!finishedRender)
+	while (!completedFrame)
 	{
 		// Update CPU, get number of cycles elapsed
 		uint32 cpuCycles;
@@ -78,6 +83,6 @@ void Nes::ExecuteCpuAndPpuFrame()
 
 		// Update PPU with that many cycles
 		const uint32 ppuCycles = cpuCycles * 3;
-		m_ppu.Execute(ppuCycles, finishedRender);
+		m_ppu.Execute(ppuCycles, completedFrame);
 	}
 }

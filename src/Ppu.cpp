@@ -310,14 +310,14 @@ void Ppu::Reset()
 	m_vblankFlagSetThisFrame = false;
 }
 
-void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
+void Ppu::Execute(uint32 ppuCycles, bool& completedFrame)
 {
 	const size_t kNumTotalScanlines = 262;
 	const size_t kNumHBlankAndBorderCycles = 85;
 	const size_t kNumScanlineCycles = kScreenWidth + kNumHBlankAndBorderCycles; // 256 + 85 = 341
 	const size_t kNumScreenCycles = kNumScanlineCycles * kNumTotalScanlines; // 89342 cycles per screen
 
-	finishedRender = false;
+	completedFrame = false;
 
 	const bool renderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites);
 
@@ -395,12 +395,12 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 							IncVertVRamAddress(m_vramAddress);
 						}
 					}
+				}
 
-					if (x < kScreenWidth && y < kScreenHeight)
-					{
-						// Render pixel at x,y using pipelined fetch data
-						RenderPixel(x, y);
-					}
+				// Render pixel at x,y using pipelined fetch data. If rendering is disabled, will render background color.
+				if (x < kScreenWidth && y < kScreenHeight)
+				{
+					RenderPixel(x, y);
 				}
 
 				// Clear flags on pre-render line at dot 1
@@ -413,8 +413,8 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 				//@TODO: Do this on last frame of post-render line?
 				if (y == 239 && x == 339)
 				{
-					PresentFrame();
-					finishedRender = true;
+					completedFrame = true;
+					OnFrameComplete();
 				}
 			}
 		}
@@ -434,6 +434,11 @@ void Ppu::Execute(uint32 ppuCycles, bool& finishedRender)
 		// Update cycle
 		m_cycle = (m_cycle + 1) % kNumScreenCycles;
 	}
+}
+
+void Ppu::RenderFrame()
+{
+	m_renderer->Present();
 }
 
 uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
@@ -707,13 +712,6 @@ void Ppu::WritePpuRegister(uint16 cpuAddress, uint8 value)
 	m_ppuRegisters.Write(MapCpuToPpuRegister(cpuAddress), value);
 }
 
-void Ppu::ClearBackground()
-{
-	// Clear to palette color 0
-	//@TODO: If vram address points to palette, we should render that palette color
-	m_renderer->Clear(g_paletteColors[m_palette.Read(0)]);
-}
-
 void Ppu::FetchBackgroundTileData()
 {
 	// Load bg tile row data (2 bytes) at v into pipeline
@@ -960,7 +958,6 @@ void Ppu::RenderPixel(uint32 x, uint32 y)
 
 	bool bgRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground);
 	bool spriteRenderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderSprites);
-	assert(bgRenderingEnabled || spriteRenderingEnabled);
 	
 	// Consider bg/sprites as disabled (for this pixel) if we're not supposed to render it in the left-most 8 pixels
 	if ( !m_ppuControlReg2->Test(PpuControl2::BackgroundShowLeft8) && x < 8 )
@@ -1086,11 +1083,8 @@ void Ppu::SetVBlankFlag()
 	}
 }
 
-void Ppu::PresentFrame()
+void Ppu::OnFrameComplete()
 {
-	m_renderer->Present();
-	ClearBackground();
-
 	const bool renderingEnabled = m_ppuControlReg2->Test(PpuControl2::RenderBackground|PpuControl2::RenderSprites);
 	
 	// For odd frames, the cycle at the end of the scanline (340,239) is skipped
