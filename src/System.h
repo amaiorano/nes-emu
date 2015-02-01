@@ -10,7 +10,7 @@ namespace System
 	char WaitForKeyPress();
 	void DebugBreak();
 	void MessageBox(const char* title, const char* message);
-	bool OpenFileDialog(std::string& fileSelected, const char* title = "Open", const char* filter = "*.*");
+	bool OpenFileDialog(std::string& fileSelected, const char* title = "Open", const char* filter = "All files *.*\0*.*\0");
 
 	typedef uint64 Ticks;
 	Ticks GetTicks();

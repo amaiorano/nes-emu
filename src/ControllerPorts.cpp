@@ -3,6 +3,7 @@
 #include "Debugger.h"
 #include "Input.h"
 #include <string>
+#include <algorithm>
 
 namespace
 {
