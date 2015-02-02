@@ -2,6 +2,7 @@
 
 #include "Cpu.h"
 #include "Ppu.h"
+#include "Apu.h"
 #include "Cartridge.h"
 #include "Memory.h"
 #include "CpuInternalRam.h"
@@ -34,6 +35,7 @@ private:
 	FrameTimer m_frameTimer;
 	Cpu m_cpu;
 	Ppu m_ppu;
+	Apu m_apu;
 	Cartridge m_cartridge;
 	CpuInternalRam m_cpuInternalRam;
 	CpuMemoryBus m_cpuMemoryBus;

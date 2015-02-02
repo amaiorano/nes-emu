@@ -53,6 +53,28 @@ namespace CpuMemory
 	const uint16 kControllerPort1			= 0x4016; // (RW) Strobe for both controllers (bit 0), and controller 1 output
 	const uint16 kControllerPort2			= 0x4017; // (R) Controller 2 output
 
+	// APU memory-mapped registers
+	const uint16 kApuPulse1ChannelA			= 0x4000; // (W)
+	const uint16 kApuPulse1ChannelB			= 0x4001; // (W)
+	const uint16 kApuPulse1ChannelC			= 0x4002; // (W)
+	const uint16 kApuPulse1ChannelD			= 0x4003; // (W)
+	const uint16 kApuPulse2ChannelA			= 0x4004; // (W)
+	const uint16 kApuPulse2ChannelB			= 0x4005; // (W)
+	const uint16 kApuPulse2ChannelC			= 0x4006; // (W)
+	const uint16 kApuPulse2ChannelD			= 0x4007; // (W)
+	const uint16 kApuTriangleChannelA		= 0x4008; // (W)
+	const uint16 kApuTriangleChannelB		= 0x400A; // (W)
+	const uint16 kApuTriangleChannelC		= 0x400B; // (W)
+	const uint16 kApuNoiseChannelA			= 0x400C; // (W)
+	const uint16 kApuNoiseChannelB			= 0x400E; // (W)
+	const uint16 kApuNoiseChannelC			= 0x400F; // (W)
+	const uint16 kApuDMCChannelA			= 0x4010; // (W)
+	const uint16 kApuDMCChannelB			= 0x4011; // (W)
+	const uint16 kApuDMCChannelC			= 0x4012; // (W)
+	const uint16 kApuDMCChannelD			= 0x4013; // (W)
+	const uint16 kApuControlStatus			= 0x4015; // (RW)
+	const uint16 kApuFrameCounter			= 0x4017; // (W)
+
 	const uint16 kNmiVector					= 0xFFFA; // and 0xFFFB
 	const uint16 kResetVector				= 0xFFFC; // and 0xFFFD
 	const uint16 kIrqVector					= 0xFFFE; // and 0xFFFF
