@@ -67,13 +67,14 @@ namespace Internal
 	template <size_t value> struct ShiftLeft1 { static const size_t Result = 1 << value; };
 	template <> struct ShiftLeft1<~0> { static const size_t Result = 0; };
 
-	template <size_t b0, size_t b1=~0, size_t b2=~0, size_t b3=~0> struct BitMask
+	template <size_t b0, size_t b1 = ~0, size_t b2 = ~0, size_t b3 = ~0, size_t b4 = ~0> struct BitMask
 	{
 		static const size_t Result =
 			ShiftLeft1<b0>::Result |
 			ShiftLeft1<b1>::Result |
 			ShiftLeft1<b2>::Result |
-			ShiftLeft1<b3>::Result;
+			ShiftLeft1<b3>::Result |
+			ShiftLeft1<b4>::Result;
 	};
 }
 #define BITS(...) Internal::BitMask<__VA_ARGS__>::Result
@@ -98,7 +99,12 @@ struct FormattedString
 	{
 		va_list args;
 		va_start(args, format);
-		vsnprintf(buffer, MaxLength, format, args);
+		int result = vsnprintf(buffer, MaxLength, format, args);
+		// Safety in case string couldn't find completely: make last character a \0
+		if (result < 0 || result >= MaxLength)
+		{
+			buffer[MaxLength - 1] = 0;
+		}
 		va_end(args);
 	}
 
