@@ -1,6 +1,7 @@
 #include "MemoryBus.h"
 #include "Cpu.h"
 #include "Ppu.h"
+#include "Apu.h"
 #include "Cartridge.h"
 #include "CpuInternalRam.h"
 #include "MemoryMap.h"
@@ -12,23 +13,32 @@ CpuMemoryBus::CpuMemoryBus()
 {
 }
 
-void CpuMemoryBus::Initialize(Cpu& cpu, Ppu& ppu, Cartridge& cartridge, CpuInternalRam& cpuInternalRam)
+void CpuMemoryBus::Initialize(Cpu& cpu, Ppu& ppu, Apu& apu, Cartridge& cartridge, CpuInternalRam& cpuInternalRam)
 {
 	m_cpu = &cpu;
 	m_ppu = &ppu;
+	m_apu = &apu;
 	m_cartridge = &cartridge;
 	m_cpuInternalRam = &cpuInternalRam;
 }
 
 uint8 CpuMemoryBus::Read(uint16 cpuAddress)
 {
+	uint8 apuResult = 0;
+	//@TODO: Implement pAPU registers
+	if (cpuAddress == CpuMemory::kApuFrameCounter)
+	{
+		//@TODO: Conflict: address $4017 is used by both controller port 2 and APU
+		apuResult = m_apu->HandleCpuRead(cpuAddress);
+	}
+
 	if (cpuAddress >= CpuMemory::kExpansionRomBase)
 	{
 		return m_cartridge->HandleCpuRead(cpuAddress);
 	}
 	else if (cpuAddress >= CpuMemory::kCpuRegistersBase)
 	{
-		return m_cpu->HandleCpuRead(cpuAddress);
+		return m_cpu->HandleCpuRead(cpuAddress) | apuResult;
 	}
 	else if (cpuAddress >= CpuMemory::kPpuRegistersBase)
 	{
@@ -40,6 +50,32 @@ uint8 CpuMemoryBus::Read(uint16 cpuAddress)
 
 void CpuMemoryBus::Write(uint16 cpuAddress, uint8 value)
 {
+	switch (cpuAddress)
+	{
+	case CpuMemory::kApuPulse1ChannelA:
+	case CpuMemory::kApuPulse1ChannelB:
+	case CpuMemory::kApuPulse1ChannelC:
+	case CpuMemory::kApuPulse1ChannelD:
+	case CpuMemory::kApuPulse2ChannelA:
+	case CpuMemory::kApuPulse2ChannelB:
+	case CpuMemory::kApuPulse2ChannelC:
+	case CpuMemory::kApuPulse2ChannelD:
+	case CpuMemory::kApuTriangleChannelA:
+	case CpuMemory::kApuTriangleChannelB:
+	case CpuMemory::kApuTriangleChannelC:
+	case CpuMemory::kApuNoiseChannelA:
+	case CpuMemory::kApuNoiseChannelB:
+	case CpuMemory::kApuNoiseChannelC:
+	case CpuMemory::kApuDMCChannelA:
+	case CpuMemory::kApuDMCChannelB:
+	case CpuMemory::kApuDMCChannelC:
+	case CpuMemory::kApuDMCChannelD:
+	case CpuMemory::kApuControlStatus:
+	case CpuMemory::kApuFrameCounter:
+		//@TODO: Conflict: address $4017 is used by both controller port 2 and APU
+		m_apu->HandleCpuWrite(cpuAddress, value);
+	}
+
 	if (cpuAddress >= CpuMemory::kExpansionRomBase)
 	{
 		m_cartridge->HandleCpuWrite(cpuAddress, value);

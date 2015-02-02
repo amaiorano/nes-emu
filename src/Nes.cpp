@@ -21,7 +21,7 @@ void Nes::Initialize()
 	m_ppu.Initialize(m_ppuMemoryBus, *this);
 	m_cartridge.Initialize(*this);
 	m_cpuInternalRam.Initialize();
-	m_cpuMemoryBus.Initialize(m_cpu, m_ppu, m_cartridge, m_cpuInternalRam);
+	m_cpuMemoryBus.Initialize(m_cpu, m_ppu, m_apu, m_cartridge, m_cpuInternalRam);
 	m_ppuMemoryBus.Initialize(m_ppu, m_cartridge);
 }
 
@@ -39,6 +39,7 @@ void Nes::Reset()
 	m_frameTimer.Reset();
 	m_cpu.Reset();
 	m_ppu.Reset();
+	m_apu.Reset();
 	//@TODO: Maybe reset cartridge (and mapper)?
 
 	m_lastSaveRamTime = System::GetTimeSec();
@@ -54,6 +55,7 @@ void Nes::ExecuteFrame(bool paused, bool turbo)
 	}
 
 	m_ppu.RenderFrame();
+	m_apu.OutputFrame(paused);
 
 	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast).
 	// If turbo mode is enabled, it won't wait.

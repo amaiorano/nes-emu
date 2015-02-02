@@ -21,6 +21,11 @@ public:
 			FAIL("Failed to open file: %s", name);
 	}
 
+	bool IsOpen() const
+	{
+		return m_file != nullptr;
+	}
+
 	bool Open(const char* name, const char* mode)
 	{
 		Close();
