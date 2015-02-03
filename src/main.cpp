@@ -46,7 +46,7 @@ namespace
 
 	bool OpenRomFileDialog(std::string& fileSelected)
 	{
-		return System::OpenFileDialog(fileSelected, "Open NES rom", "NES rom *.nes\0*.nes\0");
+		return System::OpenFileDialog(fileSelected, "Open NES rom", FILE_FILTER("NES Rom", "*.nes"));
 	}
 }
 

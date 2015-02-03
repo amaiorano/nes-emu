@@ -3,6 +3,10 @@
 
 // Platform-specific system calls
 
+#if PLATFORM_WINDOWS
+	#define FILE_FILTER(name, types) name " (" types ")\0" types "\0"
+#endif
+
 namespace System
 {
 	void Sleep(uint32 ms);
@@ -10,7 +14,7 @@ namespace System
 	char WaitForKeyPress();
 	void DebugBreak();
 	void MessageBox(const char* title, const char* message);
-	bool OpenFileDialog(std::string& fileSelected, const char* title = "Open", const char* filter = "All files *.*\0*.*\0");
+	bool OpenFileDialog(std::string& fileSelected, const char* title = "Open", const char* filter = FILE_FILTER("All files", "*.*"));
 
 	typedef uint64 Ticks;
 	Ticks GetTicks();
