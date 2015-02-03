@@ -2,6 +2,8 @@
 #include "Nes.h"
 #include "System.h"
 #include "Input.h"
+#include "Renderer.h"
+#include "Debugger.h"
 
 #define kVersionMajor 1
 #define kVersionMinor 0
@@ -79,6 +81,8 @@ int main(int argc, char* argv[])
 
 		std::shared_ptr<Nes> nes = std::make_shared<Nes>();
 		nes->Initialize();
+		
+		Debugger::Initialize(*nes.get());		
 
 		RomHeader romHeader = nes->LoadRom(romFile.c_str());
 		PrintRomInfo(romFile.c_str(), romHeader);
@@ -87,13 +91,16 @@ int main(int argc, char* argv[])
 		bool quit = false;
 		bool paused = false;
 		bool stepOneFrame = false;
-		bool turbo = false;
 
 		while (!quit)
 		{
 			Input::Update();
+			
+			Debugger::Update();
 
-			nes->ExecuteFrame(paused && !stepOneFrame, turbo);
+			nes->ExecuteFrame(paused);
+
+			Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f] %s", kVersionString, nes->GetFps(), paused? "*PAUSED*" : "").Value() );
 
 			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_O))
 			{
@@ -123,14 +130,21 @@ int main(int argc, char* argv[])
 				paused = !paused;
 			}
 
-			stepOneFrame = false;
-			if (Input::KeyPressed(SDL_SCANCODE_LEFTBRACKET) || Input::KeyDown(SDL_SCANCODE_RIGHTBRACKET))
+			// Restore pause state after stepping
+			if (stepOneFrame)
 			{
+				stepOneFrame = false;
 				paused = true;
-				stepOneFrame = true;
 			}
 
-			turbo = Input::KeyDown(SDL_SCANCODE_GRAVE); // tilde '~' key
+			if (Input::KeyPressed(SDL_SCANCODE_LEFTBRACKET) || Input::KeyDown(SDL_SCANCODE_RIGHTBRACKET))
+			{
+				stepOneFrame = true;
+				paused = false; // Unpause for one frame
+			}
+
+			const bool turbo = Input::KeyDown(SDL_SCANCODE_GRAVE); // tilde '~' key
+			nes->SetTurboEnabled(turbo);
 		}
 	}
 	catch (const std::exception& ex)
@@ -141,6 +155,8 @@ int main(int argc, char* argv[])
 	{
 		System::MessageBox("Exception", "Unknown exception");
 	}
+
+	Debugger::Shutdown();
 
 	return 0;
 }

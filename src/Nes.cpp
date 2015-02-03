@@ -1,28 +1,24 @@
 #include "Nes.h"
 #include "FileStream.h"
 #include "Rom.h"
-#include "Debugger.h"
 #include "System.h"
 #include "Renderer.h"
 
 Nes::~Nes()
 {
-	Debugger::Shutdown();
-
 	// Save sram on exit
 	m_cartridge.WriteSaveRamFile();
 }
 
 void Nes::Initialize()
 {
-	Debugger::Initialize(*this);
-
 	m_cpu.Initialize(m_cpuMemoryBus);
 	m_ppu.Initialize(m_ppuMemoryBus, *this);
 	m_cartridge.Initialize(*this);
 	m_cpuInternalRam.Initialize();
 	m_cpuMemoryBus.Initialize(m_cpu, m_ppu, m_cartridge, m_cpuInternalRam);
 	m_ppuMemoryBus.Initialize(m_ppu, m_cartridge);
+	m_turbo = false;
 }
 
 RomHeader Nes::LoadRom(const char* file)
@@ -44,23 +40,18 @@ void Nes::Reset()
 	m_lastSaveRamTime = System::GetTimeSec();
 }
 
-void Nes::ExecuteFrame(bool paused, bool turbo)
+void Nes::ExecuteFrame(bool paused)
 {
-	const float32 minFrameTime = 1.0f/60.0f;
-
 	if (!paused)
 	{
 		ExecuteCpuAndPpuFrame();
+		m_ppu.RenderFrame();
 	}
 
-	m_ppu.RenderFrame();
-
-	// PPU just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast).
+	// Just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast).
 	// If turbo mode is enabled, it won't wait.
-	m_frameTimer.Update(turbo? 0.0f : minFrameTime);
-
-	extern const char* kVersionString;
-	Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f] %s", kVersionString, m_frameTimer.GetFps(), paused? "*PAUSED*" : "").Value() );
+	const float32 minFrameTime = 1.0f/60.0f;
+	m_frameTimer.Update(m_turbo? 0.f: minFrameTime);
 
 	// Auto-save sram at fixed intervals
 	const float64 saveInterval = 5.0;

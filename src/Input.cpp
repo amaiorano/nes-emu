@@ -1,17 +1,32 @@
 #include "Input.h"
-#include "SDL_keyboard.h"
+#include <SDL_keyboard.h>
+#include <SDL_events.h>
 #include <memory>
 
 namespace
 {
 	Uint8 g_currState[SDL_NUM_SCANCODES];
 	Uint8 g_lastState[SDL_NUM_SCANCODES];
+
+	void PollEvents()
+	{
+		// Need to consume all events for window to be responsive
+		SDL_Event e;
+		while( SDL_PollEvent(&e) )
+		{
+			if( e.type == SDL_QUIT )
+			{
+				exit(0);
+			}
+		}
+	}
 }
 
 namespace Input
 {
 	void Update()
 	{
+		PollEvents();
 		memcpy(g_lastState, g_currState, sizeof(g_lastState));
 		memcpy(g_currState, SDL_GetKeyboardState(nullptr), sizeof(g_currState));
 	}

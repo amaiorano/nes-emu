@@ -1,10 +1,10 @@
 #include "Renderer.h"
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
-#include "SDL.h"
+#include <SDL.h>
 
 namespace
 {
-	std::string g_windowTitle = "nes-emu";
+	SDL_Window* g_mainWindow = nullptr;
 
 	class BackBuffer
 	{
@@ -82,7 +82,10 @@ Renderer::~Renderer()
 
 void Renderer::SetWindowTitle(const char* title)
 {
-	g_windowTitle = title;
+	if (g_mainWindow)
+	{
+		SDL_SetWindowTitle(g_mainWindow, title);
+	}
 }
 
 void Renderer::Create()
@@ -97,7 +100,7 @@ void Renderer::Create()
 	const size_t windowWidth = static_cast<size_t>(kScreenWidth * windowScale);
 	const size_t windowHeight = static_cast<size_t>(kScreenHeight * windowScale);
 	
-	m_impl->m_window = SDL_CreateWindow(g_windowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
+	m_impl->m_window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
 	if (!m_impl->m_window)
 		FAIL("SDL_CreateWindow failed");
 
@@ -108,6 +111,8 @@ void Renderer::Create()
 	m_impl->m_backbuffer.Create(kScreenWidth, kScreenHeight, m_impl->m_renderer);
 
 	Clear();
+
+	g_mainWindow = m_impl->m_window;
 }
 
 void Renderer::Destroy()
@@ -118,6 +123,7 @@ void Renderer::Destroy()
 		SDL_DestroyWindow(m_impl->m_window);
 		delete m_impl;
 		m_impl = nullptr;
+		g_mainWindow = nullptr;
 	}
 }
 
@@ -134,16 +140,4 @@ void Renderer::DrawPixel(int32 x, int32 y, const Color4& color)
 void Renderer::Present()
 {
 	m_impl->m_backbuffer.Flip(m_impl->m_renderer);
-
-	SDL_SetWindowTitle(m_impl->m_window, g_windowTitle.c_str());
-
-	// Need to consume all events for window to be responsive
-	SDL_Event e;
-	while( SDL_PollEvent(&e) )
-	{
-		if( e.type == SDL_QUIT )
-		{
-			exit(0);
-		}
-	}
 }

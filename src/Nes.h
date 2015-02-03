@@ -18,11 +18,14 @@ public:
 	RomHeader LoadRom(const char* file);
 	void Reset();
 
-	void ExecuteFrame(bool paused, bool turbo);
+	void ExecuteFrame(bool paused);
+
+	void SetTurboEnabled(bool enabled) { m_turbo = enabled; }
 
 	void SignalCpuNmi() { m_cpu.Nmi(); }
 	void SignalCpuIrq() { m_cpu.Irq(); }
 
+	float64 GetFps() const { return m_frameTimer.GetFps(); }
 	NameTableMirroring GetNameTableMirroring() const { return m_cartridge.GetNameTableMirroring(); }
 	void HACK_OnScanline() { m_cartridge.HACK_OnScanline(); }
 
@@ -40,4 +43,5 @@ private:
 	PpuMemoryBus m_ppuMemoryBus;
 
 	float64 m_lastSaveRamTime;
+	bool m_turbo;
 };

@@ -7,11 +7,11 @@
 #include "OpCodeTable.h"
 #include "System.h"
 #include "FileStream.h"
-#include <cstdio>
+#include "Input.h"
 #include <cassert>
 
 #define FCEUX_OUTPUT 0
-#define TRACE_TO_FILE 0
+#define TRACE_TO_FILE 1
 #define ENABLE_POST_TRACE 0
 
 #if FCEUX_OUTPUT
@@ -20,27 +20,37 @@
 
 namespace
 {
-	bool g_trace = true;
-	bool g_stepMode = false;
+	bool g_trace = false;
 	uint16 g_instructionBreakpoints[10] = {0};
 	uint16 g_dataBreakpoints[10] = {0};
+	FILE* g_traceFile = nullptr;
 
-	FILE* GetTraceFile()
+	void OpenTraceFile()
 	{
-		static FILE* fs = fopen("trace.log", "w+");
-		return fs;
+	#if TRACE_TO_FILE
+		g_traceFile = fopen("trace.log", "w+");
+	#endif
 	}
 
 	void CloseTraceFile()
 	{
-		fclose(GetTraceFile());
+	#if TRACE_TO_FILE
+		if (g_traceFile)
+		{
+			fclose(g_traceFile);
+			g_traceFile = nullptr;
+		}
+	#endif
 	}
 
 	void TraceToFile(const char* format, ...)
 	{
+		if (g_traceFile == nullptr)
+			OpenTraceFile();
+
 		va_list args;
 		va_start(args, format);
-		vfprintf(GetTraceFile(), format, args);
+		vfprintf(g_traceFile, format, args);
 		va_end(args);
 	}
 }
@@ -66,9 +76,30 @@ public:
 
 	void Shutdown()
 	{
-#if TRACE_TO_FILE
 		CloseTraceFile();
-#endif
+	}
+
+	void Update()
+	{
+		const bool prevTrace = g_trace;
+
+		if (Input::KeyPressed(SDL_SCANCODE_T))
+		{
+			g_trace = !g_trace;
+			printf("[Trace: %s]\n", g_trace? "on" : "off");
+		}
+
+		if (Input::KeyPressed(SDL_SCANCODE_D))
+		{
+			printf("[Dump Memory]\n");
+			DumpMemory();
+		}
+
+		// If trace stopped, close file to flush out contents
+		if (prevTrace && !g_trace)
+		{
+			CloseTraceFile();
+		}
 	}
 
 	void DumpMemory()
@@ -92,8 +123,6 @@ public:
 		}
 
 		ProcessBreakpoints();
-
-		ProcessInput();
 	}
 
 	void PostCpuInstruction()
@@ -183,82 +212,6 @@ private:
 		const char* file = "CpuMemory.dmp";
 		printf("Dumping: %s\n", file);
 		MemoryDump(cpuMemoryBus, file);
-	}
-
-	void ProcessInput()
-	{
-		const char KEY_SPACE = 32;
-		const char KEY_ENTER = 13;
-
-		char key;
-		if (g_stepMode)
-		{
-			bool done = false;
-			
-			while (!done)
-			{
-				key = (char)tolower(System::WaitForKeyPress());
-				//printf("key pressed: %c (%d)\n", key, key);
-
-				switch (key)
-				{
-				case KEY_SPACE:
-				case KEY_ENTER:
-					done = true;
-					if (!g_trace)
-					{
-						g_trace = true; // Turn back on in case it's off
-						printf("[Trace on]\n");
-					}
-					break;
-
-				case 'q':
-					printf("[User Quit]\n");
-					throw std::logic_error("User quit from debugger");
-					break;
-
-				case 'g':
-					g_stepMode = false;					
-					if (!g_trace)
-						printf("[Running]\n");
-					done = true;
-					break;
-
-				case 't':
-					g_trace = !g_trace;
-					printf("[Trace: %s]\n", g_trace? "on" : "off");
-					break;
-
-				case 'd':
-					printf("[Dump Memory]\n");
-					DumpMemory();
-					break;
-				}
-			}
-		}
-		else // not in step mode, check if we should be
-		{
-			// Checking for input every instruction slows the game down to a crawl,
-			// so we check after a certain number of instructions
-			bool checkForBreakIntoDebugger = false;
-			{
-				static int kInstructionInterval = 200;
-				static int numElapsedInstructions = 0;
-				if (++numElapsedInstructions == kInstructionInterval)
-				{
-					numElapsedInstructions = 0;
-					checkForBreakIntoDebugger = true;
-				}
-			}
-			
-			if (checkForBreakIntoDebugger && System::GetKeyPress(key))
-			{
-				g_stepMode = true;
-
-				if (!g_trace)
-					printf("[Stopped]\n");
-			}
-		}
 	}
 
 	void PrintRegisters()
@@ -460,11 +413,7 @@ private:
 			if (iter != std::end(g_instructionBreakpoints) && *iter != 0)
 			{
 				printf("[Instruction Breakpoint @ " ADDR_16 "]\n", *iter);
-				if (!g_stepMode)
-				{
-					System::DebugBreak();
-					g_stepMode = true;
-				}
+				System::DebugBreak();
 			}
 		}
 
@@ -474,11 +423,7 @@ private:
 			if (iter != std::end(g_dataBreakpoints) && *iter != 0)
 			{
 				printf("[Data breakpoint @ " ADDR_16 "]\n", *iter);
-				if (!g_stepMode)
-				{
-					System::DebugBreak();
-					g_stepMode = true;
-				}
+				System::DebugBreak();
 			}
 		}
 	}
@@ -499,6 +444,7 @@ namespace Debugger
 
 	void Initialize(Nes& nes) { g_debugger.Initialize(nes); }
 	void Shutdown() { g_debugger.Shutdown(); }
+	void Update() { ScopedExecuting se; g_debugger.Update(); }
 	void DumpMemory() { ScopedExecuting se; g_debugger.DumpMemory(); }
 	void PreCpuInstruction() { ScopedExecuting se; g_debugger.PreCpuInstruction(); }
 	void PostCpuInstruction() { ScopedExecuting se; g_debugger.PostCpuInstruction(); }
