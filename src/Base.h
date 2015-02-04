@@ -19,6 +19,7 @@
 // Disable warnings
 #if PLATFORM_WINDOWS
 	#pragma warning(disable : 4201) // nonstandard extension used : nameless struct/union
+	#pragma warning(disable : 4127) // conditional expression is constant	
 #endif
 
 #define FORCEINLINE __inline

@@ -11,11 +11,11 @@
 #include <cassert>
 
 #define FCEUX_OUTPUT 0
-#define TRACE_TO_FILE 1
 #define ENABLE_POST_TRACE 0
 
 #if FCEUX_OUTPUT
-#define ENABLE_POST_TRACE 0
+	#undef ENABLE_POST_TRACE
+	#define ENABLE_POST_TRACE 0
 #endif
 
 namespace
@@ -23,43 +23,67 @@ namespace
 	bool g_trace = false;
 	uint16 g_instructionBreakpoints[10] = {0};
 	uint16 g_dataBreakpoints[10] = {0};
-	FILE* g_traceFile = nullptr;
 
-	void OpenTraceFile()
+	namespace Trace
 	{
-	#if TRACE_TO_FILE
-		g_traceFile = fopen("trace.log", "w+");
-	#endif
-	}
+		FILE* g_file = nullptr;
+		bool g_firstOpen = true;
+		char g_buffer[KB(8)]; // Enough to hold one line, must be flushed to file stream often
+		char* g_curr = g_buffer;
 
-	void CloseTraceFile()
-	{
-	#if TRACE_TO_FILE
-		if (g_traceFile)
+		void Open()
 		{
-			fclose(g_traceFile);
-			g_traceFile = nullptr;
+			if (g_firstOpen)
+			{
+				g_file = fopen("trace.log", "w+");
+				g_firstOpen = false;
+			}
+			else
+			{
+				g_file = fopen("trace.log", "a+");
+			}
 		}
-	#endif
-	}
+		
+void FlushToFileStream();
 
-	void TraceToFile(const char* format, ...)
-	{
-		if (g_traceFile == nullptr)
-			OpenTraceFile();
+		void Close()
+		{
+			if (g_file)
+			{
+				FlushToFileStream();
+				fclose(g_file);
+				g_file = nullptr;
+				g_curr = g_buffer;
+			}
+		}
 
-		va_list args;
-		va_start(args, format);
-		vfprintf(g_traceFile, format, args);
-		va_end(args);
+		// Call often to make sure not to overflow fixed buffer. Does not necessarily update
+		// the file on disk as the stream is buffered, and even if the buffer is flushed, the
+		// OS usually implements delayed writes. Use FlushToDisk() to force it to flush all
+		// contents to disk.
+		void FlushToFileStream()
+		{
+			if (g_curr > g_buffer)
+			{
+				assert(g_curr <= g_buffer + ARRAYSIZE(g_buffer));
+				if (g_file == nullptr)
+					Open();
+
+				fwrite(g_buffer, g_curr - g_buffer, 1, g_file);
+				g_curr = g_buffer;
+			}
+		}
+
+		void FlushToDisk()
+		{
+			Close();
+		}
 	}
 }
 
-#if TRACE_TO_FILE
-	#define TRACE TraceToFile
-#else
-	#define TRACE printf
-#endif
+#define TRACEF(...)		Trace::g_curr += sprintf(Trace::g_curr, __VA_ARGS__)
+#define TRACE(text)		do { strcat(Trace::g_curr, text); Trace::g_curr += (ARRAYSIZE(text)-1); } while (false)
+
 
 class DebuggerImpl
 {
@@ -76,7 +100,7 @@ public:
 
 	void Shutdown()
 	{
-		CloseTraceFile();
+		Trace::Close();
 	}
 
 	void Update()
@@ -95,10 +119,19 @@ public:
 			DumpMemory();
 		}
 
+		if (Input::KeyPressed(SDL_SCANCODE_F))
+		{
+			if (g_trace)
+			{
+				printf("[Flushing Trace]\n");
+				Trace::FlushToDisk();
+			}
+		}
+
 		// If trace stopped, close file to flush out contents
 		if (prevTrace && !g_trace)
 		{
-			CloseTraceFile();
+			Trace::Close();
 		}
 	}
 
@@ -136,6 +169,9 @@ public:
 			TRACE("\n");
 		}
 	#endif
+
+		// Flush after every instruction to make sure we don't overflow the fixed size buffer
+		Trace::FlushToFileStream();
 	}
 
 private:
@@ -235,7 +271,7 @@ private:
 		#define HILO(v) (cpu.P.Test(v) ? StatusFlagNames[BitFlagToPos<v>::Result-1] : tolower(StatusFlagNames[BitFlagToPos<v>::Result-1]))
 		#define ADDR_8_NO$ "%02X"
 
-		TRACE("A:" ADDR_8_NO$ " X:" ADDR_8_NO$ " Y:" ADDR_8_NO$ " S:" ADDR_8_NO$ " P:%c%c%c%c%c%c%c%c",
+		TRACEF("A:" ADDR_8_NO$ " X:" ADDR_8_NO$ " Y:" ADDR_8_NO$ " S:" ADDR_8_NO$ " P:%c%c%c%c%c%c%c%c",
 			cpu.A, cpu.X, cpu.Y, cpu.SP, HILO(Negative), HILO(Overflow), HILO(Unused), HILO(BrkExecuted), HILO(Decimal), HILO(IrqDisabled), HILO(Zero), HILO(Carry) );
 
 		#undef HILO
@@ -245,7 +281,7 @@ private:
 	void PrintOperandValue()
 	{
 		Cpu& cpu = m_nes->m_cpu;
-		TRACE(" (" ADDR_16 ")=" ADDR_8, cpu.m_operandAddress, cpu.Read8(cpu.m_operandAddress));
+		TRACEF(" (" ADDR_16 ")=" ADDR_8, cpu.m_operandAddress, cpu.Read8(cpu.m_operandAddress));
 	}
 
 	void PrintStack()
@@ -254,7 +290,7 @@ private:
 		TRACE(" Stack:[ ");
 		for (int sp = 0xFF; sp > cpu.SP; --sp)
 		{
-			TRACE("%02X ", cpu.Read8(CpuMemory::kStackBase + (uint8)sp));
+			TRACEF("%02X ", cpu.Read8(CpuMemory::kStackBase + (uint8)sp));
 		}
 		TRACE("]");
 	}
@@ -262,7 +298,7 @@ private:
 	void PrintCycleCount()
 	{
 		Cpu& cpu = m_nes->m_cpu;
-		TRACE("c%-12d", cpu.m_totalCycles);
+		TRACEF("c%-12d", cpu.m_totalCycles);
 	}
 
 	void PrintInstruction()
@@ -275,26 +311,26 @@ private:
 		// Print current PRG 16K bank/page
 	#if !FCEUX_OUTPUT
 		if (PC > 0x8000)
-			TRACE("%02X:", m_nes->m_cartridge.GetPrgBankIndex16k(PC));
+			TRACEF("%02X:", m_nes->m_cartridge.GetPrgBankIndex16k(PC));
 		else
 			TRACE("  :");
 	#endif
 
 		// Print PC
-		TRACE(ADDR_16 ":", PC);
+		TRACEF(ADDR_16 ":", PC);
 
 		// Print instruction in hex
 		for (uint16 i = 0; i < 3; ++i)
 		{
 			if (i < opCodeEntry.numBytes)
-				TRACE("%02X ", cpu.Read8(PC + i));
+				TRACEF("%02X ", cpu.Read8(PC + i));
 			else
 				TRACE("   ");
 		}
 		TRACE(" ");
 
 		// Print opcode name
-		TRACE("%s ", OpCodeName::String[opCodeEntry.opCodeName]);
+		TRACEF("%s ", OpCodeName::String[opCodeEntry.opCodeName]);
 
 		// Print operand
 		char operandText[64] = {0};
@@ -400,7 +436,7 @@ private:
 			assert(false && "Invalid addressing mode");
 			break;
 		}
-		TRACE("%-41s", operandText);
+		TRACEF("%-41s", operandText);
 	}
 
 	void ProcessBreakpoints()
