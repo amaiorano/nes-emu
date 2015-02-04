@@ -79,10 +79,11 @@ int main(int argc, char* argv[])
 			FAIL("No rom file to load");
 		}
 
-		std::shared_ptr<Nes> nes = std::make_shared<Nes>();
+		std::shared_ptr<Nes> nesHolder = std::make_shared<Nes>();
+		Nes* nes = nesHolder.get();
 		nes->Initialize();
 		
-		Debugger::Initialize(*nes.get());		
+		Debugger::Initialize(*nes);
 
 		RomHeader romHeader = nes->LoadRom(romFile.c_str());
 		PrintRomInfo(romFile.c_str(), romHeader);

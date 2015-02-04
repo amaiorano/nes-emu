@@ -31,3 +31,4 @@ ipch/
 # Project-specific
 temp/
 *.dmp
+*.log
