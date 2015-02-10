@@ -135,5 +135,8 @@
     <ClCompile Include="src\Mapper4.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\Apu.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

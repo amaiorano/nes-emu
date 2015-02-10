@@ -63,13 +63,16 @@ namespace
 
 Cpu::Cpu()
 	: m_cpuMemoryBus(nullptr)
+	, m_apu(nullptr)
 	, m_opCodeEntry(nullptr)
 {
 }
 
-void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus)
+void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus, Apu& apu)
 {
 	m_cpuMemoryBus = &cpuMemoryBus;
+	m_apu = &apu;
+
 	m_controllerPorts.Initialize();
 }
 
@@ -144,10 +147,11 @@ uint8 Cpu::HandleCpuRead(uint16 cpuAddress)
 	case CpuMemory::kControllerPort1: // $4016
 	case CpuMemory::kControllerPort2: // $4017
 		return m_controllerPorts.HandleCpuRead(cpuAddress);
-		break;
+
+	default:
+		return m_apu->HandleCpuRead(cpuAddress);
 	}
 
-	//@TODO: Implement pAPU registers
 	return 0;
 }
 
@@ -188,7 +192,7 @@ void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		break;
 
 	default:
-		//@TODO: Implement pAPU registers
+		m_apu->HandleCpuWrite(cpuAddress, value);
 		break;
 	}
 }

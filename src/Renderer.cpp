@@ -31,6 +31,10 @@ namespace
 		{
 			Unlock();
 			SDL_RenderCopy(renderer, m_backbufferTexture, NULL, NULL);
+
+			extern void DebugDrawAudio(SDL_Renderer* renderer);
+			DebugDrawAudio(renderer);
+
 			SDL_RenderPresent(renderer);
 			Lock();
 		}
