@@ -1,15 +1,15 @@
 #include "Apu.h"
+#include "AudioDriver.h"
 #include <vector>
 #include <algorithm>
-#include <SDL_render.h>
-#include "Renderer.h"
 
-//@TODO: ifdef supports override... also move to Base.h
-#define override virtual
+// Temp for debug drawing
+#include "Renderer.h"
+#include <SDL_render.h>
 
 #define APU_TO_CPU_CYCLE(cpuCycle) static_cast<size_t>(cpuCycle * 2)
 
-Apu* g_apu = nullptr;
+Apu* g_apu = nullptr; //@HACK: get rid of this
 
 struct Divider
 {
@@ -105,15 +105,6 @@ struct LengthCounter
 	}
 };
 
-//struct Gate
-//{
-//
-//};
-
-
-
-
-
 // Controls volume in 2 ways: decreasing saw with optional looping, or constant volume
 // Input: Clocked by Frame Sequencer
 // Output: 4-bit volume value (0-15)
@@ -157,7 +148,7 @@ struct Envelope
 		{
 			m_startFlag = false;
 			m_counter = 15;
-			m_divider.SetPeriod(m_constantVolume + 1);
+			m_divider.SetPeriod(m_constantVolume + 1); // Constant volume doubles up as divider reload value (+1)
 		}
 		else
 		{
@@ -296,6 +287,7 @@ struct SweepUnit
 
 			if (lastDividerCounter == 0 && m_enabled)
 			{
+				//ComputeTargetPeriod();
 				AdjustTimerPeriod();
 			}
 
@@ -303,13 +295,8 @@ struct SweepUnit
 		}
 		else
 		{
-			if (m_divider.m_counter > 0)
+			if (m_enabled && m_divider.Clock())
 			{
-				m_divider.Clock();
-			}
-			else if (m_enabled)
-			{
-				m_divider.Clock(); // Resets counter to period
 				AdjustTimerPeriod();
 			}
 		}
@@ -383,6 +370,7 @@ struct PulseChannel
 		if (m_lengthCounter.ReadCounter() == 0)
 			return 0;
 
+		//auto value = std::max<size_t>(5, m_envelope.GetVolume()) * m_sequencer.m_currValue;
 		auto value = m_envelope.GetVolume() * m_sequencer.m_currValue;
 
 		assert(value < 16);
@@ -512,10 +500,18 @@ void Apu::Initialize()
 	m_frameCounter->m_envelopes.push_back(&m_pulse1->m_envelope);
 	m_frameCounter->m_lengthCounters.push_back(&m_pulse1->m_lengthCounter);
 	m_frameCounter->m_sweepUnits.push_back(&m_pulse1->m_sweepUnit);
+
+	m_elapsedCpuCycles = 0;
+	
+	m_audioDriver = std::make_shared<AudioDriver>();
+	m_audioDriver->Initialize();
 }
 
 void Apu::Execute(uint32 cpuCycles)
 {
+	const size_t kCpuCyclesPerSec = 1786840;
+	const size_t kCpuCyclesPerSample = kCpuCyclesPerSec / m_audioDriver->GetSampleRate();
+
 	for (uint32 i = 0; i < cpuCycles; ++i)
 	{
 		//@TODO: Clock all timers - pulse timers are clocked every 2nd CPU clock (even frames)
@@ -527,15 +523,21 @@ void Apu::Execute(uint32 cpuCycles)
 		m_frameCounter->Clock();
 
 		m_evenFrame = !m_evenFrame;
-	}
 
-	//size_t v = m_pulse1->GetValue();
-	//if (v > 0)
-	//	printf("%d\n", m_pulse1->GetValue());
+		// Fill the sample buffer at the current output sample rate (i.e. 48 KHz)
+		if (++m_elapsedCpuCycles == kCpuCyclesPerSample)
+		{
+			m_elapsedCpuCycles = 0;
+
+			float32 sample = m_pulse1->GetValue() / 15.0f;
+			m_audioDriver->AddSampleF32(sample);
+		}
+	}
 }
 
 uint8 Apu::HandleCpuRead(uint16 cpuAddress)
 {
+	(void)cpuAddress;
 	return 0;
 }
 
@@ -547,15 +549,16 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 	{
 	case 0x4000:
 		pulse1->m_sequencer.SetDuty( ReadBits(value, BITS(6, 7)) >> 6 );
-		pulse1->m_lengthCounter.m_halt = TestBits(value, 5);
-		pulse1->m_envelope.m_constantVolumeMode = TestBits(value, 4);
+		pulse1->m_lengthCounter.m_halt = TestBits(value, BIT(5));
+		pulse1->m_envelope.m_loop = pulse1->m_lengthCounter.m_halt; // Same bit
+		pulse1->m_envelope.m_constantVolumeMode = TestBits(value, BIT(4));
 		pulse1->m_envelope.m_constantVolume = ReadBits(value, BITS(0,1,2,3));
 		break;
 
 	case 0x4001: // Sweep unit setup
-		pulse1->m_sweepUnit.m_enabled = TestBits(value, 7);
-		pulse1->m_sweepUnit.m_divider.SetPeriod(ReadBits(value, BITS(4, 5, 6)) >> 4); //@TODO: Call func on sweep unit
-		pulse1->m_sweepUnit.m_negate = TestBits(value, 3);
+		pulse1->m_sweepUnit.m_enabled = TestBits(value, BIT(7));
+		pulse1->m_sweepUnit.m_divider.SetPeriod((ReadBits(value, BITS(4, 5, 6)) >> 4) + 1); //@TODO: Call func on sweep unit
+		pulse1->m_sweepUnit.m_negate = TestBits(value, BIT(3));
 		pulse1->m_sweepUnit.m_shiftCount = ReadBits(value, BITS(0,1,2));
 		pulse1->m_sweepUnit.m_reload = true; // Side effect
 		break;
@@ -590,7 +593,7 @@ void DebugDrawAudio(SDL_Renderer* renderer)
 		SDL_Rect rect = { x, y, (int)size, 20 };
 		y += 20;
 
-		SDL_SetRenderDrawColor(renderer, color.R(), color.G(), color.B(), 128);// color.A());
+		SDL_SetRenderDrawColor(renderer, color.R(), color.G(), color.B(), color.A());
 		SDL_RenderFillRect(renderer, &rect);
 	};
 

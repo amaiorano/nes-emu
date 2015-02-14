@@ -139,20 +139,25 @@ void Cpu::Execute(uint32& cpuCyclesElapsed)
 
 uint8 Cpu::HandleCpuRead(uint16 cpuAddress)
 {
+	uint8 result = 0;
+
 	switch (cpuAddress)
 	{
 	case CpuMemory::kSpriteDmaReg: // $4014
-		return m_spriteDmaRegister;
+		result = m_spriteDmaRegister;
+		break;
 
 	case CpuMemory::kControllerPort1: // $4016
 	case CpuMemory::kControllerPort2: // $4017
-		return m_controllerPorts.HandleCpuRead(cpuAddress);
+		result = m_controllerPorts.HandleCpuRead(cpuAddress);
+		break;
 
 	default:
-		return m_apu->HandleCpuRead(cpuAddress);
+		result = m_apu->HandleCpuRead(cpuAddress);
+		break;
 	}
-
-	return 0;
+	
+	return result;
 }
 
 void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
