@@ -7,9 +7,11 @@
 class AudioDriver::AudioDriverImpl
 {
 public:
-	static const int kSampleRate = 48000;
-	//static const SDL_AudioFormat kSampleFormat = AUDIO_S16; // Apparently supported by all drivers?
-	static const SDL_AudioFormat kSampleFormat = AUDIO_U16;
+	friend class AudioDriver;
+
+	static const int kSampleRate = 44100;
+	static const SDL_AudioFormat kSampleFormat = AUDIO_S16; // Apparently supported by all drivers?
+	//static const SDL_AudioFormat kSampleFormat = AUDIO_U16;
 	static const int kNumChannels = 1;
 	static const int kSamplesPerCallback = 1024;
 
@@ -20,7 +22,7 @@ public:
 	typedef FormatToType<kSampleFormat>::Type SampleFormatType;
 
 	AudioDriverImpl()
-		: m_audioDevice(0)
+		: m_audioDeviceID(0)
 	{
 	}
 
@@ -42,24 +44,24 @@ public:
 		desired.callback = AudioCallback;
 		desired.userdata = this;
 
-		m_audioDevice = SDL_OpenAudioDevice(NULL, 0, &desired, NULL/*&m_audioSpec*/, /*SDL_AUDIO_ALLOW_FORMAT_CHANGE*/0);
+		m_audioDeviceID = SDL_OpenAudioDevice(NULL, 0, &desired, NULL/*&m_audioSpec*/, SDL_AUDIO_ALLOW_ANY_CHANGE);
 		m_audioSpec = desired;
 
-		if (m_audioDevice == 0)
+		if (m_audioDeviceID == 0)
 			FAIL("Failed to open audio device (error code %d)", SDL_GetError());
 
 		// The minimize audio delay in the case where we write faster than the audio thread can read, we
 		// must make the buffer as small as possible - that is, twice the number of samples we need to feed
 		// the audio device per callback.
-		const size_t bufferSize = kSamplesPerCallback * 2;
+		const size_t bufferSize = static_cast<size_t>(kSamplesPerCallback * 2.5f);
 		m_samples.Init(bufferSize);
 
-		SDL_PauseAudioDevice(m_audioDevice, 0); // Unpause audio
+		SDL_PauseAudioDevice(m_audioDeviceID, 0); // Unpause audio
 	}
 
 	void Shutdown()
 	{
-		SDL_CloseAudioDevice(m_audioDevice);
+		SDL_CloseAudioDevice(m_audioDeviceID);
 		SDL_QuitSubSystem(SDL_INIT_AUDIO);
 	}
 
@@ -68,7 +70,10 @@ public:
 		assert(sample >= 0.0f && sample <= 1.0f);
 		//@TODO: This multiply is wrong for signed format types (S16, S32)
 		float targetSample = sample * std::numeric_limits<SampleFormatType>::max();
+
+		SDL_LockAudioDevice(m_audioDeviceID);
 		m_samples.Write(static_cast<SampleFormatType>(targetSample));
+		SDL_UnlockAudioDevice(m_audioDeviceID);
 	}
 
 private:
@@ -87,7 +92,7 @@ private:
 		}
 	}
 
-	SDL_AudioDeviceID m_audioDevice;
+	SDL_AudioDeviceID m_audioDeviceID;
 	SDL_AudioSpec m_audioSpec;
 	CircularBuffer<SampleFormatType> m_samples;
 };
@@ -115,7 +120,7 @@ void AudioDriver::Shutdown()
 
 size_t AudioDriver::GetSampleRate() const
 {
-	return AudioDriverImpl::kSampleRate;
+	return m_impl->m_audioSpec.freq;
 }
 
 void AudioDriver::AddSampleF32(float32 sample)

@@ -18,9 +18,10 @@ public:
 	}
 
 	// Attempts to write numValues from source into buffer; will not go past the read pointer
-	void Write(T* source, size_t numValues)
+	size_t Write(T* source, size_t numValues)
 	{
 		assert(m_wrapped < 2);
+		size_t numValuesActuallyWritten = 0;
 
 		if (m_wrapped == 0) // read is behind write
 		{
@@ -29,6 +30,7 @@ public:
 
 			std::copy_n(source, numValuesForFirstWrite, m_write);
 			m_write += numValuesForFirstWrite;
+			numValuesActuallyWritten += numValuesForFirstWrite;
 			assert(m_write <= m_end);
 
 			if (m_write == m_end)
@@ -41,7 +43,7 @@ public:
 			// update our inputs and fall through into m_wrapped == 1 condition below
 			if (numValuesForFirstWrite == numValues)
 			{
-				return;
+				return numValuesActuallyWritten;
 			}
 			else
 			{
@@ -56,10 +58,14 @@ public:
 			// Write as much as we can; but we can't go past the read pointer
 			size_t roomLeft = m_read - m_write;
 			const size_t numValuesToWrite = std::min(numValues, roomLeft);
+
 			std::copy_n(source, numValuesToWrite, m_write);
 			m_write += numValuesToWrite;
+			numValuesActuallyWritten += numValuesToWrite;
 			assert(m_write <= m_read);
 		}
+
+		return numValuesActuallyWritten;
 	}
 
 	// Attempts to read numValues worth of data from the buffer into dest, returns how many values actually read
@@ -113,9 +119,9 @@ public:
 	}
 
 	//@TODO: Optimize for single value write
-	void Write(T value)
+	size_t Write(T value)
 	{
-		Write(&value, 1);
+		return Write(&value, 1);
 	}
 
 	//@TODO: Optimize for single value read

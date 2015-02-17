@@ -509,8 +509,8 @@ void Apu::Initialize()
 
 void Apu::Execute(uint32 cpuCycles)
 {
-	const size_t kCpuCyclesPerSec = 1786840;
-	const size_t kCpuCyclesPerSample = kCpuCyclesPerSec / m_audioDriver->GetSampleRate();
+	const float32 kCpuCyclesPerSec = 1786840.0f;
+	const float32 kCpuCyclesPerSample = kCpuCyclesPerSec / (float32)m_audioDriver->GetSampleRate();
 
 	for (uint32 i = 0; i < cpuCycles; ++i)
 	{
@@ -525,9 +525,9 @@ void Apu::Execute(uint32 cpuCycles)
 		m_evenFrame = !m_evenFrame;
 
 		// Fill the sample buffer at the current output sample rate (i.e. 48 KHz)
-		if (++m_elapsedCpuCycles == kCpuCyclesPerSample)
+		if (++m_elapsedCpuCycles >= kCpuCyclesPerSample)
 		{
-			m_elapsedCpuCycles = 0;
+			m_elapsedCpuCycles -= kCpuCyclesPerSample;
 
 			float32 sample = m_pulse1->GetValue() / 15.0f;
 			m_audioDriver->AddSampleF32(sample);
