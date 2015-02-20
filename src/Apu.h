@@ -2,8 +2,8 @@
 #include "Base.h"
 #include <memory>
 
-struct PulseChannel;
-struct FrameCounter;
+class PulseChannel;
+class FrameCounter;
 class AudioDriver;
 
 class Apu

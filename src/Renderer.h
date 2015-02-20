@@ -23,11 +23,14 @@ struct Color4
 	uint8 G() const { return uint8((argb & 0x0000FF00)>>8); }
 	uint8 B() const { return uint8((argb & 0x000000FF)); }
 
-	static Color4& Black()	{ static Color4 c(0x00, 0x00, 0x00, 0xFF); return c; }
-	static Color4& White()	{ static Color4 c(0xFF, 0xFF, 0xFF, 0xFF); return c; }
-	static Color4& Red()	{ static Color4 c(0xFF, 0x00, 0x00, 0xFF); return c; }
-	static Color4& Green()	{ static Color4 c(0x00, 0xFF, 0x00, 0xFF); return c; }
-	static Color4& Blue()	{ static Color4 c(0x00, 0x00, 0xFF, 0xFF); return c; }
+	static Color4& Black()		{ static Color4 c(0x00, 0x00, 0x00, 0xFF); return c; }
+	static Color4& White()		{ static Color4 c(0xFF, 0xFF, 0xFF, 0xFF); return c; }
+	static Color4& Red()		{ static Color4 c(0xFF, 0x00, 0x00, 0xFF); return c; }
+	static Color4& Green()		{ static Color4 c(0x00, 0xFF, 0x00, 0xFF); return c; }
+	static Color4& Blue()		{ static Color4 c(0x00, 0x00, 0xFF, 0xFF); return c; }
+	static Color4& Cyan()		{ static Color4 c(0x00, 0xFF, 0xFF, 0xFF); return c; }
+	static Color4& Magenta()	{ static Color4 c(0xFF, 0x00, 0xFF, 0xFF); return c; }
+	static Color4& Yellow()		{ static Color4 c(0xFF, 0xFF, 0x00, 0xFF); return c; }
 };
 
 

@@ -11,20 +11,21 @@
 
 Apu* g_apu = nullptr; //@HACK: get rid of this
 
-struct Divider
+class Divider
 {
-	size_t m_period;
-	size_t m_counter;
-
+public:
 	void Initialize()
 	{
-		SetPeriod(0);
+		m_period = 0;
+		m_counter = 0;
 	}
+
+	size_t GetPeriod() const { return m_period; }
+	size_t GetCounter() const { return m_counter;  }
 
 	void SetPeriod(size_t period)
 	{
 		m_period = period;
-		m_counter = m_period;
 	}
 
 	void ResetCounter()
@@ -34,28 +35,51 @@ struct Divider
 
 	bool Clock()
 	{
-		//@NOTE: Can't assert this because period is written in 2 writes with a potential Clock in between.
-		// Can fix this by making sure to call SetPeriod only once both writes are made?
-		//assert(m_counter > 0 || m_period == 0);
-
-		if (m_counter > 0 && --m_counter == 0)
+#if 1
+		// This logic doesn't allow counter to remain 0, unless period is 0 (divider is disabled).
+		// This means if period is 5, it will count 5,4,3,2,1,0->5,4,3,2,1,0->5, etc. clocking output on 0->5
+		if (m_counter == 0) // Unusual, don't generate a clock
 		{
 			ResetCounter();
-			return true;
+		}
+		else if (--m_counter == 0)
+		{
+			if (m_period > 0) // Is this right? Should it generate an output clock every clock if period is 0?
+			{
+				ResetCounter();
+				return true;
+			}
 		}
 		return false;
-	}	
+#else
+		// This logic allows the counter to be 0 for one clock, then on the next clock,
+		// resets the counter to period and generates an output clock
+		if (m_counter > 0)
+		{
+			--m_counter;
+		}
+		else // m_counter is 0
+		{
+			if (m_period > 0) // Is this right? Should it generate an output clock every clock if period is 0?
+			{
+				ResetCounter();
+				return true;
+			}
+		}
+		return false;
+#endif
+	}
+
+private:
+	size_t m_period;
+	size_t m_counter;
 };
 
-
 // When LengthCounter reaches 0, corresponding channel is silenced
-// file:///C:/code/tony/nes-emu-temp/nesdevwiki/wikipages/APU_Length_Counter.xhtml
-struct LengthCounter
+// http://wiki.nesdev.com/w/index.php/APU_Length_Counter
+class LengthCounter
 {
-	bool m_enabled;
-	bool m_halt;
-	size_t m_counter;
-
+public:
 	void Initialize()
 	{
 		m_enabled = false;
@@ -98,40 +122,48 @@ struct LengthCounter
 			--m_counter;
 	}
 
-	// If 0 returned, should silence channel
 	size_t ReadCounter() const
 	{
 		return m_counter;
 	}
+
+	bool SilenceChannel() const
+	{
+		return m_counter == 0;
+	}
+
+private:
+	bool m_enabled;
+	bool m_halt;
+	size_t m_counter;
 };
 
 // Controls volume in 2 ways: decreasing saw with optional looping, or constant volume
 // Input: Clocked by Frame Sequencer
 // Output: 4-bit volume value (0-15)
 // http://wiki.nesdev.com/w/index.php/APU_Envelope
-struct Envelope
+class VolumeEnvelope
 {
-	bool m_startFlag;
-	bool m_loop;
-	Divider m_divider;
-	size_t m_counter; // Saw envelope volume value (if not constant volume mode)
-	bool m_constantVolumeMode;
-	size_t m_constantVolume; // Also reload value for divider
-
+public:
 	void Initialize()
 	{
-		m_startFlag = true;
+		m_restart = true;
 		m_loop = false;
 		m_divider.Initialize();
 		m_counter = 0;
-		m_constantVolume = false;
+		m_constantVolumeMode = false;
 		m_constantVolume = 0;
 	}
+
+	void Restart() { m_restart = true; }
+	void SetLoop(bool loop) { m_loop = loop;  }
+	void SetConstantVolumeMode(bool mode) { m_constantVolumeMode = mode; }
 
 	void SetConstantVolume(uint16 value)
 	{
 		assert(value < 16);
 		m_constantVolume = value;
+		m_divider.SetPeriod(m_constantVolume + 1); // Constant volume doubles up as divider reload value (+1)
 	}
 
 	size_t GetVolume()
@@ -144,11 +176,12 @@ struct Envelope
 	// Clocked by FrameCounter
 	void Clock()
 	{
-		if (m_startFlag)
+		if (m_restart)
 		{
-			m_startFlag = false;
+			m_restart = false;
 			m_counter = 15;
-			m_divider.SetPeriod(m_constantVolume + 1); // Constant volume doubles up as divider reload value (+1)
+			//m_divider.SetPeriod(m_constantVolume + 1); // Constant volume doubles up as divider reload value (+1)
+			m_divider.ResetCounter();
 		}
 		else
 		{
@@ -165,20 +198,31 @@ struct Envelope
 			}
 		}
 	}
+private:
+	friend void DebugDrawAudio(SDL_Renderer* renderer);
+
+	bool m_restart;
+	bool m_loop;
+	Divider m_divider;
+	size_t m_counter; // Saw envelope volume value (if not constant volume mode)
+	bool m_constantVolumeMode;
+	size_t m_constantVolume; // Also reload value for divider
 };
 
 // Produces the square wave based on one of 4 duty cycles
-struct PulseSequencer
+// http://wiki.nesdev.com/w/index.php/APU_Pulse
+class PulseWaveGenerator
 {
-	uint8 m_duty; // 2 bits
-	uint8 m_step; // 0-7
-	uint8 m_currValue;
-
+public:
 	void Initialize()
 	{
 		m_duty = 0;
 		m_step = 0;
-		m_currValue = 0;
+	}
+
+	void Restart()
+	{
+		m_step = 0;
 	}
 
 	void SetDuty(uint8 duty)
@@ -190,6 +234,11 @@ struct PulseSequencer
 	// Clocked by an Timer, outputs bit (0 or 1)
 	void Clock()
 	{
+		m_step = (m_step + 1) % 8;
+	}
+
+	size_t GetValue() const
+	{
 		static uint8 sequences[4][8] =
 		{
 			{ 0, 1, 0, 0, 0, 0, 0, 0 }, // 12.5%
@@ -198,39 +247,61 @@ struct PulseSequencer
 			{ 1, 0, 0, 1, 1, 1, 1, 1 }  // 25% negated
 		};
 
-		m_step = (m_step + 1) % 8;
-		
 		const uint8 value = sequences[m_duty][m_step];
-		// @TODO: This value is fed into a gate? Or we just return it...
-		m_currValue = value;
+		return value;
 	}
+
+private:
+	uint8 m_duty; // 2 bits
+	uint8 m_step; // 0-7
 };
 
 // A timer is used in each of the five channels to control the sound frequency. It contains a divider which is
 // clocked by the CPU clock. The triangle channel's timer is clocked on every CPU cycle, but the pulse, noise,
 // and DMC timers are clocked only on every second CPU cycle and thus produce only even periods.
-// **** Don't need this.. just use a divider for the timer part (divider -> divider for non-triangle)
-struct Timer
+// http://wiki.nesdev.com/w/index.php/APU_Misc#Glossary
+class Timer
 {
-	Divider m_divider; // Clocked by CPU clock...
-	PulseSequencer* m_sequencer;
-
+public:
 	void Initialize()
 	{
 		m_divider.Initialize();
-		m_sequencer = nullptr;
+		m_pulseWaveGenerator = nullptr;
 	}
 
-	void SetCounterLow8(uint8 value)
+	void Connect(PulseWaveGenerator& pulseWaveGenerator)
 	{
-		//@NOTE: Bypassing SetPeriod
-		m_divider.m_period = value;
+		assert(m_pulseWaveGenerator == nullptr);
+		m_pulseWaveGenerator = &pulseWaveGenerator;
 	}
 
-	void SetCounterHigh3(uint8 value)
+	void Reset()
 	{
-		//@NOTE: Bypassing SetPeriod
-		m_divider.m_period |= (value << 8);
+		m_divider.ResetCounter();
+	}
+
+	size_t GetPeriod() const { return m_divider.GetPeriod(); }
+
+	void SetPeriod(size_t period)
+	{
+		assert(period < (BIT(11) - 1));
+		m_divider.SetPeriod(period);
+	}
+
+	void SetPeriodLow8(uint8 value)
+	{
+		size_t period = m_divider.GetPeriod();
+		period = (period & 0xE00) | value; // Keep bits 9,10,11
+		m_divider.SetPeriod(period + 1); // @TODO: + 1 here? Is this right?
+	}
+
+	void SetPeriodHigh3(uint8 value)
+	{
+		assert(value < (BIT(3) - 1));
+		size_t period = m_divider.GetPeriod();
+		period = (value << 8) | (period & 0xFF); // Keep low 8 bits
+		m_divider.SetPeriod(period);
+
 		m_divider.ResetCounter();
 	}
 
@@ -239,23 +310,22 @@ struct Timer
 	{
 		if (m_divider.Clock())
 		{
-			m_sequencer->Clock();
+			m_pulseWaveGenerator->Clock();
 		}
 	}
+
+private:
+	friend void DebugDrawAudio(SDL_Renderer* renderer);
+
+	Divider m_divider;
+	PulseWaveGenerator* m_pulseWaveGenerator;
 };
 
+// Periodically adjusts the period of the Timer, sweeping the frequency high or low over time
 // http://wiki.nesdev.com/w/index.php/APU_Sweep
-struct SweepUnit
+class SweepUnit
 {
-	bool m_enabled;
-	bool m_negate;
-	bool m_reload;
-	bool m_silenceChannel; // This is the Sweep -> Gate connection, if true channel is silenced
-	uint8 m_shiftCount; // [0,7]
-	Divider m_divider;
-	Timer* m_timer;
-	size_t m_targetPeriod; // Target period for the timer; is computed continuously in real hardware
-
+public:
 	void Initialize()
 	{
 		m_enabled = true;
@@ -268,12 +338,29 @@ struct SweepUnit
 		m_targetPeriod = 0;
 	}
 
+	void Connect(Timer& timer)
+	{
+		assert(m_timer == nullptr);
+		m_timer = &timer;
+	}
+
+	void SetEnabled(bool enabled) { m_enabled = enabled; }
+	void SetNegate(bool negate) { m_negate = negate; }
+
 	void SetPeriod(size_t period)
 	{
 		assert(period < 8); // 3 bits
-		m_divider.SetPeriod(period + 1); //@TODO: Are we only supposed to set the period? Or is it correct to reset the counter as well?
+		m_divider.SetPeriod(period + 1); // Don't reset counter
 		ComputeTargetPeriod();
 	}
+
+	void SetShiftCount(uint8 shiftCount)
+	{
+		assert(shiftCount < (BIT(2) - 1));
+		m_shiftCount = shiftCount;
+	}
+
+	void Restart() { m_reload = true;  }
 
 	// Clocked by FrameCounter
 	void Clock()
@@ -282,46 +369,70 @@ struct SweepUnit
 
 		if (m_reload)
 		{
-			const auto lastDividerCounter = m_divider.m_counter;
-			m_divider.ResetCounter();
+			//const auto lastDividerCounter = m_divider.GetCounter();
 
-			if (lastDividerCounter == 0 && m_enabled)
+			// From nesdev wiki: "If the divider's counter was zero before the reload and the sweep is enabled,
+			// the pulse's period is also adjusted". BUT, divider can never be zero. So instead, I think they
+			// mean if the divider would have clocked and reset as usual, adjust timer period.
+			if (m_enabled && m_divider.Clock())
 			{
-				//ComputeTargetPeriod();
 				AdjustTimerPeriod();
 			}
+
+			m_divider.ResetCounter();
+
+			//if (lastDividerCounter == 0 && m_enabled)
+			//{
+			//	AdjustTimerPeriod();
+			//}
 
 			m_reload = false;
 		}
 		else
 		{
-			if (m_enabled && m_divider.Clock())
+
+			//// From the nesdev wiki, it looks like the divider is always decremented, but only
+			//// reset to its period if the sweep is enabled.
+			//if (m_divider.GetCounter() > 0)
+			//{
+			//	m_divider.Clock();
+			//}
+			//else if (m_enabled)
+			//{
+			//	if (m_divider.Clock())
+			//	{
+			//		//m_divider.Clock(); //***EXTRA CLOCK?
+			//		AdjustTimerPeriod();
+			//	}
+			//}
+
+			//@TODO: Always clock? Or only when enabled?
+			bool clocked = m_divider.Clock();
+			if (m_enabled && clocked)
+			//if (m_enabled && m_divider.Clock())
 			{
 				AdjustTimerPeriod();
 			}
 		}
 	}
 
-	template <typename T>
-	static inline T BitwiseRotateRight(T value, T shift, T width)
+	bool SilenceChannel() const
 	{
-		const T mask = (1 << shift) - 1; // Convert number of bits to shift to a mask with that many bits set
-		const T chopped = value & mask;
-		const T result = (chopped << (width - shift)) | (value >> shift);
-		return result;
+		return m_silenceChannel;
 	}
 
+private:
 	void ComputeTargetPeriod()
 	{
-		//@TODO: Validate this code. Not sure if this is what the wiki describes.
-		auto& currPeriod = m_timer->m_divider.m_period;
-		//const size_t shiftedPeriod = BitwiseRotateRight<size_t>(currPeriod, m_shiftCount, 11);
+		assert(m_shiftCount < 8); // 3 bits
+
+		const size_t currPeriod = m_timer->GetPeriod();
 		const size_t shiftedPeriod = currPeriod >> m_shiftCount;
 
 		if (m_negate)
 		{
-			//@TODO: For Pulse1, subtract an extra 1 from here
-			m_targetPeriod = currPeriod - shiftedPeriod;
+			//@TODO: For Pulse1, subtract an extra 1 from here, but not for Pulse2
+			m_targetPeriod = currPeriod - shiftedPeriod - 1;
 		}
 		else
 		{
@@ -337,66 +448,72 @@ struct SweepUnit
 		// If channel is not silenced, it means we're in range
 		if (m_enabled && m_shiftCount > 0 && !m_silenceChannel)
 		{
-			auto& currPeriod = m_timer->m_divider.m_period;
-			currPeriod = m_targetPeriod;
+			m_timer->SetPeriod(m_targetPeriod);
 		}
 	}
+
+private:
+	friend void DebugDrawAudio(SDL_Renderer* renderer);
+
+	bool m_enabled;
+	bool m_negate;
+	bool m_reload;
+	bool m_silenceChannel; // This is the Sweep -> Gate connection, if true channel is silenced
+	uint8 m_shiftCount; // [0,7]
+	Divider m_divider;
+	Timer* m_timer;
+	size_t m_targetPeriod; // Target period for the timer; is computed continuously in real hardware
 };
 
-struct PulseChannel
+// http://wiki.nesdev.com/w/index.php/APU_Pulse
+class PulseChannel
 {
+public:
 	void Initialize()
 	{
-		m_envelope.Initialize();
+		m_volumeEnvelope.Initialize();
 		m_sweepUnit.Initialize();
 		m_timer.Initialize();
-		m_sequencer.Initialize();
+		m_pulseWaveGenerator.Initialize();
 		m_lengthCounter.Initialize();
 
 		// Connect timer to sequencer
-		m_timer.m_sequencer = &m_sequencer;
+		m_timer.Connect(m_pulseWaveGenerator);
 
 		// Connect sweep unit to timer
-		m_sweepUnit.m_timer = &m_timer;
+		m_sweepUnit.Connect(m_timer);
 	}
 
 	size_t GetValue()
 	{
 		//@TODO: Maybe we should use gates
 
-		if (m_sweepUnit.m_silenceChannel)
+		if (m_sweepUnit.SilenceChannel())
 			return 0;
 
-		if (m_lengthCounter.ReadCounter() == 0)
+		if (m_lengthCounter.SilenceChannel())
 			return 0;
 
-		//auto value = std::max<size_t>(5, m_envelope.GetVolume()) * m_sequencer.m_currValue;
-		auto value = m_envelope.GetVolume() * m_sequencer.m_currValue;
+		auto value = m_volumeEnvelope.GetVolume() * m_pulseWaveGenerator.GetValue();
 
 		assert(value < 16);
 		return value;
 	}
 
-	Envelope m_envelope; // Clocked by FrameCounter
-	SweepUnit m_sweepUnit; // Clocked by FrameCounter
-	Timer m_timer; // Clocked by CPU clock
-	PulseSequencer m_sequencer; // Clocked by Timer
-	LengthCounter m_lengthCounter; // Clocked by FrameCounter
+//private:
+	VolumeEnvelope m_volumeEnvelope;
+	SweepUnit m_sweepUnit;
+	Timer m_timer;
+	PulseWaveGenerator m_pulseWaveGenerator;
+	LengthCounter m_lengthCounter;
 };
 
 
 // aka Frame Sequencer
-// file:///C:/code/tony/nes-emu-temp/nesdevwiki/wikipages/APU_Frame_Counter.xhtml
-struct FrameCounter
+// http://wiki.nesdev.com/w/index.php/APU_Frame_Counter
+class FrameCounter
 {
-	size_t m_cpuCycles;
-	size_t m_numSteps;
-	bool m_inhibitInterrupt;
-
-	std::vector<Envelope*> m_envelopes;
-	std::vector<LengthCounter*> m_lengthCounters;
-	std::vector<SweepUnit*> m_sweepUnits;
-
+public:
 	void Initialize()
 	{
 		m_cpuCycles = 0;
@@ -404,6 +521,95 @@ struct FrameCounter
 		m_inhibitInterrupt = true;
 	}
 
+	void AddConnection(VolumeEnvelope& e) { m_envelopes.push_back(&e); }
+	void AddConnection(LengthCounter& lc) { m_lengthCounters.push_back(&lc); }
+	void AddConnection(SweepUnit& su) { m_sweepUnits.push_back(&su); }
+
+	void SetMode(uint8 mode)
+	{
+		assert(mode < 2);
+		if (mode == 0)
+		{
+			m_numSteps = 4;
+		}
+		else
+		{
+			m_numSteps = 5;
+			ClockQuarterFrameChips();
+			ClockHalfFrameChips();
+		}
+
+		// Always restart sequence
+		m_cpuCycles = 0;
+	}
+
+	void AllowInterrupt() { m_inhibitInterrupt = false; }
+
+	// Clock every CPU cycle
+	void Clock()
+	{
+		bool resetCycles = false;
+
+		switch (m_cpuCycles)
+		{
+		case APU_TO_CPU_CYCLE(3728.5):
+			ClockQuarterFrameChips();
+			break;
+
+		case APU_TO_CPU_CYCLE(7456.5):
+			ClockQuarterFrameChips();
+			ClockHalfFrameChips();
+			break;
+
+		case APU_TO_CPU_CYCLE(11185.5):
+			ClockQuarterFrameChips();
+			break;
+
+		case APU_TO_CPU_CYCLE(14914):
+			if (m_numSteps == 4)
+			{
+				//@TODO: set interrupt flag if !inhibit
+			}
+			break;
+
+		case APU_TO_CPU_CYCLE(14914.5):
+			if (m_numSteps == 4)
+			{
+				//@TODO: set interrupt flag if !inhibit
+				ClockQuarterFrameChips();
+				ClockHalfFrameChips();
+			}
+			break;
+
+		case APU_TO_CPU_CYCLE(14915):
+			if (m_numSteps == 4)
+			{
+				//@TODO: set interrupt flag if !inhibit
+
+				resetCycles = true;
+			}
+			break;
+
+		case APU_TO_CPU_CYCLE(18640.5):
+			assert(m_numSteps == 5);
+			{
+				ClockQuarterFrameChips();
+				ClockHalfFrameChips();
+			}
+			break;
+
+		case APU_TO_CPU_CYCLE(18641):
+			assert(m_numSteps == 5);
+			{
+				resetCycles = true;
+			}
+			break;
+		}
+
+		m_cpuCycles = resetCycles ? 0 : m_cpuCycles + 1;
+	}
+
+private:
 	template <typename Container>
 	void ClockAll(Container& container)
 	{
@@ -413,74 +619,24 @@ struct FrameCounter
 		}
 	}
 
-	// Clock every CPU cycle
-	void Clock()
+	void ClockQuarterFrameChips()
 	{
-		m_cpuCycles += 1;
-
-		switch (m_cpuCycles)
-		{
-		case APU_TO_CPU_CYCLE(3728.5):
-			//@TODO: triangle's linear counter
-			ClockAll(m_envelopes);
-			break;
-
-		case APU_TO_CPU_CYCLE(7456.5):
-			//@TODO: triangle's linear counter
-			ClockAll(m_envelopes);
-			ClockAll(m_lengthCounters);
-			ClockAll(m_sweepUnits);
-			break;
-
-		case APU_TO_CPU_CYCLE(11185.5):
-			//@TODO: triangle's linear counter
-			ClockAll(m_envelopes);
-			break;
-
-		case APU_TO_CPU_CYCLE(14914):
-			//@TODO: set interrupt flag if !inhibit
-			break;
-
-		case APU_TO_CPU_CYCLE(14914.5):
-			if (m_numSteps == 4)
-			{
-				//@TODO: triangle's linear counter
-				//@TODO: set interrupt flag if !inhibit
-				ClockAll(m_envelopes);
-				ClockAll(m_lengthCounters);
-				ClockAll(m_sweepUnits);
-			}
-			break;
-
-		case APU_TO_CPU_CYCLE(14915):
-			if (m_numSteps == 4)
-			{
-				//@TODO: set interrupt flag if !inhibit
-
-				// Reset counter
-				m_cpuCycles = 0;
-			}
-			break;
-
-		case APU_TO_CPU_CYCLE(18640.5):
-			if (m_numSteps == 5)
-			{
-				//@TODO: triangle's linear counter
-				ClockAll(m_envelopes);
-				ClockAll(m_lengthCounters);
-				ClockAll(m_sweepUnits);
-			}
-			break;
-
-		case APU_TO_CPU_CYCLE(18641):
-			if (m_numSteps == 5)
-			{
-				// Reset counter
-				m_cpuCycles = 0;
-			}
-			break;
-		}
+		//@TODO: triangle's linear counter
+		ClockAll(m_envelopes);
 	}
+
+	void ClockHalfFrameChips()
+	{
+		ClockAll(m_lengthCounters);
+		ClockAll(m_sweepUnits);
+	}
+
+	size_t m_cpuCycles;
+	size_t m_numSteps;
+	bool m_inhibitInterrupt;
+	std::vector<VolumeEnvelope*> m_envelopes;
+	std::vector<LengthCounter*> m_lengthCounters;
+	std::vector<SweepUnit*> m_sweepUnits;
 };
 
 void Apu::Initialize()
@@ -496,10 +652,9 @@ void Apu::Initialize()
 	m_pulse1->Initialize();
 	
 	// Connect FrameCounter to chips it clocks
-	//@TODO: pass in FrameCounter to PulseChannel::Initialize so it can do this
-	m_frameCounter->m_envelopes.push_back(&m_pulse1->m_envelope);
-	m_frameCounter->m_lengthCounters.push_back(&m_pulse1->m_lengthCounter);
-	m_frameCounter->m_sweepUnits.push_back(&m_pulse1->m_sweepUnit);
+	m_frameCounter->AddConnection(m_pulse1->m_volumeEnvelope);
+	m_frameCounter->AddConnection(m_pulse1->m_lengthCounter);
+	m_frameCounter->AddConnection(m_pulse1->m_sweepUnit);
 
 	m_elapsedCpuCycles = 0;
 	
@@ -514,14 +669,13 @@ void Apu::Execute(uint32 cpuCycles)
 
 	for (uint32 i = 0; i < cpuCycles; ++i)
 	{
+		m_frameCounter->Clock();
+
 		//@TODO: Clock all timers - pulse timers are clocked every 2nd CPU clock (even frames)
 		if (m_evenFrame)
 		{
 			m_pulse1->m_timer.Clock();
 		}
-
-		m_frameCounter->Clock();
-
 		m_evenFrame = !m_evenFrame;
 
 		// Fill the sample buffer at the current output sample rate (i.e. 48 KHz)
@@ -529,7 +683,10 @@ void Apu::Execute(uint32 cpuCycles)
 		{
 			m_elapsedCpuCycles -= kCpuCyclesPerSample;
 
-			float32 sample = m_pulse1->GetValue() / 15.0f;
+			static float MasterVolume = 0.25;
+
+			float32 pulse1 = m_pulse1->GetValue() / 15.0f;
+			float32 sample = MasterVolume * pulse1;
 			m_audioDriver->AddSampleF32(sample);
 		}
 	}
@@ -548,37 +705,44 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 	switch (cpuAddress)
 	{
 	case 0x4000:
-		pulse1->m_sequencer.SetDuty( ReadBits(value, BITS(6, 7)) >> 6 );
-		pulse1->m_lengthCounter.m_halt = TestBits(value, BIT(5));
-		pulse1->m_envelope.m_loop = pulse1->m_lengthCounter.m_halt; // Same bit
-		pulse1->m_envelope.m_constantVolumeMode = TestBits(value, BIT(4));
-		pulse1->m_envelope.m_constantVolume = ReadBits(value, BITS(0,1,2,3));
+		pulse1->m_pulseWaveGenerator.SetDuty( ReadBits(value, BITS(6, 7)) >> 6 );
+		pulse1->m_lengthCounter.SetHalt( TestBits(value, BIT(5)) );
+		pulse1->m_volumeEnvelope.SetLoop( TestBits(value, BIT(5)) ); // Same bit for length counter halt and envelope loop
+		pulse1->m_volumeEnvelope.SetConstantVolumeMode( TestBits(value, BIT(4)) );
+		pulse1->m_volumeEnvelope.SetConstantVolume( ReadBits(value, BITS(0,1,2,3)) );
 		break;
 
 	case 0x4001: // Sweep unit setup
-		pulse1->m_sweepUnit.m_enabled = TestBits(value, BIT(7));
-		pulse1->m_sweepUnit.m_divider.SetPeriod((ReadBits(value, BITS(4, 5, 6)) >> 4) + 1); //@TODO: Call func on sweep unit
-		pulse1->m_sweepUnit.m_negate = TestBits(value, BIT(3));
-		pulse1->m_sweepUnit.m_shiftCount = ReadBits(value, BITS(0,1,2));
-		pulse1->m_sweepUnit.m_reload = true; // Side effect
+		pulse1->m_sweepUnit.SetEnabled( TestBits(value, BIT(7)) );
+		pulse1->m_sweepUnit.SetPeriod( ReadBits(value, BITS(4,5,6)) >> 4 );
+		pulse1->m_sweepUnit.SetNegate( TestBits(value, BIT(3)) );
+		pulse1->m_sweepUnit.SetShiftCount( ReadBits(value, BITS(0,1,2)) );
+		pulse1->m_sweepUnit.Restart(); // Side effect
 		break;
 
 	case 0x4002:
-		pulse1->m_timer.SetCounterLow8(value);
+		pulse1->m_timer.SetPeriodLow8(value);
 		break;
 
 	case 0x4003:
-		pulse1->m_timer.SetCounterHigh3( ReadBits(value, BITS(0,1,2)) );
+		pulse1->m_timer.SetPeriodHigh3( ReadBits(value, BITS(0,1,2)) );
 		pulse1->m_lengthCounter.LoadCounterFromLUT( ReadBits(value, BITS(3,4,5,6,7)) >> 3 );
 
 		// Side effects...
-		pulse1->m_envelope.m_startFlag = true;
-		pulse1->m_sequencer.m_step = 0; //@TODO: for pulse channels the phase is reset - IS THIS RIGHT?
+		pulse1->m_volumeEnvelope.Restart();
+		pulse1->m_pulseWaveGenerator.Restart(); //@TODO: for pulse channels the phase is reset - IS THIS RIGHT?
 		break;
 
 	case 0x4015:
 		pulse1->m_lengthCounter.SetEnabled( TestBits(value, BIT(0)) );
 		//@TODO: bits 1, 2, 3 set length counter values for other 3 channels
+		break;
+
+	case 0x4017:
+		m_frameCounter->SetMode(ReadBits(value, BIT(7)) >> 7);
+
+		if (TestBits(value, BIT(6)))
+			m_frameCounter->AllowInterrupt(); //@TODO: double-check this
 		break;
 	}
 }
@@ -601,9 +765,14 @@ void DebugDrawAudio(SDL_Renderer* renderer)
 	auto pulse1 = g_apu->m_pulse1.get();
 
 	DrawBar(pulse1->GetValue() / 15.0f * maxWidth, Color4::White());
-	DrawBar(pulse1->m_envelope.GetVolume() / 15.0f * maxWidth, Color4::Red());
-	DrawBar(pulse1->m_sweepUnit.m_silenceChannel ? 0 : maxWidth, Color4::Green());
-	DrawBar(pulse1->m_sequencer.m_currValue * maxWidth, Color4::Blue());
+	DrawBar(pulse1->m_volumeEnvelope.GetVolume() / 15.0f * maxWidth, Color4::Red());
+	DrawBar(pulse1->m_volumeEnvelope.m_counter / 15.0f * maxWidth, Color4::Cyan());
+	DrawBar(pulse1->m_volumeEnvelope.m_constantVolume / 15.0f * maxWidth, Color4::Magenta());
+	DrawBar(pulse1->m_sweepUnit.SilenceChannel() ? 0 : maxWidth, Color4::Green());
+	DrawBar(pulse1->m_pulseWaveGenerator.GetValue() * maxWidth, Color4::Blue());
 	DrawBar(pulse1->m_lengthCounter.ReadCounter() / 255.0f * maxWidth, Color4::Black());
-}
 
+	DrawBar(pulse1->m_sweepUnit.m_divider.GetCounter() / 7.0f * maxWidth, Color4::Red());
+	DrawBar(pulse1->m_timer.m_divider.GetPeriod() / 2047.0f * maxWidth, Color4::Blue());
+	DrawBar(pulse1->m_timer.m_divider.GetCounter() / 2047.0f * maxWidth, Color4::Green());
+}

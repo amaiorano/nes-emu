@@ -192,10 +192,10 @@ void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		break;
 
 	case CpuMemory::kControllerPort1: // $4016
-	case CpuMemory::kControllerPort2: // $4017
 		m_controllerPorts.HandleCpuWrite(cpuAddress, value);
 		break;
 
+	case CpuMemory::kControllerPort2: // $4017 For writes, this address is mapped to the APU!
 	default:
 		m_apu->HandleCpuWrite(cpuAddress, value);
 		break;
