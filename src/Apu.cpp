@@ -180,7 +180,6 @@ public:
 		{
 			m_restart = false;
 			m_counter = 15;
-			//m_divider.SetPeriod(m_constantVolume + 1); // Constant volume doubles up as divider reload value (+1)
 			m_divider.ResetCounter();
 		}
 		else
@@ -291,11 +290,11 @@ public:
 	void SetPeriodLow8(uint8 value)
 	{
 		size_t period = m_divider.GetPeriod();
-		period = (period & 0xE00) | value; // Keep bits 9,10,11
-		m_divider.SetPeriod(period + 1); // @TODO: + 1 here? Is this right?
+		period = (period & BITS(8,9,10)) | value; // Keep high 3 bits
+		SetPeriod(period);
 	}
 
-	void SetPeriodHigh3(uint8 value)
+	void SetPeriodHigh3(size_t value)
 	{
 		assert(value < (BIT(3) - 1));
 		size_t period = m_divider.GetPeriod();
