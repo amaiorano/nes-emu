@@ -11,6 +11,10 @@
 
 Apu* g_apu = nullptr; //@HACK: get rid of this
 
+
+// Divider outputs a clock periodically.
+// Note that the term 'period' in this code really means 'period reload value', P,
+// where the actual output clock period is P + 1.
 class Divider
 {
 public:
@@ -35,39 +39,13 @@ public:
 
 	bool Clock()
 	{
-#if 1
-		// This logic doesn't allow counter to remain 0, unless period is 0 (divider is disabled).
-		// This means if period is 5, it will count 5,4,3,2,1,0->5,4,3,2,1,0->5, etc. clocking output on 0->5
-		if (m_counter == 0) // Unusual, don't generate a clock
+		// We count down from P to 0 inclusive, clocking out every P + 1 input clocks.
+		if (m_counter-- == 0)
 		{
 			ResetCounter();
-		}
-		else if (--m_counter == 0)
-		{
-			if (m_period > 0) // Is this right? Should it generate an output clock every clock if period is 0?
-			{
-				ResetCounter();
-				return true;
-			}
+			return true;
 		}
 		return false;
-#else
-		// This logic allows the counter to be 0 for one clock, then on the next clock,
-		// resets the counter to period and generates an output clock
-		if (m_counter > 0)
-		{
-			--m_counter;
-		}
-		else // m_counter is 0
-		{
-			if (m_period > 0) // Is this right? Should it generate an output clock every clock if period is 0?
-			{
-				ResetCounter();
-				return true;
-			}
-		}
-		return false;
-#endif
 	}
 
 private:
@@ -163,7 +141,7 @@ public:
 	{
 		assert(value < 16);
 		m_constantVolume = value;
-		m_divider.SetPeriod(m_constantVolume + 1); // Constant volume doubles up as divider reload value (+1)
+		m_divider.SetPeriod(m_constantVolume); // Constant volume doubles up as divider reload value
 	}
 
 	size_t GetVolume()
@@ -349,7 +327,7 @@ public:
 	void SetPeriod(size_t period)
 	{
 		assert(period < 8); // 3 bits
-		m_divider.SetPeriod(period + 1); // Don't reset counter
+		m_divider.SetPeriod(period); // Don't reset counter
 		ComputeTargetPeriod();
 	}
 
@@ -371,8 +349,8 @@ public:
 			//const auto lastDividerCounter = m_divider.GetCounter();
 
 			// From nesdev wiki: "If the divider's counter was zero before the reload and the sweep is enabled,
-			// the pulse's period is also adjusted". BUT, divider can never be zero. So instead, I think they
-			// mean if the divider would have clocked and reset as usual, adjust timer period.
+			// the pulse's period is also adjusted". What this effectively means is: if the divider would have
+			// clocked and reset as usual, adjust the timer period.
 			if (m_enabled && m_divider.Clock())
 			{
 				AdjustTimerPeriod();
@@ -380,38 +358,28 @@ public:
 
 			m_divider.ResetCounter();
 
-			//if (lastDividerCounter == 0 && m_enabled)
-			//{
-			//	AdjustTimerPeriod();
-			//}
-
 			m_reload = false;
 		}
 		else
 		{
-
-			//// From the nesdev wiki, it looks like the divider is always decremented, but only
-			//// reset to its period if the sweep is enabled.
-			//if (m_divider.GetCounter() > 0)
-			//{
-			//	m_divider.Clock();
-			//}
-			//else if (m_enabled)
-			//{
-			//	if (m_divider.Clock())
-			//	{
-			//		//m_divider.Clock(); //***EXTRA CLOCK?
-			//		AdjustTimerPeriod();
-			//	}
-			//}
-
-			//@TODO: Always clock? Or only when enabled?
-			bool clocked = m_divider.Clock();
-			if (m_enabled && clocked)
-			//if (m_enabled && m_divider.Clock())
+#if 0
+			// Only clock divider while sweep is enabled
+			if (m_enabled && m_divider.Clock())
 			{
 				AdjustTimerPeriod();
 			}
+#else
+			// From the nesdev wiki, it looks like the divider is always decremented, but only
+			// reset to its period if the sweep is enabled.
+			if (m_divider.GetCounter() > 0)
+			{
+				m_divider.Clock();
+			}
+			else if (m_enabled && m_divider.Clock())
+			{
+				AdjustTimerPeriod();
+			}
+#endif
 		}
 	}
 
