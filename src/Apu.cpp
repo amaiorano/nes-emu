@@ -305,6 +305,7 @@ class SweepUnit
 public:
 	void Initialize()
 	{
+		m_subtractExtra = 0;
 		m_enabled = true;
 		m_negate = false;
 		m_reload = false;
@@ -313,6 +314,11 @@ public:
 		m_divider.Initialize();
 		m_timer = nullptr;
 		m_targetPeriod = 0;
+	}
+
+	void SetSubtractExtra()
+	{
+		m_subtractExtra = 1;
 	}
 
 	void Connect(Timer& timer)
@@ -398,8 +404,8 @@ private:
 
 		if (m_negate)
 		{
-			//@TODO: For Pulse1, subtract an extra 1 from here, but not for Pulse2
-			m_targetPeriod = currPeriod - shiftedPeriod - 1;
+			// Pulse1 subtracts an extra 1, but not Pulse2
+			m_targetPeriod = currPeriod - shiftedPeriod - m_subtractExtra;
 		}
 		else
 		{
@@ -422,6 +428,7 @@ private:
 private:
 	friend void DebugDrawAudio(SDL_Renderer* renderer);
 
+	size_t m_subtractExtra;
 	bool m_enabled;
 	bool m_negate;
 	bool m_reload;
@@ -615,13 +622,19 @@ void Apu::Initialize()
 	m_frameCounter.reset(new FrameCounter());
 	m_frameCounter->Initialize();
 
-	m_pulse1.reset(new PulseChannel());
-	m_pulse1->Initialize();
-	
-	// Connect FrameCounter to chips it clocks
-	m_frameCounter->AddConnection(m_pulse1->m_volumeEnvelope);
-	m_frameCounter->AddConnection(m_pulse1->m_lengthCounter);
-	m_frameCounter->AddConnection(m_pulse1->m_sweepUnit);
+	for (auto& pulse : m_pulseChannels)
+	{
+		pulse.reset(new PulseChannel());
+		pulse->Initialize();
+
+		// Connect FrameCounter to chips it clocks
+		m_frameCounter->AddConnection(pulse->m_volumeEnvelope);
+		m_frameCounter->AddConnection(pulse->m_lengthCounter);
+		m_frameCounter->AddConnection(pulse->m_sweepUnit);
+	}
+
+	// Pulse1 subtracts an extra 1 when computing target period
+	m_pulseChannels[0]->m_sweepUnit.SetSubtractExtra();
 
 	m_elapsedCpuCycles = 0;
 	
@@ -641,7 +654,8 @@ void Apu::Execute(uint32 cpuCycles)
 		//@TODO: Clock all timers - pulse timers are clocked every 2nd CPU clock (even frames)
 		if (m_evenFrame)
 		{
-			m_pulse1->m_timer.Clock();
+			for (auto& pulse : m_pulseChannels)
+				pulse->m_timer.Clock();
 		}
 		m_evenFrame = !m_evenFrame;
 
@@ -650,10 +664,16 @@ void Apu::Execute(uint32 cpuCycles)
 		{
 			m_elapsedCpuCycles -= kCpuCyclesPerSample;
 
-			static float MasterVolume = 0.25;
+			static float MasterVolume = 0.5f;
 
-			float32 pulse1 = m_pulse1->GetValue() / 15.0f;
-			float32 sample = MasterVolume * pulse1;
+			const size_t pulse1 = m_pulseChannels[0]->GetValue();
+			const size_t pulse2 = m_pulseChannels[1]->GetValue();
+
+			const float32 totalPulse = static_cast<float32>(pulse1 + pulse2);
+			const float32 pulseOut = totalPulse == 0 ? 0 : 95.88f / ((8128.0f / totalPulse) + 100);
+
+			const float32 sample = MasterVolume * pulseOut;
+
 			m_audioDriver->AddSampleF32(sample);
 		}
 	}
@@ -667,41 +687,51 @@ uint8 Apu::HandleCpuRead(uint16 cpuAddress)
 
 void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 {
-	auto pulse1 = m_pulse1.get();
+	PulseChannel* pulse = nullptr;
+	if (cpuAddress <= 0x4007)
+	{
+		pulse = m_pulseChannels[cpuAddress < 0x4004? 0 : 1].get();
+		assert(pulse);
+	}
 
 	switch (cpuAddress)
 	{
 	case 0x4000:
-		pulse1->m_pulseWaveGenerator.SetDuty( ReadBits(value, BITS(6, 7)) >> 6 );
-		pulse1->m_lengthCounter.SetHalt( TestBits(value, BIT(5)) );
-		pulse1->m_volumeEnvelope.SetLoop( TestBits(value, BIT(5)) ); // Same bit for length counter halt and envelope loop
-		pulse1->m_volumeEnvelope.SetConstantVolumeMode( TestBits(value, BIT(4)) );
-		pulse1->m_volumeEnvelope.SetConstantVolume( ReadBits(value, BITS(0,1,2,3)) );
+	case 0x4004:
+		pulse->m_pulseWaveGenerator.SetDuty( ReadBits(value, BITS(6, 7)) >> 6 );
+		pulse->m_lengthCounter.SetHalt( TestBits(value, BIT(5)) );
+		pulse->m_volumeEnvelope.SetLoop( TestBits(value, BIT(5)) ); // Same bit for length counter halt and envelope loop
+		pulse->m_volumeEnvelope.SetConstantVolumeMode( TestBits(value, BIT(4)) );
+		pulse->m_volumeEnvelope.SetConstantVolume( ReadBits(value, BITS(0,1,2,3)) );
 		break;
 
 	case 0x4001: // Sweep unit setup
-		pulse1->m_sweepUnit.SetEnabled( TestBits(value, BIT(7)) );
-		pulse1->m_sweepUnit.SetPeriod( ReadBits(value, BITS(4,5,6)) >> 4 );
-		pulse1->m_sweepUnit.SetNegate( TestBits(value, BIT(3)) );
-		pulse1->m_sweepUnit.SetShiftCount( ReadBits(value, BITS(0,1,2)) );
-		pulse1->m_sweepUnit.Restart(); // Side effect
+	case 0x4005:
+		pulse->m_sweepUnit.SetEnabled( TestBits(value, BIT(7)) );
+		pulse->m_sweepUnit.SetPeriod( ReadBits(value, BITS(4,5,6)) >> 4 );
+		pulse->m_sweepUnit.SetNegate( TestBits(value, BIT(3)) );
+		pulse->m_sweepUnit.SetShiftCount( ReadBits(value, BITS(0,1,2)) );
+		pulse->m_sweepUnit.Restart(); // Side effect
 		break;
 
 	case 0x4002:
-		pulse1->m_timer.SetPeriodLow8(value);
+	case 0x4006:
+		pulse->m_timer.SetPeriodLow8(value);
 		break;
 
 	case 0x4003:
-		pulse1->m_timer.SetPeriodHigh3( ReadBits(value, BITS(0,1,2)) );
-		pulse1->m_lengthCounter.LoadCounterFromLUT( ReadBits(value, BITS(3,4,5,6,7)) >> 3 );
+	case 0x4007:
+		pulse->m_timer.SetPeriodHigh3( ReadBits(value, BITS(0,1,2)) );
+		pulse->m_lengthCounter.LoadCounterFromLUT( ReadBits(value, BITS(3,4,5,6,7)) >> 3 );
 
 		// Side effects...
-		pulse1->m_volumeEnvelope.Restart();
-		pulse1->m_pulseWaveGenerator.Restart(); //@TODO: for pulse channels the phase is reset - IS THIS RIGHT?
+		pulse->m_volumeEnvelope.Restart();
+		pulse->m_pulseWaveGenerator.Restart(); //@TODO: for pulse channels the phase is reset - IS THIS RIGHT?
 		break;
 
 	case 0x4015:
-		pulse1->m_lengthCounter.SetEnabled( TestBits(value, BIT(0)) );
+		m_pulseChannels[0]->m_lengthCounter.SetEnabled( TestBits(value, BIT(0)) );
+		m_pulseChannels[1]->m_lengthCounter.SetEnabled( TestBits(value, BIT(1)) );
 		//@TODO: bits 1, 2, 3 set length counter values for other 3 channels
 		break;
 
@@ -716,6 +746,8 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 
 void DebugDrawAudio(SDL_Renderer* renderer)
 {
+	(void)renderer;
+#if 0
 	int x = 0;
 	int y = 0;
 
@@ -729,17 +761,18 @@ void DebugDrawAudio(SDL_Renderer* renderer)
 	};
 
 	float maxWidth = 200.0f;
-	auto pulse1 = g_apu->m_pulse1.get();
+	auto pulse = g_apu->m_pulseChannels[1].get();
 
-	DrawBar(pulse1->GetValue() / 15.0f * maxWidth, Color4::White());
-	DrawBar(pulse1->m_volumeEnvelope.GetVolume() / 15.0f * maxWidth, Color4::Red());
-	DrawBar(pulse1->m_volumeEnvelope.m_counter / 15.0f * maxWidth, Color4::Cyan());
-	DrawBar(pulse1->m_volumeEnvelope.m_constantVolume / 15.0f * maxWidth, Color4::Magenta());
-	DrawBar(pulse1->m_sweepUnit.SilenceChannel() ? 0 : maxWidth, Color4::Green());
-	DrawBar(pulse1->m_pulseWaveGenerator.GetValue() * maxWidth, Color4::Blue());
-	DrawBar(pulse1->m_lengthCounter.ReadCounter() / 255.0f * maxWidth, Color4::Black());
+	DrawBar(pulse->GetValue() / 15.0f * maxWidth, Color4::White());
+	DrawBar(pulse->m_volumeEnvelope.GetVolume() / 15.0f * maxWidth, Color4::Red());
+	DrawBar(pulse->m_volumeEnvelope.m_counter / 15.0f * maxWidth, Color4::Cyan());
+	DrawBar(pulse->m_volumeEnvelope.m_constantVolume / 15.0f * maxWidth, Color4::Magenta());
+	DrawBar(pulse->m_sweepUnit.SilenceChannel() ? 0 : maxWidth, Color4::Green());
+	DrawBar(pulse->m_pulseWaveGenerator.GetValue() * maxWidth, Color4::Blue());
+	DrawBar(pulse->m_lengthCounter.ReadCounter() / 255.0f * maxWidth, Color4::Black());
 
-	DrawBar(pulse1->m_sweepUnit.m_divider.GetCounter() / 7.0f * maxWidth, Color4::Red());
-	DrawBar(pulse1->m_timer.m_divider.GetPeriod() / 2047.0f * maxWidth, Color4::Blue());
-	DrawBar(pulse1->m_timer.m_divider.GetCounter() / 2047.0f * maxWidth, Color4::Green());
+	DrawBar(pulse->m_sweepUnit.m_divider.GetCounter() / 7.0f * maxWidth, Color4::Red());
+	DrawBar(pulse->m_timer.m_divider.GetPeriod() / 2047.0f * maxWidth, Color4::Blue());
+	DrawBar(pulse->m_timer.m_divider.GetCounter() / 2047.0f * maxWidth, Color4::Green());
+#endif
 }

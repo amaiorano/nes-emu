@@ -19,7 +19,7 @@ private:
 
 	bool m_evenFrame;
 	std::shared_ptr<FrameCounter> m_frameCounter;
-	std::shared_ptr<PulseChannel> m_pulse1;
+	std::shared_ptr<PulseChannel> m_pulseChannels[2];
 	float32 m_elapsedCpuCycles;
 	std::shared_ptr<AudioDriver> m_audioDriver;
 };
