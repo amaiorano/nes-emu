@@ -77,8 +77,6 @@ public:
 		m_halt = halt;
 	}
 
-	//@Side Effects of load: The envelope is restarted, for pulse channels phase is reset,
-	// for triangle the linear counter reload flag is set.
 	void LoadCounterFromLUT(uint8 index)
 	{
 		static uint8 lut[] = 
@@ -100,7 +98,7 @@ public:
 			--m_counter;
 	}
 
-	size_t ReadCounter() const
+	size_t GetValue() const
 	{
 		return m_counter;
 	}
@@ -144,7 +142,7 @@ public:
 		m_divider.SetPeriod(m_constantVolume); // Constant volume doubles up as divider reload value
 	}
 
-	size_t GetVolume()
+	size_t GetVolume() const
 	{
 		size_t result = m_constantVolumeMode ? m_constantVolume : m_counter;
 		assert(result < 16);
@@ -186,9 +184,15 @@ private:
 	size_t m_constantVolume; // Also reload value for divider
 };
 
+class WaveGenerator
+{
+public:
+	virtual void Clock() = 0;
+};
+
 // Produces the square wave based on one of 4 duty cycles
 // http://wiki.nesdev.com/w/index.php/APU_Pulse
-class PulseWaveGenerator
+class PulseWaveGenerator : public WaveGenerator
 {
 public:
 	void Initialize()
@@ -209,7 +213,7 @@ public:
 	}
 
 	// Clocked by an Timer, outputs bit (0 or 1)
-	void Clock()
+	virtual void Clock()
 	{
 		m_step = (m_step + 1) % 8;
 	}
@@ -243,13 +247,14 @@ public:
 	void Initialize()
 	{
 		m_divider.Initialize();
-		m_pulseWaveGenerator = nullptr;
+		m_waveGenerator = nullptr;
+		m_minPeriod = 0;
 	}
 
-	void Connect(PulseWaveGenerator& pulseWaveGenerator)
+	void Connect(WaveGenerator& waveGenerator)
 	{
-		assert(m_pulseWaveGenerator == nullptr);
-		m_pulseWaveGenerator = &pulseWaveGenerator;
+		assert(m_waveGenerator == nullptr);
+		m_waveGenerator = &waveGenerator;
 	}
 
 	void Reset()
@@ -282,12 +287,21 @@ public:
 		m_divider.ResetCounter();
 	}
 
+	void SetMinPeriod(size_t minPeriod)
+	{
+		m_minPeriod = minPeriod;
+	}
+
 	// Clocked by CPU clock every cycle (triangle channel) or second cycle (pulse/noise channels)
 	void Clock()
 	{
+		// Avoid popping and weird noises from ultra sonic frequencies
+		if (m_divider.GetPeriod() < m_minPeriod)
+			return;
+
 		if (m_divider.Clock())
 		{
-			m_pulseWaveGenerator->Clock();
+			m_waveGenerator->Clock();
 		}
 	}
 
@@ -295,7 +309,8 @@ private:
 	friend void DebugDrawAudio(SDL_Renderer* renderer);
 
 	Divider m_divider;
-	PulseWaveGenerator* m_pulseWaveGenerator;
+	WaveGenerator* m_waveGenerator;
+	size_t m_minPeriod;
 };
 
 // Periodically adjusts the period of the Timer, sweeping the frequency high or low over time
@@ -339,7 +354,7 @@ public:
 
 	void SetShiftCount(uint8 shiftCount)
 	{
-		assert(shiftCount < (BIT(2) - 1));
+		assert(shiftCount < BIT(3));
 		m_shiftCount = shiftCount;
 	}
 
@@ -458,7 +473,7 @@ public:
 		m_sweepUnit.Connect(m_timer);
 	}
 
-	size_t GetValue()
+	size_t GetValue() const
 	{
 		//@TODO: Maybe we should use gates
 
@@ -482,6 +497,147 @@ public:
 	LengthCounter m_lengthCounter;
 };
 
+class LinearCounter
+{
+public:
+	void Initialize()
+	{
+		m_reload = true;
+		m_control = true;
+		m_divider.Initialize();
+	}
+
+	void Restart() { m_reload = true; }
+	void SetControl(bool control) { m_control = control; }
+	void SetPeriod(size_t period)
+	{
+		assert(period < BIT(6));
+		m_divider.SetPeriod(period);
+	}
+
+	// Clocked by FrameCounter every CPU cycle
+	void Clock()
+	{
+		if (m_reload)
+		{
+			m_divider.ResetCounter();
+		}
+		else if (m_divider.GetCounter() > 0)
+		{
+			m_divider.Clock();
+		}
+
+		if (!m_control)
+		{
+			m_reload = false;
+		}
+	}
+
+	// If zero, sequencer is not clocked
+	size_t GetValue() const
+	{
+		return m_divider.GetCounter();
+	}
+
+	bool SilenceChannel() const
+	{
+		return GetValue() == 0;
+	}
+
+private:
+	bool m_reload;
+	bool m_control; // If set, keeps reloading
+	Divider m_divider;
+};
+
+class TriangleWaveGenerator : public WaveGenerator
+{
+public:
+	void Initialize()
+	{
+		m_step = 0;
+	}
+
+	virtual void Clock()
+	{
+		m_step = (m_step + 1) % 32;
+	}
+
+	size_t GetValue() const
+	{
+		static size_t sequence[] =
+		{
+			15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+		};
+		assert(m_step < 32);
+		return sequence[m_step];
+	}
+
+private:
+	uint8 m_step;
+};
+
+// Proxy that handles clocking TriangleWaveGenerator when both linear and length counters are non-zero
+class TriangleWaveGeneratorClocker : public WaveGenerator
+{
+public:
+	void Initialize()
+	{
+		m_linearCounter = nullptr;
+		m_lengthCounter = nullptr;
+		m_triangleWaveGenerator = nullptr;
+	}
+
+	virtual void Clock()
+	{
+		if (m_linearCounter->GetValue() > 0 && m_lengthCounter->GetValue() > 0)
+			m_triangleWaveGenerator->Clock();
+	}
+
+	LinearCounter* m_linearCounter;
+	LengthCounter* m_lengthCounter;
+	TriangleWaveGenerator* m_triangleWaveGenerator;
+};
+
+class TriangleChannel
+{
+public:
+	void Initialize()
+	{
+		m_linearCounter.Initialize();
+		m_lengthCounter.Initialize();
+		m_timer.Initialize();
+		m_clocker.Initialize();
+		m_triangleWaveGenerator.Initialize();
+
+		m_timer.Connect(m_clocker);
+		m_timer.SetMinPeriod(3); // Avoid popping from ultrasonic frequencies
+
+		//@TODO: Connect funcs
+		m_clocker.m_linearCounter = &m_linearCounter;
+		m_clocker.m_lengthCounter = &m_lengthCounter;
+		m_clocker.m_triangleWaveGenerator = &m_triangleWaveGenerator;
+	}
+
+	size_t GetValue() const
+	{
+		if (m_linearCounter.SilenceChannel())
+			return 0;
+
+		if (m_lengthCounter.SilenceChannel())
+			return 0;
+
+		return m_triangleWaveGenerator.GetValue();
+	}
+
+	LinearCounter m_linearCounter;
+	LengthCounter m_lengthCounter;
+	Timer m_timer;
+	TriangleWaveGeneratorClocker m_clocker;
+	TriangleWaveGenerator m_triangleWaveGenerator;
+};
+
 
 // aka Frame Sequencer
 // http://wiki.nesdev.com/w/index.php/APU_Frame_Counter
@@ -498,6 +654,7 @@ public:
 	void AddConnection(VolumeEnvelope& e) { m_envelopes.push_back(&e); }
 	void AddConnection(LengthCounter& lc) { m_lengthCounters.push_back(&lc); }
 	void AddConnection(SweepUnit& su) { m_sweepUnits.push_back(&su); }
+	void AddConnection(LinearCounter& lc) { m_linearCounters.push_back(&lc); }
 
 	void SetMode(uint8 mode)
 	{
@@ -595,8 +752,8 @@ private:
 
 	void ClockQuarterFrameChips()
 	{
-		//@TODO: triangle's linear counter
 		ClockAll(m_envelopes);
+		ClockAll(m_linearCounters);
 	}
 
 	void ClockHalfFrameChips()
@@ -611,6 +768,7 @@ private:
 	std::vector<VolumeEnvelope*> m_envelopes;
 	std::vector<LengthCounter*> m_lengthCounters;
 	std::vector<SweepUnit*> m_sweepUnits;
+	std::vector<LinearCounter*> m_linearCounters;
 };
 
 void Apu::Initialize()
@@ -636,6 +794,11 @@ void Apu::Initialize()
 	// Pulse1 subtracts an extra 1 when computing target period
 	m_pulseChannels[0]->m_sweepUnit.SetSubtractExtra();
 
+	m_triangleChannel.reset(new TriangleChannel());
+	m_triangleChannel->Initialize();
+	m_frameCounter->AddConnection(m_triangleChannel->m_linearCounter);
+	m_frameCounter->AddConnection(m_triangleChannel->m_lengthCounter);
+
 	m_elapsedCpuCycles = 0;
 	
 	m_audioDriver = std::make_shared<AudioDriver>();
@@ -651,28 +814,42 @@ void Apu::Execute(uint32 cpuCycles)
 	{
 		m_frameCounter->Clock();
 
-		//@TODO: Clock all timers - pulse timers are clocked every 2nd CPU clock (even frames)
-		if (m_evenFrame)
+		// Clock all timers - pulse timers are clocked every 2nd CPU clock (even frames)
 		{
-			for (auto& pulse : m_pulseChannels)
-				pulse->m_timer.Clock();
+			if (m_evenFrame)
+			{
+				for (auto& pulse : m_pulseChannels)
+					pulse->m_timer.Clock();
+			}
+			m_evenFrame = !m_evenFrame;
+
+			m_triangleChannel->m_timer.Clock();
+
+			//@TODO: clock noise channel timer?
 		}
-		m_evenFrame = !m_evenFrame;
 
 		// Fill the sample buffer at the current output sample rate (i.e. 48 KHz)
 		if (++m_elapsedCpuCycles >= kCpuCyclesPerSample)
 		{
 			m_elapsedCpuCycles -= kCpuCyclesPerSample;
 
-			static float MasterVolume = 0.5f;
+			static float kMasterVolume = 0.5f;
 
 			const size_t pulse1 = m_pulseChannels[0]->GetValue();
 			const size_t pulse2 = m_pulseChannels[1]->GetValue();
+			const size_t triangle = m_triangleChannel->GetValue();
+			const size_t noise = 0;
+			const size_t dmc = 0;
 
-			const float32 totalPulse = static_cast<float32>(pulse1 + pulse2);
-			const float32 pulseOut = totalPulse == 0 ? 0 : 95.88f / ((8128.0f / totalPulse) + 100);
+			const float32 pulseTotal = static_cast<float32>(pulse1 + pulse2);
+			const float32 pulseOut = pulseTotal == 0 ? 0 : 95.88f / ((8128.0f / pulseTotal) + 100.0f);
 
-			const float32 sample = MasterVolume * pulseOut;
+			const float32 tndTotal = (triangle / 8227.0f) + (noise / 12241) + (dmc / 22638);
+			const float32 tndOut = tndTotal == 0 ? 0 : 159.79f / (1.0f / tndTotal + 100.0f);
+
+			const float32 output = pulseOut + tndOut;
+
+			const float32 sample = kMasterVolume * output;
 
 			m_audioDriver->AddSampleF32(sample);
 		}
@@ -693,6 +870,8 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		pulse = m_pulseChannels[cpuAddress < 0x4004? 0 : 1].get();
 		assert(pulse);
 	}
+
+	TriangleChannel* triangle = m_triangleChannel.get();
 
 	switch (cpuAddress)
 	{
@@ -729,9 +908,26 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		pulse->m_pulseWaveGenerator.Restart(); //@TODO: for pulse channels the phase is reset - IS THIS RIGHT?
 		break;
 
+	case 0x4008:
+		triangle->m_lengthCounter.SetHalt( TestBits(value, BIT(7)) );
+		triangle->m_linearCounter.SetControl( TestBits(value, BIT(7)) );
+		triangle->m_linearCounter.SetPeriod( ReadBits(value, BITS(0,1,2,3,4,5,6)) );
+		break;
+
+	case 0x400A:
+		triangle->m_timer.SetPeriodLow8(value);
+		break;
+
+	case 0x400B:
+		triangle->m_timer.SetPeriodHigh3( ReadBits(value, BITS(0,1,2)) );
+		triangle->m_linearCounter.Restart(); // Side effect
+		triangle->m_lengthCounter.LoadCounterFromLUT(value >> 3);
+		break;
+
 	case 0x4015:
 		m_pulseChannels[0]->m_lengthCounter.SetEnabled( TestBits(value, BIT(0)) );
 		m_pulseChannels[1]->m_lengthCounter.SetEnabled( TestBits(value, BIT(1)) );
+		m_triangleChannel->m_lengthCounter.SetEnabled( TestBits(value, BIT(2)) );
 		//@TODO: bits 1, 2, 3 set length counter values for other 3 channels
 		break;
 
@@ -769,7 +965,7 @@ void DebugDrawAudio(SDL_Renderer* renderer)
 	DrawBar(pulse->m_volumeEnvelope.m_constantVolume / 15.0f * maxWidth, Color4::Magenta());
 	DrawBar(pulse->m_sweepUnit.SilenceChannel() ? 0 : maxWidth, Color4::Green());
 	DrawBar(pulse->m_pulseWaveGenerator.GetValue() * maxWidth, Color4::Blue());
-	DrawBar(pulse->m_lengthCounter.ReadCounter() / 255.0f * maxWidth, Color4::Black());
+	DrawBar(pulse->m_lengthCounter.GetValue() / 255.0f * maxWidth, Color4::Black());
 
 	DrawBar(pulse->m_sweepUnit.m_divider.GetCounter() / 7.0f * maxWidth, Color4::Red());
 	DrawBar(pulse->m_timer.m_divider.GetPeriod() / 2047.0f * maxWidth, Color4::Blue());

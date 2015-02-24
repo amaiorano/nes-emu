@@ -3,6 +3,7 @@
 #include <memory>
 
 class PulseChannel;
+class TriangleChannel;
 class FrameCounter;
 class AudioDriver;
 
@@ -20,6 +21,7 @@ private:
 	bool m_evenFrame;
 	std::shared_ptr<FrameCounter> m_frameCounter;
 	std::shared_ptr<PulseChannel> m_pulseChannels[2];
+	std::shared_ptr<TriangleChannel> m_triangleChannel;
 	float32 m_elapsedCpuCycles;
 	std::shared_ptr<AudioDriver> m_audioDriver;
 };
