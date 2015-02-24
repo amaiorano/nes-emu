@@ -833,7 +833,7 @@ void Apu::Execute(uint32 cpuCycles)
 		{
 			m_elapsedCpuCycles -= kCpuCyclesPerSample;
 
-			static float kMasterVolume = 0.5f;
+			static float kMasterVolume = 1.0f;
 
 			const size_t pulse1 = m_pulseChannels[0]->GetValue();
 			const size_t pulse2 = m_pulseChannels[1]->GetValue();
@@ -841,15 +841,10 @@ void Apu::Execute(uint32 cpuCycles)
 			const size_t noise = 0;
 			const size_t dmc = 0;
 
-			const float32 pulseTotal = static_cast<float32>(pulse1 + pulse2);
-			const float32 pulseOut = pulseTotal == 0 ? 0 : 95.88f / ((8128.0f / pulseTotal) + 100.0f);
-
-			const float32 tndTotal = (triangle / 8227.0f) + (noise / 12241) + (dmc / 22638);
-			const float32 tndOut = tndTotal == 0 ? 0 : 159.79f / (1.0f / tndTotal + 100.0f);
-
-			const float32 output = pulseOut + tndOut;
-
-			const float32 sample = kMasterVolume * output;
+			// Linear approximation
+			const float32 pulseOut = 0.00752f * (pulse1 + pulse2);
+			const float32 tndOut = 0.00851f * triangle + 0.00494f * noise + 0.00335f * dmc;
+			const float32 sample = kMasterVolume * (pulseOut + tndOut);
 
 			m_audioDriver->AddSampleF32(sample);
 		}
