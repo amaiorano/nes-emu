@@ -18,11 +18,7 @@ Apu* g_apu = nullptr; //@HACK: get rid of this
 class Divider
 {
 public:
-	void Initialize()
-	{
-		m_period = 0;
-		m_counter = 0;
-	}
+	Divider() : m_period(0), m_counter(0) {}
 
 	size_t GetPeriod() const { return m_period; }
 	size_t GetCounter() const { return m_counter;  }
@@ -58,12 +54,7 @@ private:
 class LengthCounter
 {
 public:
-	void Initialize()
-	{
-		m_enabled = false;
-		m_halt = false;
-		m_counter = 0;
-	}
+	LengthCounter() : m_enabled(false), m_halt(false), m_counter(0) {}
 
 	void SetEnabled(bool enabled)
 	{
@@ -121,14 +112,13 @@ private:
 class VolumeEnvelope
 {
 public:
-	void Initialize()
+	VolumeEnvelope()
+		: m_restart(true)
+		, m_loop(false)
+		, m_counter(0)
+		, m_constantVolumeMode(false)
+		, m_constantVolume(0)
 	{
-		m_restart = true;
-		m_loop = false;
-		m_divider.Initialize();
-		m_counter = 0;
-		m_constantVolumeMode = false;
-		m_constantVolume = 0;
 	}
 
 	void Restart() { m_restart = true; }
@@ -195,11 +185,7 @@ public:
 class PulseWaveGenerator : public AudioChip
 {
 public:
-	void Initialize()
-	{
-		m_duty = 0;
-		m_step = 0;
-	}
+	PulseWaveGenerator() : m_duty(0), m_step(0) {}
 
 	void Restart()
 	{
@@ -244,12 +230,7 @@ private:
 class Timer
 {
 public:
-	void Initialize()
-	{
-		m_divider.Initialize();
-		m_outputChip = nullptr;
-		m_minPeriod = 0;
-	}
+	Timer() : m_outputChip(nullptr), m_minPeriod(0) {}
 
 	void Connect(AudioChip& outputChip)
 	{
@@ -318,17 +299,16 @@ private:
 class SweepUnit
 {
 public:
-	void Initialize()
+	SweepUnit()
+		: m_subtractExtra(0)
+		, m_enabled(false)
+		, m_negate(false)
+		, m_reload(false)
+		, m_silenceChannel(false)
+		, m_shiftCount(0)
+		, m_timer(nullptr)
+		, m_targetPeriod(0)
 	{
-		m_subtractExtra = 0;
-		m_enabled = true;
-		m_negate = false;
-		m_reload = false;
-		m_silenceChannel = false;
-		m_shiftCount = 0;
-		m_divider.Initialize();
-		m_timer = nullptr;
-		m_targetPeriod = 0;
 	}
 
 	void SetSubtractExtra()
@@ -458,14 +438,8 @@ private:
 class PulseChannel
 {
 public:
-	void Initialize()
+	PulseChannel()
 	{
-		m_volumeEnvelope.Initialize();
-		m_sweepUnit.Initialize();
-		m_timer.Initialize();
-		m_pulseWaveGenerator.Initialize();
-		m_lengthCounter.Initialize();
-
 		// Connect timer to sequencer
 		m_timer.Connect(m_pulseWaveGenerator);
 
@@ -500,12 +474,7 @@ public:
 class LinearCounter
 {
 public:
-	void Initialize()
-	{
-		m_reload = true;
-		m_control = true;
-		m_divider.Initialize();
-	}
+	LinearCounter() : m_reload(true), m_control(true) {}
 
 	void Restart() { m_reload = true; }
 	void SetControl(bool control) { m_control = control; }
@@ -553,10 +522,7 @@ private:
 class TriangleWaveGenerator : public AudioChip
 {
 public:
-	void Initialize()
-	{
-		m_step = 0;
-	}
+	TriangleWaveGenerator() : m_step(0) {}
 
 	virtual void Clock()
 	{
@@ -582,11 +548,11 @@ private:
 class TriangleWaveGeneratorClocker : public AudioChip
 {
 public:
-	void Initialize()
+	TriangleWaveGeneratorClocker()
+		: m_linearCounter(nullptr)
+		, m_lengthCounter(nullptr)
+		, m_triangleWaveGenerator(nullptr)
 	{
-		m_linearCounter = nullptr;
-		m_lengthCounter = nullptr;
-		m_triangleWaveGenerator = nullptr;
 	}
 
 	virtual void Clock()
@@ -603,14 +569,8 @@ public:
 class TriangleChannel
 {
 public:
-	void Initialize()
+	TriangleChannel()
 	{
-		m_linearCounter.Initialize();
-		m_lengthCounter.Initialize();
-		m_timer.Initialize();
-		m_clocker.Initialize();
-		m_triangleWaveGenerator.Initialize();
-
 		m_timer.Connect(m_clocker);
 		m_timer.SetMinPeriod(3); // Avoid popping from ultrasonic frequencies
 
@@ -665,14 +625,9 @@ public:
 class NoiseChannel
 {
 public:
-	void Initialize()
+	NoiseChannel()
 	{
-		m_volumeEnvelope.Initialize();
-		m_timer.Initialize();
-		m_lengthCounter.Initialize();
-
 		m_volumeEnvelope.SetLoop(true); // Always looping
-
 		m_timer.Connect(m_shiftRegister);
 	}
 
@@ -696,11 +651,11 @@ public:
 class FrameCounter
 {
 public:
-	void Initialize()
+	FrameCounter()
+		: m_cpuCycles(0)
+		, m_numSteps(4)
+		, m_inhibitInterrupt(true)
 	{
-		m_cpuCycles = 0;
-		m_numSteps = 4;
-		m_inhibitInterrupt = true;
 	}
 
 	void AddConnection(VolumeEnvelope& e) { m_envelopes.push_back(&e); }
@@ -830,12 +785,10 @@ void Apu::Initialize()
 	m_evenFrame = true;
 
 	m_frameCounter.reset(new FrameCounter());
-	m_frameCounter->Initialize();
 
 	for (auto& pulse : m_pulseChannels)
 	{
 		pulse.reset(new PulseChannel());
-		pulse->Initialize();
 
 		// Connect FrameCounter to chips it clocks
 		m_frameCounter->AddConnection(pulse->m_volumeEnvelope);
@@ -847,12 +800,10 @@ void Apu::Initialize()
 	m_pulseChannels[0]->m_sweepUnit.SetSubtractExtra();
 
 	m_triangleChannel.reset(new TriangleChannel());
-	m_triangleChannel->Initialize();
 	m_frameCounter->AddConnection(m_triangleChannel->m_linearCounter);
 	m_frameCounter->AddConnection(m_triangleChannel->m_lengthCounter);
 
 	m_noiseChannel.reset(new NoiseChannel());
-	m_noiseChannel->Initialize();
 	m_frameCounter->AddConnection(m_noiseChannel->m_volumeEnvelope);
 	m_frameCounter->AddConnection(m_noiseChannel->m_lengthCounter);
 
