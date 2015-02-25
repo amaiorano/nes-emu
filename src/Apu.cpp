@@ -784,6 +784,8 @@ void Apu::Initialize()
 
 	m_evenFrame = true;
 
+	std::fill(std::begin(m_channelVolumes), std::end(m_channelVolumes), 1.0f);
+
 	m_frameCounter.reset(new FrameCounter());
 
 	for (auto& pulse : m_pulseChannels)
@@ -844,11 +846,11 @@ void Apu::Execute(uint32 cpuCycles)
 
 			static float kMasterVolume = 1.0f;
 
-			const size_t pulse1 = m_pulseChannels[0]->GetValue();
-			const size_t pulse2 = m_pulseChannels[1]->GetValue();
-			const size_t triangle = m_triangleChannel->GetValue();
-			const size_t noise = m_noiseChannel->GetValue();
-			const size_t dmc = 0;
+			const float32 pulse1 = m_pulseChannels[0]->GetValue() * m_channelVolumes[ApuChannel::Pulse1];
+			const float32 pulse2 = m_pulseChannels[1]->GetValue() * m_channelVolumes[ApuChannel::Pulse2];
+			const float32 triangle = m_triangleChannel->GetValue() * m_channelVolumes[ApuChannel::Triangle];
+			const float32 noise = m_noiseChannel->GetValue() * m_channelVolumes[ApuChannel::Noise];
+			const float32 dmc = 0.0f;
 
 			// Linear approximation
 			const float32 pulseOut = 0.00752f * (pulse1 + pulse2);
@@ -981,6 +983,11 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 			m_frameCounter->AllowInterrupt(); //@TODO: double-check this
 		break;
 	}
+}
+
+void Apu::SetChannelVolume(ApuChannel::Type type, float32 volume)
+{
+	m_channelVolumes[type] = Clamp(volume, 0.0f, 1.0f);
 }
 
 void DebugDrawAudio(SDL_Renderer* renderer)

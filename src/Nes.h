@@ -22,6 +22,7 @@ public:
 	void ExecuteFrame(bool paused);
 
 	void SetTurboEnabled(bool enabled) { m_turbo = enabled; }
+	void SetChannelVolume(ApuChannel::Type type, float32 volume) { m_apu.SetChannelVolume(type, volume); }
 
 	void SignalCpuNmi() { m_cpu.Nmi(); }
 	void SignalCpuIrq() { m_cpu.Irq(); }

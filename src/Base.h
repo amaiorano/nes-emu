@@ -145,6 +145,12 @@ struct FormattedString
 	char buffer[MaxLength];
 };
 
+template <typename T>
+T Clamp(T value, T min, T max)
+{
+	return value < min ? min : value > max ? max : value;
+}
+
 // FAIL macro
 
 namespace System { extern void DebugBreak(); }
