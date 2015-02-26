@@ -32,3 +32,4 @@ ipch/
 temp/
 *.dmp
 *.log
+*.raw

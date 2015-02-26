@@ -1,8 +1,11 @@
 #include "AudioDriver.h"
 #include "CircularBuffer.h"
+#include "FileStream.h"
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
 #include <SDL.h>
 #include <SDL_audio.h>
+
+#define OUTPUT_RAW_AUDIO_FILE_STREAM 0
 
 class AudioDriver::AudioDriverImpl
 {
@@ -12,12 +15,14 @@ public:
 	static const int kSampleRate = 44100;
 	static const SDL_AudioFormat kSampleFormat = AUDIO_S16; // Apparently supported by all drivers?
 	//static const SDL_AudioFormat kSampleFormat = AUDIO_U16;
+	//static const SDL_AudioFormat kSampleFormat = AUDIO_F32;
 	static const int kNumChannels = 1;
 	static const int kSamplesPerCallback = 1024;
 
 	template <SDL_AudioFormat Format> struct FormatToType;
 	template <> struct FormatToType<AUDIO_S16> { typedef int16 Type; };
 	template <> struct FormatToType<AUDIO_U16> { typedef uint16 Type; };
+	template <> struct FormatToType<AUDIO_F32> { typedef float32 Type; };
 
 	typedef FormatToType<kSampleFormat>::Type SampleFormatType;
 
@@ -56,17 +61,34 @@ public:
 		const size_t bufferSize = static_cast<size_t>(kSamplesPerCallback * 2.5f);
 		m_samples.Init(bufferSize);
 
-		SDL_PauseAudioDevice(m_audioDeviceID, 0); // Unpause audio
+	#if OUTPUT_RAW_AUDIO_FILE_STREAM
+		m_rawAudioOutputFS.Open("RawAudio.raw", "wb");
+	#endif
+
+		SetPaused(true);
 	}
 
 	void Shutdown()
 	{
+		m_rawAudioOutputFS.Close();
+
 		SDL_CloseAudioDevice(m_audioDeviceID);
 		SDL_QuitSubSystem(SDL_INIT_AUDIO);
 	}
 
+	void SetPaused(bool paused)
+	{
+		if (paused != m_paused)
+		{
+			m_paused = paused;
+			SDL_PauseAudioDevice(m_audioDeviceID, m_paused? 1 : 0);
+		}
+	}
+
 	void AddSampleF32(float32 sample)
 	{
+		SetPaused(false);
+
 		assert(sample >= 0.0f && sample <= 1.0f);
 		//@TODO: This multiply is wrong for signed format types (S16, S32)
 		float targetSample = sample * std::numeric_limits<SampleFormatType>::max();
@@ -74,6 +96,10 @@ public:
 		SDL_LockAudioDevice(m_audioDeviceID);
 		m_samples.Write(static_cast<SampleFormatType>(targetSample));
 		SDL_UnlockAudioDevice(m_audioDeviceID);
+
+	#if OUTPUT_RAW_AUDIO_FILE_STREAM
+		m_rawAudioOutputFS.WriteValue(sample);
+	#endif
 	}
 
 private:
@@ -88,13 +114,15 @@ private:
 
 		if (numSamplesRead < numSamplesToRead)
 		{
-			std::fill_n(stream + numSamplesRead, numSamplesToRead - numSamplesRead, 0);
+			std::fill_n(stream + numSamplesRead, numSamplesToRead - numSamplesRead, static_cast<SampleFormatType>(0));
 		}
 	}
 
 	SDL_AudioDeviceID m_audioDeviceID;
 	SDL_AudioSpec m_audioSpec;
 	CircularBuffer<SampleFormatType> m_samples;
+	FileStream m_rawAudioOutputFS;
+	bool m_paused;
 };
 
 
