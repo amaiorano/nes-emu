@@ -12,9 +12,9 @@ Nes::~Nes()
 
 void Nes::Initialize()
 {
+	m_apu.Initialize();
 	m_cpu.Initialize(m_cpuMemoryBus, m_apu);
 	m_ppu.Initialize(m_ppuMemoryBus, *this);
-	m_apu.Initialize();
 	m_cartridge.Initialize(*this);
 	m_cpuInternalRam.Initialize();
 	m_cpuMemoryBus.Initialize(m_cpu, m_ppu, m_cartridge, m_cpuInternalRam);

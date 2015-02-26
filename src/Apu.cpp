@@ -1,5 +1,6 @@
 #include "Apu.h"
 #include "AudioDriver.h"
+#include "Bitfield.h"
 #include <vector>
 #include <algorithm>
 
@@ -59,6 +60,8 @@ public:
 	void SetEnabled(bool enabled)
 	{
 		m_enabled = enabled;
+		
+		// Disabling resets counter to 0, and it stays that way until enabled again
 		if (!m_enabled)
 			m_counter = 0;
 	}
@@ -70,6 +73,9 @@ public:
 
 	void LoadCounterFromLUT(uint8 index)
 	{
+		if (!m_enabled)
+			return;
+
 		static uint8 lut[] = 
 		{ 
 			10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
@@ -78,14 +84,16 @@ public:
 		static_assert(ARRAYSIZE(lut) == 32, "Invalid");
 		assert(index < ARRAYSIZE(lut));
 
-		if (m_enabled)
-			m_counter = lut[index];
+		m_counter = lut[index];
 	}
 
 	// Clocked by FrameCounter
 	void Clock()
 	{
-		if (m_counter > 0 && !m_halt)
+		if (m_halt) // Halting locks counter at current value
+			return;
+
+		if (m_counter > 0) // Once it reaches 0, it stops, and channel is silenced
 			--m_counter;
 	}
 
@@ -471,19 +479,26 @@ public:
 	LengthCounter m_lengthCounter;
 };
 
+// A counter used by TriangleChannel clocked twice as often as the LengthCounter.
+// Is called "linear" because it is fed the period directly rather than an index
+// into a look up table like the LengthCounter.
 class LinearCounter
 {
 public:
 	LinearCounter() : m_reload(true), m_control(true) {}
 
 	void Restart() { m_reload = true; }
-	void SetControl(bool control) { m_control = control; }
-	void SetPeriod(size_t period)
+
+	// If control is false, counter will keep reloading to input period.
+	// One way to disable Triangle channel is to set control to false and
+	// period to 0 (via $4008), and then restart the LinearCounter (via $400B)
+	void SetControlAndPeriod(bool control, size_t period)
 	{
+		m_control = control;
 		assert(period < BIT(6));
 		m_divider.SetPeriod(period);
 	}
-
+	
 	// Clocked by FrameCounter every CPU cycle
 	void Clock()
 	{
@@ -515,7 +530,7 @@ public:
 
 private:
 	bool m_reload;
-	bool m_control; // If set, keeps reloading
+	bool m_control;
 	Divider m_divider;
 };
 
@@ -864,8 +879,23 @@ void Apu::Execute(uint32 cpuCycles)
 
 uint8 Apu::HandleCpuRead(uint16 cpuAddress)
 {
-	(void)cpuAddress;
-	return 0;
+	Bitfield<uint8> result;
+	result.ClearAll();
+
+	switch (cpuAddress)
+	{
+	case 0x4015:
+		//@TODO: set bits 7,6,4: DMC interrupt (I), frame interrupt (F), DMC active (D)
+		//@TODO: Reading this register clears the frame interrupt flag (but not the DMC interrupt flag).
+
+		result.SetPos(0, m_pulseChannels[0]->m_lengthCounter.GetValue() > 0);
+		result.SetPos(1, m_pulseChannels[1]->m_lengthCounter.GetValue() > 0);
+		result.SetPos(2, m_triangleChannel->m_lengthCounter.GetValue() > 0);
+		result.SetPos(3, m_noiseChannel->m_lengthCounter.GetValue() > 0);
+		break;
+	}
+	
+	return result.Value();
 }
 
 void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
@@ -923,8 +953,7 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		/////////////////////
 	case 0x4008:
 		triangle->m_lengthCounter.SetHalt( TestBits(value, BIT(7)) );
-		triangle->m_linearCounter.SetControl( TestBits(value, BIT(7)) );
-		triangle->m_linearCounter.SetPeriod( ReadBits(value, BITS(0,1,2,3,4,5,6)) );
+		triangle->m_linearCounter.SetControlAndPeriod( TestBits(value, BIT(7)), ReadBits(value, BITS(0,1,2,3,4,5,6)) );
 		break;
 
 	case 0x400A:
