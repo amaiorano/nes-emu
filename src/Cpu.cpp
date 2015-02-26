@@ -848,7 +848,9 @@ uint8 Cpu::Pop8()
 
 uint16 Cpu::Pop16()
 {
-	return TO16(Pop8()) | TO16(Pop8()) << 8;
+	const uint16 low = TO16(Pop8());
+	const uint16 high = TO16(Pop8());
+	return (high << 8) | low;
 }
 
 void Cpu::PushProcessorStatus(bool softwareInterrupt)
