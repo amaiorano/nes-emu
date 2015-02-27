@@ -36,6 +36,7 @@ void Nes::Reset()
 	m_frameTimer.Reset();
 	m_cpu.Reset();
 	m_ppu.Reset();
+	m_apu.Reset();
 	//@TODO: Maybe reset cartridge (and mapper)?
 
 	m_lastSaveRamTime = System::GetTimeSec();

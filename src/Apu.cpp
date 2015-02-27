@@ -828,6 +828,16 @@ void Apu::Initialize()
 	
 	m_audioDriver = std::make_shared<AudioDriver>();
 	m_audioDriver->Initialize();
+
+	Reset();
+}
+
+void Apu::Reset()
+{
+	HandleCpuWrite(0x4017, 0);
+	HandleCpuWrite(0x4015, 0);
+	for (uint16 address = 0x4000; address <= 0x400F; ++address)
+		HandleCpuWrite(address, 0);
 }
 
 void Apu::Execute(uint32 cpuCycles)
