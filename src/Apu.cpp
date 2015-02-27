@@ -597,11 +597,16 @@ public:
 
 	size_t GetValue() const
 	{
+		//@NOTE: From nesdev wiki main APU page:
+		// "Silencing the triangle channel merely halts it. It will continue to output its last value, rather than 0."
+		// So we don't return 0 if channel is silenced.
+	#if 0
 		if (m_linearCounter.SilenceChannel())
 			return 0;
 
 		if (m_lengthCounter.SilenceChannel())
 			return 0;
+	#endif
 
 		return m_triangleWaveGenerator.GetValue();
 	}
