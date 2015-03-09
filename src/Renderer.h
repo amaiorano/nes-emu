@@ -2,9 +2,6 @@
 
 #include "Base.h"
 
-const size_t kScreenWidth = 256;
-const size_t kScreenHeight = 240;
-
 struct Color4
 {
 	uint32 argb;
@@ -42,7 +39,7 @@ public:
 
 	static void SetWindowTitle(const char* title);
 
-	void Create();
+	void Create(size_t screenWidth, size_t screenHeight);
 	void Destroy();
 
 	void Clear(const Color4& color = Color4::Black());

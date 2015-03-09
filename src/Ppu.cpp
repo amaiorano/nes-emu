@@ -9,6 +9,9 @@
 
 namespace
 {
+	const size_t kScreenWidth = 256;
+	const size_t kScreenHeight = 240;
+
 	const size_t kNumPaletteColors = 64; // Technically 56 but there is space for 64 and some games access >= 56
 	Color4 g_paletteColors[kNumPaletteColors] = {0};
 
@@ -242,26 +245,6 @@ namespace PpuStatus // $2002 (R)
 	};
 }
 
-namespace
-{
-	std::tuple<uint16,uint8> GetSpritePatternTableAddressAndTileIndex(Bitfield8* ppuControlReg1, uint8 oamByte1)
-	{
-		uint16 address;
-		uint8 tileIndex;
-		if ( !ppuControlReg1->Test(PpuControl1::SpriteSize8x16) ) // 8x8 sprite
-		{
-			address = ppuControlReg1->Test(PpuControl1::SpritePatternTableAddress8x8)? 0x1000 : 0x0000;
-			tileIndex = oamByte1;
-		}
-		else // 8x16 sprite, information is stored in oam byte 1
-		{
-			address = TestBits(oamByte1, BIT(0))? 0x1000 : 0x0000;
-			tileIndex = ReadBits(oamByte1, ~BIT(0));
-		}
-		return std::make_tuple(address, tileIndex);
-	}
-}
-
 Ppu::Ppu()
 	: m_ppuMemoryBus(nullptr)
 	, m_nes(nullptr)
@@ -269,7 +252,7 @@ Ppu::Ppu()
 	, m_renderer(m_rendererHolder.get())
 {
 	InitPaletteColors();
-	m_renderer->Create();
+	m_renderer->Create(kScreenWidth, kScreenHeight);
 }
 
 void Ppu::Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes)
@@ -310,12 +293,14 @@ void Ppu::Reset()
 	m_vblankFlagSetThisFrame = false;
 }
 
-void Ppu::Execute(uint32 ppuCycles, bool& completedFrame)
+void Ppu::Execute(uint32 cpuCycles, bool& completedFrame)
 {
 	const size_t kNumTotalScanlines = 262;
 	const size_t kNumHBlankAndBorderCycles = 85;
 	const size_t kNumScanlineCycles = kScreenWidth + kNumHBlankAndBorderCycles; // 256 + 85 = 341
 	const size_t kNumScreenCycles = kNumScanlineCycles * kNumTotalScanlines; // 89342 cycles per screen
+
+	uint32 ppuCycles = CpuToPpuCycles(cpuCycles);
 
 	completedFrame = false;
 

@@ -76,8 +76,7 @@ void Nes::ExecuteCpuAndPpuFrame()
 		m_cpu.Execute(cpuCycles);
 
 		// Update PPU with that many cycles
-		const uint32 ppuCycles = cpuCycles * 3;
-		m_ppu.Execute(ppuCycles, completedFrame);
+		m_ppu.Execute(cpuCycles, completedFrame);
 
 		m_apu.Execute(cpuCycles);
 	}

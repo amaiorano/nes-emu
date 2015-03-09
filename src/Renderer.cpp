@@ -92,7 +92,7 @@ void Renderer::SetWindowTitle(const char* title)
 	}
 }
 
-void Renderer::Create()
+void Renderer::Create(size_t screenWidth, size_t screenHeight)
 {
 	assert(!m_impl);
 	m_impl = new PIMPL();
@@ -101,8 +101,8 @@ void Renderer::Create()
 		FAIL("SDL_Init failed");
 
 	const float windowScale = 3.0f;
-	const size_t windowWidth = static_cast<size_t>(kScreenWidth * windowScale);
-	const size_t windowHeight = static_cast<size_t>(kScreenHeight * windowScale);
+	const size_t windowWidth = static_cast<size_t>(screenWidth * windowScale);
+	const size_t windowHeight = static_cast<size_t>(screenHeight * windowScale);
 	
 	m_impl->m_window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
 	if (!m_impl->m_window)
@@ -112,7 +112,7 @@ void Renderer::Create()
 	if (!m_impl->m_renderer)
 		FAIL("SDL_CreateRenderer failed");
 
-	m_impl->m_backbuffer.Create(kScreenWidth, kScreenHeight, m_impl->m_renderer);
+	m_impl->m_backbuffer.Create(screenWidth, screenHeight, m_impl->m_renderer);
 
 	Clear();
 
