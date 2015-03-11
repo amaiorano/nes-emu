@@ -255,7 +255,6 @@ public:
 
 	void SetPeriod(size_t period)
 	{
-		assert(period < (BIT(11) - 1));
 		m_divider.SetPeriod(period);
 	}
 
@@ -268,7 +267,7 @@ public:
 
 	void SetPeriodHigh3(size_t value)
 	{
-		assert(value < (BIT(3) - 1));
+		assert(value < BIT(3));
 		size_t period = m_divider.GetPeriod();
 		period = (value << 8) | (period & 0xFF); // Keep low 8 bits
 		m_divider.SetPeriod(period);
@@ -495,7 +494,7 @@ public:
 	void SetControlAndPeriod(bool control, size_t period)
 	{
 		m_control = control;
-		assert(period < BIT(6));
+		assert(period < BIT(7));
 		m_divider.SetPeriod(period);
 	}
 	
@@ -587,7 +586,7 @@ public:
 	TriangleChannel()
 	{
 		m_timer.Connect(m_clocker);
-		m_timer.SetMinPeriod(3); // Avoid popping from ultrasonic frequencies
+		m_timer.SetMinPeriod(2); // Avoid popping from ultrasonic frequencies
 
 		//@TODO: Connect funcs
 		m_clocker.m_linearCounter = &m_linearCounter;
