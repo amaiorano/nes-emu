@@ -846,8 +846,12 @@ void Apu::Reset()
 
 void Apu::Execute(uint32 cpuCycles)
 {
-	const float32 kCpuCyclesPerSec = 1786840.0f;
-	const float32 kCpuCyclesPerSample = kCpuCyclesPerSec / (float32)m_audioDriver->GetSampleRate();
+	//@HACK: This is an attempt to determine how many CPU cycles must elapse before generating a sample.
+	// It's based on PPU timing becaue that currently drives the frame-based rendering. It's not perfect,
+	// though, because the PPU cycles per screen depends on whether rendering is enabled or not.
+	const float64 kAvgNumScreenPpuCycles = 89342 - 0.5; // 1 less every odd frame when rendering is enabled
+	const float64 kCpuCyclesPerSec = (kAvgNumScreenPpuCycles / 3) * 60.0;
+	const float64 kCpuCyclesPerSample = kCpuCyclesPerSec / (float64)m_audioDriver->GetSampleRate();
 
 	for (uint32 i = 0; i < cpuCycles; ++i)
 	{
@@ -1036,32 +1040,41 @@ void Apu::SetChannelVolume(ApuChannel::Type type, float32 volume)
 void DebugDrawAudio(SDL_Renderer* renderer)
 {
 	(void)renderer;
-#if 0
 	int x = 0;
 	int y = 0;
 
-	auto DrawBar = [&](float size, const Color4& color)
+	auto DrawBar = [&](float32 ratio, const Color4& color)
 	{
-		SDL_Rect rect = { x, y, (int)size, 20 };
-		y += 20;
+		const int width = 400;
+		const int height = 20;
 
-		SDL_SetRenderDrawColor(renderer, color.R(), color.G(), color.B(), color.A());
+		static auto white = Color4::White();
+		SDL_Rect rect = { x, y, width, height };
+		SDL_SetRenderDrawColor(renderer, white.R(), white.G(), white.B(), white.A());
 		SDL_RenderFillRect(renderer, &rect);
+
+		SDL_Rect rect2 = { x, y, (int)(ratio * width), 20 };
+		SDL_SetRenderDrawColor(renderer, color.R(), color.G(), color.B(), color.A());
+		SDL_RenderFillRect(renderer, &rect2);
+
+		y += (height + 1);
 	};
 
-	float maxWidth = 200.0f;
+#if 0
 	auto pulse = g_apu->m_pulseChannels[1].get();
 
-	DrawBar(pulse->GetValue() / 15.0f * maxWidth, Color4::White());
-	DrawBar(pulse->m_volumeEnvelope.GetVolume() / 15.0f * maxWidth, Color4::Red());
-	DrawBar(pulse->m_volumeEnvelope.m_counter / 15.0f * maxWidth, Color4::Cyan());
-	DrawBar(pulse->m_volumeEnvelope.m_constantVolume / 15.0f * maxWidth, Color4::Magenta());
-	DrawBar(pulse->m_sweepUnit.SilenceChannel() ? 0 : maxWidth, Color4::Green());
-	DrawBar(pulse->m_pulseWaveGenerator.GetValue() * maxWidth, Color4::Blue());
-	DrawBar(pulse->m_lengthCounter.GetValue() / 255.0f * maxWidth, Color4::Black());
+	DrawBar(pulse->GetValue() / 15.0f, Color4::Yellow());
+	DrawBar(pulse->m_volumeEnvelope.GetVolume() / 15.0f, Color4::Red());
+	DrawBar(pulse->m_volumeEnvelope.m_counter / 15.0f, Color4::Cyan());
+	DrawBar(pulse->m_volumeEnvelope.m_constantVolume / 15.0f, Color4::Magenta());
+	DrawBar(pulse->m_sweepUnit.SilenceChannel() ? 0 : 1, Color4::Green());
+	DrawBar(pulse->m_pulseWaveGenerator.GetValue(), Color4::Blue());
+	DrawBar(pulse->m_lengthCounter.GetValue() / 255.0f, Color4::Black());
 
-	DrawBar(pulse->m_sweepUnit.m_divider.GetCounter() / 7.0f * maxWidth, Color4::Red());
-	DrawBar(pulse->m_timer.m_divider.GetPeriod() / 2047.0f * maxWidth, Color4::Blue());
-	DrawBar(pulse->m_timer.m_divider.GetCounter() / 2047.0f * maxWidth, Color4::Green());
+	DrawBar(pulse->m_sweepUnit.m_divider.GetCounter() / 7.0f, Color4::Red());
+	DrawBar(pulse->m_timer.m_divider.GetPeriod() / 2047.0f, Color4::Blue());
+	DrawBar(pulse->m_timer.m_divider.GetCounter() / 2047.0f, Color4::Green());
+
+	DrawBar(g_apu->m_audioDriver->GetBufferUsageRatio(), Color4::Green());
 #endif
 }

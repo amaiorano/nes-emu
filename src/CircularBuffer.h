@@ -17,6 +17,28 @@ public:
 		m_wrapped = 0;
 	}
 
+	size_t TotalSize() const
+	{
+		return m_buffer.size();
+	}
+
+	size_t UsedSize() const
+	{
+		if (m_wrapped == 0) // read is behind write
+		{
+			return m_write - m_read;
+		}
+		else // read is ahead of write
+		{
+			return (m_end - m_read) + (m_write - &m_buffer.front());
+		}
+	}
+
+	size_t FreeSize() const
+	{
+		return TotalSize() - UsedSize();
+	}
+
 	// Attempts to write numValues from source into buffer; will not go past the read pointer
 	size_t Write(T* source, size_t numValues)
 	{

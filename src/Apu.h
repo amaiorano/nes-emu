@@ -37,6 +37,6 @@ private:
 	std::shared_ptr<PulseChannel> m_pulseChannels[2];
 	std::shared_ptr<TriangleChannel> m_triangleChannel;
 	std::shared_ptr<NoiseChannel> m_noiseChannel;
-	float32 m_elapsedCpuCycles;
+	float64 m_elapsedCpuCycles;
 	std::shared_ptr<AudioDriver> m_audioDriver;
 };

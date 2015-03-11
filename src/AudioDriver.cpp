@@ -55,10 +55,10 @@ public:
 		if (m_audioDeviceID == 0)
 			FAIL("Failed to open audio device (error code %d)", SDL_GetError());
 
-		// The minimize audio delay in the case where we write faster than the audio thread can read, we
-		// must make the buffer as small as possible - that is, twice the number of samples we need to feed
-		// the audio device per callback.
-		const size_t bufferSize = static_cast<size_t>(kSamplesPerCallback * 2.5f);
+		// Set buffer size as a function of the latency we allow
+		const float32 kDesiredLatencySecs = 50 / 1000.0f;
+		const float32 desiredLatencySamples = kDesiredLatencySecs * GetSampleRate();
+		const size_t bufferSize = static_cast<size_t>(desiredLatencySamples * 2); // We wait until buffer is 50% full to start playing
 		m_samples.Init(bufferSize);
 
 	#if OUTPUT_RAW_AUDIO_FILE_STREAM
@@ -76,6 +76,16 @@ public:
 		SDL_QuitSubSystem(SDL_INIT_AUDIO);
 	}
 
+	size_t GetSampleRate() const
+	{
+		return m_audioSpec.freq;
+	}
+
+	float32 GetBufferUsageRatio() const
+	{
+		return static_cast<float32>(m_samples.UsedSize()) / m_samples.TotalSize();
+	}
+
 	void SetPaused(bool paused)
 	{
 		if (paused != m_paused)
@@ -87,8 +97,6 @@ public:
 
 	void AddSampleF32(float32 sample)
 	{
-		SetPaused(false);
-
 		assert(sample >= 0.0f && sample <= 1.0f);
 		//@TODO: This multiply is wrong for signed format types (S16, S32)
 		float targetSample = sample * std::numeric_limits<SampleFormatType>::max();
@@ -96,6 +104,18 @@ public:
 		SDL_LockAudioDevice(m_audioDeviceID);
 		m_samples.Write(static_cast<SampleFormatType>(targetSample));
 		SDL_UnlockAudioDevice(m_audioDeviceID);
+
+		// Unpause when buffer is half full; pause if almost depleted to give buffer a chance to
+		// fill up again.
+		const auto bufferUsageRatio = GetBufferUsageRatio();
+		if (bufferUsageRatio >= 0.5f)
+		{
+			SetPaused(false);
+		}
+		else if (bufferUsageRatio < 0.1f)
+		{
+			SetPaused(true);
+		}
 
 	#if OUTPUT_RAW_AUDIO_FILE_STREAM
 		m_rawAudioOutputFS.WriteValue(sample);
@@ -112,9 +132,12 @@ private:
 
 		size_t numSamplesRead = audioDriver->m_samples.Read(stream, numSamplesToRead);
 
+		// If we haven't written enough samples, fill out the rest with the last sample
+		// written. This will usually hide the error.
 		if (numSamplesRead < numSamplesToRead)
 		{
-			std::fill_n(stream + numSamplesRead, numSamplesToRead - numSamplesRead, static_cast<SampleFormatType>(0));
+			SampleFormatType lastSample = numSamplesRead == 0 ? 0 : stream[numSamplesRead - 1];
+			std::fill_n(stream + numSamplesRead, numSamplesToRead - numSamplesRead, lastSample);
 		}
 	}
 
@@ -148,7 +171,12 @@ void AudioDriver::Shutdown()
 
 size_t AudioDriver::GetSampleRate() const
 {
-	return m_impl->m_audioSpec.freq;
+	return m_impl->GetSampleRate();
+}
+
+float32 AudioDriver::GetBufferUsageRatio() const
+{
+	return m_impl->GetBufferUsageRatio();
 }
 
 void AudioDriver::AddSampleF32(float32 sample)

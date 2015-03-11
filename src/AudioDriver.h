@@ -11,6 +11,8 @@ public:
 	void Shutdown();
 
 	size_t GetSampleRate() const;
+	float32 GetBufferUsageRatio() const;
+
 	void AddSampleF32(float32 sample);
 
 private:
