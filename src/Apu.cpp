@@ -354,8 +354,6 @@ public:
 
 		if (m_reload)
 		{
-			//const auto lastDividerCounter = m_divider.GetCounter();
-
 			// From nesdev wiki: "If the divider's counter was zero before the reload and the sweep is enabled,
 			// the pulse's period is also adjusted". What this effectively means is: if the divider would have
 			// clocked and reset as usual, adjust the timer period.
@@ -406,8 +404,9 @@ private:
 
 		if (m_negate)
 		{
-			// Pulse1 subtracts an extra 1, but not Pulse2
-			m_targetPeriod = currPeriod - shiftedPeriod - m_subtractExtra;
+			// Pulse 1's adder's carry is hardwired, so the subtraction adds the one's complement
+			// instead of the expected two's complement (as pulse 2 does)
+			m_targetPeriod = currPeriod - (shiftedPeriod - m_subtractExtra);
 		}
 		else
 		{
@@ -832,8 +831,6 @@ void Apu::Initialize()
 	
 	m_audioDriver = std::make_shared<AudioDriver>();
 	m_audioDriver->Initialize();
-
-	Reset();
 }
 
 void Apu::Reset()
