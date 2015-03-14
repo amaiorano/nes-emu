@@ -624,8 +624,13 @@ public:
 	virtual void Clock()
 	{
 		uint16 bit0 = ReadBits(m_register, BIT(0));
-		uint16 bitN = m_mode ? ReadBits(m_register, BIT(6)) >> 6 : ReadBits(m_register, BIT(1)) >> 1;
+
+		uint16 whichBitN = m_mode ? 6 : 1;
+		uint16 bitN = ReadBits(m_register, BIT(whichBitN)) >> whichBitN;
+
 		uint16 feedback = bit0 ^ bitN;
+		assert(feedback < 2);
+
 		m_register = (m_register >> 1) | (feedback << 14);
 		assert(m_register < BIT(15));
 	}
@@ -874,19 +879,7 @@ void Apu::Execute(uint32 cpuCycles)
 		{
 			m_elapsedCpuCycles -= kCpuCyclesPerSample;
 
-			static float kMasterVolume = 1.0f;
-
-			const float32 pulse1 = m_pulseChannels[0]->GetValue() * m_channelVolumes[ApuChannel::Pulse1];
-			const float32 pulse2 = m_pulseChannels[1]->GetValue() * m_channelVolumes[ApuChannel::Pulse2];
-			const float32 triangle = m_triangleChannel->GetValue() * m_channelVolumes[ApuChannel::Triangle];
-			const float32 noise = m_noiseChannel->GetValue() * m_channelVolumes[ApuChannel::Noise];
-			const float32 dmc = 0.0f;
-
-			// Linear approximation
-			const float32 pulseOut = 0.00752f * (pulse1 + pulse2);
-			const float32 tndOut = 0.00851f * triangle + 0.00494f * noise + 0.00335f * dmc;
-			const float32 sample = kMasterVolume * (pulseOut + tndOut);
-
+			const float32 sample = SampleChannelsAndMix();			
 			m_audioDriver->AddSampleF32(sample);
 		}
 	}
@@ -1032,6 +1025,49 @@ void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 void Apu::SetChannelVolume(ApuChannel::Type type, float32 volume)
 {
 	m_channelVolumes[type] = Clamp(volume, 0.0f, 1.0f);
+}
+
+float32 Apu::SampleChannelsAndMix()
+{
+	static float kMasterVolume = 1.0f;
+
+	// Sample all channels
+	const size_t pulse1 = static_cast<size_t>(m_pulseChannels[0]->GetValue() * m_channelVolumes[ApuChannel::Pulse1]);
+	const size_t pulse2 = static_cast<size_t>(m_pulseChannels[1]->GetValue() * m_channelVolumes[ApuChannel::Pulse2]);
+	const size_t triangle = static_cast<size_t>(m_triangleChannel->GetValue() * m_channelVolumes[ApuChannel::Triangle]);
+	const size_t noise = static_cast<size_t>(m_noiseChannel->GetValue() * m_channelVolumes[ApuChannel::Noise]);
+	const size_t dmc = static_cast<size_t>(0.0f);
+
+	// Mix samples
+#if MIX_USING_LINEAR_APPROXIMATION
+	// Linear approximation (less accurate than lookup table)
+	const float32 pulseOut = 0.00752f * (pulse1 + pulse2);
+	const float32 tndOut = 0.00851f * triangle + 0.00494f * noise + 0.00335f * dmc;
+#else
+	// Lookup Table (accurate)			
+	static float32 pulseTable[31] = { ~0 };
+	if (pulseTable[0] == ~0)
+	{
+		for (size_t i = 0; i < ARRAYSIZE(pulseTable); ++i)
+		{
+			pulseTable[i] = 95.52f / (8128.0f / i + 100.0f);
+		}
+	}
+	static float32 tndTable[203] = { ~0 };
+	if (tndTable[0] == ~0)
+	{
+		for (size_t i = 0; i < ARRAYSIZE(tndTable); ++i)
+		{
+			tndTable[i] = 163.67f / (24329.0f / i + 100.0f);
+		}
+	}
+
+	const float32 pulseOut = pulseTable[pulse1 + pulse2];
+	const float32 tndOut = tndTable[3 * triangle + 2 * noise + dmc];
+#endif
+
+	const float32 sample = kMasterVolume * (pulseOut + tndOut);
+	return sample;
 }
 
 void DebugDrawAudio(SDL_Renderer* renderer)

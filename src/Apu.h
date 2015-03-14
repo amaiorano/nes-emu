@@ -29,6 +29,7 @@ public:
 	void SetChannelVolume(ApuChannel::Type type, float32 volume);
 
 private:
+	float32 SampleChannelsAndMix();
 	friend void DebugDrawAudio(struct SDL_Renderer* renderer);
 
 	bool m_evenFrame;
