@@ -7,10 +7,11 @@
 // Temp for debug drawing
 #include "Renderer.h"
 #include <SDL_render.h>
-
-#define APU_TO_CPU_CYCLE(cpuCycle) static_cast<size_t>(cpuCycle * 2)
-
 Apu* g_apu = nullptr; //@HACK: get rid of this
+
+// If set, samples every CPU cycle (~1.79 MHz, more expensive but better quality),
+// otherwise will only sample at output rate (e.g. 44.1 KHz)
+#define SAMPLE_EVERY_CPU_CYCLE 1
 
 class AudioChip
 {
@@ -883,6 +884,8 @@ public:
 	{
 		bool resetCycles = false;
 
+		#define APU_TO_CPU_CYCLE(cpuCycle) static_cast<size_t>(cpuCycle * 2)
+		
 		switch (m_cpuCycles)
 		{
 		case APU_TO_CPU_CYCLE(3728.5):
@@ -940,6 +943,8 @@ public:
 		}
 
 		m_cpuCycles = resetCycles ? 0 : m_cpuCycles + 1;
+	
+		#undef APU_TO_CPU_CYCLE
 	}
 
 private:
@@ -965,9 +970,6 @@ void Apu::Initialize()
 {
 	g_apu = this;
 
-	m_evenFrame = true;
-	m_elapsedCpuCycles = 0;
-
 	std::fill(std::begin(m_channelVolumes), std::end(m_channelVolumes), 1.0f);
 
 	m_frameCounter.reset(new FrameCounter());
@@ -988,6 +990,9 @@ void Apu::Initialize()
 
 void Apu::Reset()
 {
+	m_evenFrame = true;
+	m_elapsedCpuCycles = 0;
+	m_sampleSum = m_numSamples = 0;
 	HandleCpuWrite(0x4017, 0);
 	HandleCpuWrite(0x4015, 0);
 	for (uint16 address = 0x4000; address <= 0x400F; ++address)
@@ -1021,12 +1026,23 @@ void Apu::Execute(uint32 cpuCycles)
 			m_evenFrame = !m_evenFrame;
 		}
 
+	#if SAMPLE_EVERY_CPU_CYCLE
+		m_sampleSum += SampleChannelsAndMix();
+		++m_numSamples;
+	#endif
+
 		// Fill the sample buffer at the current output sample rate (i.e. 48 KHz)
 		if (++m_elapsedCpuCycles >= kCpuCyclesPerSample)
 		{
 			m_elapsedCpuCycles -= kCpuCyclesPerSample;
 
-			const float32 sample = SampleChannelsAndMix();			
+		#if SAMPLE_EVERY_CPU_CYCLE
+			const float32 sample = m_sampleSum / m_numSamples;
+			m_sampleSum = m_numSamples = 0;
+		#else
+			const float32 sample = SampleChannelsAndMix();
+		#endif
+
 			m_audioDriver->AddSampleF32(sample);
 		}
 	}

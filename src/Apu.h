@@ -34,6 +34,8 @@ private:
 
 	bool m_evenFrame;
 	float64 m_elapsedCpuCycles;
+	float32 m_sampleSum;
+	float32 m_numSamples;
 	float32 m_channelVolumes[ApuChannel::NumTypes];
 	std::shared_ptr<FrameCounter> m_frameCounter;
 	std::shared_ptr<PulseChannel> m_pulseChannel0;
