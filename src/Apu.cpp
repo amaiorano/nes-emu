@@ -12,6 +12,22 @@
 
 Apu* g_apu = nullptr; //@HACK: get rid of this
 
+class AudioChip
+{
+public:
+	virtual void Clock() = 0;
+};
+
+class LengthCounter;
+
+class IAudioChannel
+{
+public:
+	virtual void ClockQuarterFrameChips() = 0;
+	virtual void ClockHalfFrameChips() = 0;
+	virtual void ClockTimer() = 0;
+	virtual LengthCounter& GetLengthCounter() = 0;
+};
 
 // Divider outputs a clock periodically.
 // Note that the term 'period' in this code really means 'period reload value', P,
@@ -180,12 +196,6 @@ private:
 	size_t m_counter; // Saw envelope volume value (if not constant volume mode)
 	bool m_constantVolumeMode;
 	size_t m_constantVolume; // Also reload value for divider
-};
-
-class AudioChip
-{
-public:
-	virtual void Clock() = 0;
 };
 
 // Produces the square wave based on one of 4 duty cycles
@@ -440,12 +450,35 @@ private:
 	size_t m_targetPeriod; // Target period for the timer; is computed continuously in real hardware
 };
 
-// http://wiki.nesdev.com/w/index.php/APU_Pulse
-class PulseChannel
+// Concrete base class for audio channels
+class AudioChannel : public IAudioChannel
 {
 public:
-	PulseChannel()
+	virtual void ClockTimer()
 	{
+		m_timer.Clock();
+	}
+
+	virtual LengthCounter& GetLengthCounter()
+	{
+		return m_lengthCounter;
+	}
+
+protected:
+	Timer m_timer;
+	LengthCounter m_lengthCounter;
+};
+
+// http://wiki.nesdev.com/w/index.php/APU_Pulse
+class PulseChannel : public AudioChannel
+{
+public:
+	PulseChannel(uint8 pulseChannelNumber)
+	{
+		assert(pulseChannelNumber < 2);
+		if (pulseChannelNumber == 0)
+			m_sweepUnit.SetSubtractExtra();
+
 		// Connect timer to sequencer
 		m_timer.Connect(m_pulseWaveGenerator);
 
@@ -453,10 +486,58 @@ public:
 		m_sweepUnit.Connect(m_timer);
 	}
 
+	virtual void ClockQuarterFrameChips()
+	{
+		m_volumeEnvelope.Clock();
+	}
+
+	virtual void ClockHalfFrameChips()
+	{
+		m_lengthCounter.Clock();
+		m_sweepUnit.Clock();
+	}
+
+	void HandleCpuWrite(uint16 cpuAddress, uint8 value)
+	{
+		switch (ReadBits(cpuAddress, BITS(0,1)))
+		{
+		case 0:
+			m_pulseWaveGenerator.SetDuty(ReadBits(value, BITS(6, 7)) >> 6);
+			m_lengthCounter.SetHalt(TestBits(value, BIT(5)));
+			m_volumeEnvelope.SetLoop(TestBits(value, BIT(5))); // Same bit for length counter halt and envelope loop
+			m_volumeEnvelope.SetConstantVolumeMode(TestBits(value, BIT(4)));
+			m_volumeEnvelope.SetConstantVolume(ReadBits(value, BITS(0, 1, 2, 3)));
+			break;
+
+		case 1: // Sweep unit setup
+			m_sweepUnit.SetEnabled(TestBits(value, BIT(7)));
+			m_sweepUnit.SetPeriod(ReadBits(value, BITS(4, 5, 6)) >> 4);
+			m_sweepUnit.SetNegate(TestBits(value, BIT(3)));
+			m_sweepUnit.SetShiftCount(ReadBits(value, BITS(0, 1, 2)));
+			m_sweepUnit.Restart(); // Side effect
+			break;
+
+		case 2:
+			m_timer.SetPeriodLow8(value);
+			break;
+
+		case 3:
+			m_timer.SetPeriodHigh3(ReadBits(value, BITS(0, 1, 2)));
+			m_lengthCounter.LoadCounterFromLUT(ReadBits(value, BITS(3, 4, 5, 6, 7)) >> 3);
+
+			// Side effects...
+			m_volumeEnvelope.Restart();
+			m_pulseWaveGenerator.Restart(); //@TODO: for pulse channels the phase is reset - IS THIS RIGHT?
+			break;
+
+		default:
+			assert(false);
+			break;
+		}
+	}
+
 	size_t GetValue() const
 	{
-		//@TODO: Maybe we should use gates
-
 		if (m_sweepUnit.SilenceChannel())
 			return 0;
 
@@ -469,12 +550,12 @@ public:
 		return value;
 	}
 
-//private:
+private:
+	friend void DebugDrawAudio(SDL_Renderer* renderer);
+
 	VolumeEnvelope m_volumeEnvelope;
 	SweepUnit m_sweepUnit;
-	Timer m_timer;
 	PulseWaveGenerator m_pulseWaveGenerator;
-	LengthCounter m_lengthCounter;
 };
 
 // A counter used by TriangleChannel clocked twice as often as the LengthCounter.
@@ -579,7 +660,7 @@ public:
 	TriangleWaveGenerator* m_triangleWaveGenerator;
 };
 
-class TriangleChannel
+class TriangleChannel : public AudioChannel
 {
 public:
 	TriangleChannel()
@@ -591,6 +672,41 @@ public:
 		m_clocker.m_linearCounter = &m_linearCounter;
 		m_clocker.m_lengthCounter = &m_lengthCounter;
 		m_clocker.m_triangleWaveGenerator = &m_triangleWaveGenerator;
+	}
+
+	virtual void ClockQuarterFrameChips()
+	{
+		m_linearCounter.Clock();
+	}
+
+	virtual void ClockHalfFrameChips()
+	{
+		m_lengthCounter.Clock();
+	}
+
+	void HandleCpuWrite(uint16 cpuAddress, uint8 value)
+	{
+		switch (cpuAddress)
+		{
+		case 0x4008:
+			m_lengthCounter.SetHalt(TestBits(value, BIT(7)));
+			m_linearCounter.SetControlAndPeriod(TestBits(value, BIT(7)), ReadBits(value, BITS(0, 1, 2, 3, 4, 5, 6)));
+			break;
+
+		case 0x400A:
+			m_timer.SetPeriodLow8(value);
+			break;
+
+		case 0x400B:
+			m_timer.SetPeriodHigh3(ReadBits(value, BITS(0, 1, 2)));
+			m_linearCounter.Restart(); // Side effect
+			m_lengthCounter.LoadCounterFromLUT(value >> 3);
+			break;
+
+		default:
+			assert(false);
+			break;
+		};
 	}
 
 	size_t GetValue() const
@@ -610,8 +726,6 @@ public:
 	}
 
 	LinearCounter m_linearCounter;
-	LengthCounter m_lengthCounter;
-	Timer m_timer;
 	TriangleWaveGeneratorClocker m_clocker;
 	TriangleWaveGenerator m_triangleWaveGenerator;
 };
@@ -621,6 +735,7 @@ class LinearFeedbackShiftRegister : public AudioChip
 public:
 	LinearFeedbackShiftRegister() : m_register(1), m_mode(false){}
 
+	// Clocked by noise channel timer
 	virtual void Clock()
 	{
 		uint16 bit0 = ReadBits(m_register, BIT(0));
@@ -645,13 +760,23 @@ public:
 	bool m_mode;
 };
 
-class NoiseChannel
+class NoiseChannel : public AudioChannel
 {
 public:
 	NoiseChannel()
 	{
 		m_volumeEnvelope.SetLoop(true); // Always looping
 		m_timer.Connect(m_shiftRegister);
+	}
+
+	virtual void ClockQuarterFrameChips()
+	{
+		m_volumeEnvelope.Clock();
+	}
+
+	virtual void ClockHalfFrameChips()
+	{
+		m_lengthCounter.Clock();
 	}
 
 	size_t GetValue() const
@@ -662,10 +787,43 @@ public:
 		return m_volumeEnvelope.GetVolume();
 	}
 
-//private:
+	void HandleCpuWrite(uint16 cpuAddress, uint8 value)
+	{
+		switch (cpuAddress)
+		{
+		case 0x400C:
+			m_lengthCounter.SetHalt(TestBits(value, BIT(5)));
+			m_volumeEnvelope.SetConstantVolumeMode(TestBits(value, BIT(4)));
+			m_volumeEnvelope.SetConstantVolume(ReadBits(value, BITS(0, 1, 2, 3)));
+			break;
+
+		case 0x400E:
+			m_shiftRegister.m_mode = TestBits(value, BIT(7));
+
+			//@TODO: Move this into helper function SetNoiseTimerPeriod()
+			{
+				size_t ntscPeriods[] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
+				static_assert(ARRAYSIZE(ntscPeriods) == 16, "Size error");
+				//size_t palPeriods[] = { 4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778 };
+				//static_assert(ARRAYSIZE(palPeriods) == 16, "Size error");
+				size_t index = ReadBits(value, BITS(0, 1, 2, 3));
+				m_timer.SetPeriod(ntscPeriods[index]);
+			}
+			break;
+
+		case 0x400F:
+			m_lengthCounter.LoadCounterFromLUT(value >> 3);
+			m_volumeEnvelope.Restart();
+			break;
+
+		default:
+			assert(false);
+			break;
+		};
+	}
+
+private:
 	VolumeEnvelope m_volumeEnvelope;
-	Timer m_timer;
-	LengthCounter m_lengthCounter;
 	LinearFeedbackShiftRegister m_shiftRegister;
 };
 
@@ -681,10 +839,10 @@ public:
 	{
 	}
 
-	void AddConnection(VolumeEnvelope& e) { m_envelopes.push_back(&e); }
-	void AddConnection(LengthCounter& lc) { m_lengthCounters.push_back(&lc); }
-	void AddConnection(SweepUnit& su) { m_sweepUnits.push_back(&su); }
-	void AddConnection(LinearCounter& lc) { m_linearCounters.push_back(&lc); }
+	void AddChannel(AudioChannel& channel)
+	{
+		m_channels.push_back(&channel);
+	}
 
 	void SetMode(uint8 mode)
 	{
@@ -696,15 +854,29 @@ public:
 		else
 		{
 			m_numSteps = 5;
+
+			//@TODO: This should happen in 3 or 4 CPU cycles
 			ClockQuarterFrameChips();
 			ClockHalfFrameChips();
 		}
 
 		// Always restart sequence
+		//@TODO: This should happen in 3 or 4 CPU cycles
 		m_cpuCycles = 0;
 	}
 
 	void AllowInterrupt() { m_inhibitInterrupt = false; }
+
+	void HandleCpuWrite(uint16 cpuAddress, uint8 value)
+	{
+		(void)cpuAddress;
+		assert(cpuAddress == 0x4017);
+
+		SetMode(ReadBits(value, BIT(7)) >> 7);
+
+		if (TestBits(value, BIT(6)))
+			AllowInterrupt(); //@TODO: double-check this
+	}
 
 	// Clock every CPU cycle
 	void Clock()
@@ -771,34 +943,22 @@ public:
 	}
 
 private:
-	template <typename Container>
-	void ClockAll(Container& container)
-	{
-		for (auto& curr : container)
-		{
-			curr->Clock();
-		}
-	}
-
 	void ClockQuarterFrameChips()
 	{
-		ClockAll(m_envelopes);
-		ClockAll(m_linearCounters);
+		for (auto& channel : m_channels)
+			channel->ClockQuarterFrameChips();
 	}
 
 	void ClockHalfFrameChips()
 	{
-		ClockAll(m_lengthCounters);
-		ClockAll(m_sweepUnits);
+		for (auto& channel : m_channels)
+			channel->ClockHalfFrameChips();
 	}
 
 	size_t m_cpuCycles;
 	size_t m_numSteps;
 	bool m_inhibitInterrupt;
-	std::vector<VolumeEnvelope*> m_envelopes;
-	std::vector<LengthCounter*> m_lengthCounters;
-	std::vector<SweepUnit*> m_sweepUnits;
-	std::vector<LinearCounter*> m_linearCounters;
+	std::vector<AudioChannel*> m_channels;
 };
 
 void Apu::Initialize()
@@ -806,34 +966,22 @@ void Apu::Initialize()
 	g_apu = this;
 
 	m_evenFrame = true;
+	m_elapsedCpuCycles = 0;
 
 	std::fill(std::begin(m_channelVolumes), std::end(m_channelVolumes), 1.0f);
 
 	m_frameCounter.reset(new FrameCounter());
 
-	for (auto& pulse : m_pulseChannels)
-	{
-		pulse.reset(new PulseChannel());
+	m_pulseChannel0 = std::make_shared<PulseChannel>(0);
+	m_pulseChannel1 = std::make_shared<PulseChannel>(1);
+	m_triangleChannel = std::make_shared<TriangleChannel>();
+	m_noiseChannel = std::make_shared<NoiseChannel>();
 
-		// Connect FrameCounter to chips it clocks
-		m_frameCounter->AddConnection(pulse->m_volumeEnvelope);
-		m_frameCounter->AddConnection(pulse->m_lengthCounter);
-		m_frameCounter->AddConnection(pulse->m_sweepUnit);
-	}
-
-	// Pulse1 subtracts an extra 1 when computing target period
-	m_pulseChannels[0]->m_sweepUnit.SetSubtractExtra();
-
-	m_triangleChannel.reset(new TriangleChannel());
-	m_frameCounter->AddConnection(m_triangleChannel->m_linearCounter);
-	m_frameCounter->AddConnection(m_triangleChannel->m_lengthCounter);
-
-	m_noiseChannel.reset(new NoiseChannel());
-	m_frameCounter->AddConnection(m_noiseChannel->m_volumeEnvelope);
-	m_frameCounter->AddConnection(m_noiseChannel->m_lengthCounter);
-
-	m_elapsedCpuCycles = 0;
-	
+	m_frameCounter->AddChannel(*m_pulseChannel0);
+	m_frameCounter->AddChannel(*m_pulseChannel1);
+	m_frameCounter->AddChannel(*m_triangleChannel);
+	m_frameCounter->AddChannel(*m_noiseChannel);
+		
 	m_audioDriver = std::make_shared<AudioDriver>();
 	m_audioDriver->Initialize();
 }
@@ -861,15 +1009,14 @@ void Apu::Execute(uint32 cpuCycles)
 
 		// Clock all timers
 		{
-			m_triangleChannel->m_timer.Clock();
+			m_triangleChannel->ClockTimer();
 
 			// All other timers are clocked every 2nd CPU cycle (every APU cycle)
 			if (m_evenFrame)
 			{
-				for (auto& pulse : m_pulseChannels)
-					pulse->m_timer.Clock();
-
-				m_noiseChannel->m_timer.Clock();
+				m_pulseChannel0->ClockTimer();
+				m_pulseChannel1->ClockTimer();
+				m_noiseChannel->ClockTimer();
 			}
 			m_evenFrame = !m_evenFrame;
 		}
@@ -896,10 +1043,10 @@ uint8 Apu::HandleCpuRead(uint16 cpuAddress)
 		//@TODO: set bits 7,6,4: DMC interrupt (I), frame interrupt (F), DMC active (D)
 		//@TODO: Reading this register clears the frame interrupt flag (but not the DMC interrupt flag).
 
-		result.SetPos(0, m_pulseChannels[0]->m_lengthCounter.GetValue() > 0);
-		result.SetPos(1, m_pulseChannels[1]->m_lengthCounter.GetValue() > 0);
-		result.SetPos(2, m_triangleChannel->m_lengthCounter.GetValue() > 0);
-		result.SetPos(3, m_noiseChannel->m_lengthCounter.GetValue() > 0);
+		result.SetPos(0, m_pulseChannel0->GetLengthCounter().GetValue() > 0);
+		result.SetPos(1, m_pulseChannel1->GetLengthCounter().GetValue() > 0);
+		result.SetPos(2, m_triangleChannel->GetLengthCounter().GetValue() > 0);
+		result.SetPos(3, m_noiseChannel->GetLengthCounter().GetValue() > 0);
 		break;
 	}
 	
@@ -908,116 +1055,47 @@ uint8 Apu::HandleCpuRead(uint16 cpuAddress)
 
 void Apu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 {
-	PulseChannel* pulse = nullptr;
-	if (cpuAddress <= 0x4007)
-	{
-		pulse = m_pulseChannels[cpuAddress < 0x4004? 0 : 1].get();
-		assert(pulse);
-	}
-
-	TriangleChannel* triangle = m_triangleChannel.get();
-	NoiseChannel* noise = m_noiseChannel.get();
-
 	switch (cpuAddress)
 	{
-		/////////////////////
-		// Pulse 1 and 2
-		/////////////////////
 	case 0x4000:
-	case 0x4004:
-		pulse->m_pulseWaveGenerator.SetDuty( ReadBits(value, BITS(6, 7)) >> 6 );
-		pulse->m_lengthCounter.SetHalt( TestBits(value, BIT(5)) );
-		pulse->m_volumeEnvelope.SetLoop( TestBits(value, BIT(5)) ); // Same bit for length counter halt and envelope loop
-		pulse->m_volumeEnvelope.SetConstantVolumeMode( TestBits(value, BIT(4)) );
-		pulse->m_volumeEnvelope.SetConstantVolume( ReadBits(value, BITS(0,1,2,3)) );
-		break;
-
-	case 0x4001: // Sweep unit setup
-	case 0x4005:
-		pulse->m_sweepUnit.SetEnabled( TestBits(value, BIT(7)) );
-		pulse->m_sweepUnit.SetPeriod( ReadBits(value, BITS(4,5,6)) >> 4 );
-		pulse->m_sweepUnit.SetNegate( TestBits(value, BIT(3)) );
-		pulse->m_sweepUnit.SetShiftCount( ReadBits(value, BITS(0,1,2)) );
-		pulse->m_sweepUnit.Restart(); // Side effect
-		break;
-
+	case 0x4001:
 	case 0x4002:
-	case 0x4006:
-		pulse->m_timer.SetPeriodLow8(value);
-		break;
-
 	case 0x4003:
+		m_pulseChannel0->HandleCpuWrite(cpuAddress, value);
+		break;
+
+	case 0x4004:
+	case 0x4005:
+	case 0x4006:
 	case 0x4007:
-		pulse->m_timer.SetPeriodHigh3( ReadBits(value, BITS(0,1,2)) );
-		pulse->m_lengthCounter.LoadCounterFromLUT( ReadBits(value, BITS(3,4,5,6,7)) >> 3 );
-
-		// Side effects...
-		pulse->m_volumeEnvelope.Restart();
-		pulse->m_pulseWaveGenerator.Restart(); //@TODO: for pulse channels the phase is reset - IS THIS RIGHT?
+		m_pulseChannel1->HandleCpuWrite(cpuAddress, value);
 		break;
 
-		/////////////////////
-		// Triangle channel
-		/////////////////////
 	case 0x4008:
-		triangle->m_lengthCounter.SetHalt( TestBits(value, BIT(7)) );
-		triangle->m_linearCounter.SetControlAndPeriod( TestBits(value, BIT(7)), ReadBits(value, BITS(0,1,2,3,4,5,6)) );
-		break;
-
 	case 0x400A:
-		triangle->m_timer.SetPeriodLow8(value);
-		break;
-
 	case 0x400B:
-		triangle->m_timer.SetPeriodHigh3( ReadBits(value, BITS(0,1,2)) );
-		triangle->m_linearCounter.Restart(); // Side effect
-		triangle->m_lengthCounter.LoadCounterFromLUT(value >> 3);
+		m_triangleChannel->HandleCpuWrite(cpuAddress, value);
 		break;
 
-		/////////////////////
-		// Noise channel
-		/////////////////////
 	case 0x400C:
-		noise->m_lengthCounter.SetHalt(TestBits(value, BIT(5)));
-		noise->m_volumeEnvelope.SetConstantVolumeMode(TestBits(value, BIT(4)));
-		noise->m_volumeEnvelope.SetConstantVolume(ReadBits(value, BITS(0,1,2,3)));
-		break;
-
 	case 0x400E:
-		noise->m_shiftRegister.m_mode = TestBits(value, BIT(7));
-
-		//@TODO: Move this into helper function SetNoiseTimerPeriod()
-		{
-			size_t ntscPeriods[] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
-			static_assert(ARRAYSIZE(ntscPeriods) == 16, "Size error");
-			//size_t palPeriods[] = { 4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778 };
-			//static_assert(ARRAYSIZE(palPeriods) == 16, "Size error");
-			size_t index = ReadBits(value, BITS(0,1,2,3));
-			noise->m_timer.SetPeriod(ntscPeriods[index]);
-		}
-		break;
-
 	case 0x400F:
-		noise->m_lengthCounter.LoadCounterFromLUT(value >> 3);
-		noise->m_volumeEnvelope.Restart();
+		m_noiseChannel->HandleCpuWrite(cpuAddress, value);
 		break;
 
 		/////////////////////
 		// Misc
 		/////////////////////
 	case 0x4015:
-		m_pulseChannels[0]->m_lengthCounter.SetEnabled( TestBits(value, BIT(0)) );
-		m_pulseChannels[1]->m_lengthCounter.SetEnabled( TestBits(value, BIT(1)) );
-		triangle->m_lengthCounter.SetEnabled( TestBits(value, BIT(2)) );
-		noise->m_lengthCounter.SetEnabled( TestBits(value, BIT(3)) );
+		m_pulseChannel0->GetLengthCounter().SetEnabled(TestBits(value, BIT(0)));
+		m_pulseChannel1->GetLengthCounter().SetEnabled(TestBits(value, BIT(1)));
+		m_triangleChannel->GetLengthCounter().SetEnabled(TestBits(value, BIT(2)));
+		m_noiseChannel->GetLengthCounter().SetEnabled(TestBits(value, BIT(3)));
 		//@TODO: DMC Enable bit 4
 		break;
 
 	case 0x4017:
-		m_frameCounter->SetMode(ReadBits(value, BIT(7)) >> 7);
-
-		if (TestBits(value, BIT(6)))
-			m_frameCounter->AllowInterrupt(); //@TODO: double-check this
+		m_frameCounter->HandleCpuWrite(cpuAddress, value);
 		break;
 	}
 }
@@ -1032,8 +1110,8 @@ float32 Apu::SampleChannelsAndMix()
 	static float kMasterVolume = 1.0f;
 
 	// Sample all channels
-	const size_t pulse1 = static_cast<size_t>(m_pulseChannels[0]->GetValue() * m_channelVolumes[ApuChannel::Pulse1]);
-	const size_t pulse2 = static_cast<size_t>(m_pulseChannels[1]->GetValue() * m_channelVolumes[ApuChannel::Pulse2]);
+	const size_t pulse1 = static_cast<size_t>(m_pulseChannel0->GetValue() * m_channelVolumes[ApuChannel::Pulse1]);
+	const size_t pulse2 = static_cast<size_t>(m_pulseChannel1->GetValue() * m_channelVolumes[ApuChannel::Pulse2]);
 	const size_t triangle = static_cast<size_t>(m_triangleChannel->GetValue() * m_channelVolumes[ApuChannel::Triangle]);
 	const size_t noise = static_cast<size_t>(m_noiseChannel->GetValue() * m_channelVolumes[ApuChannel::Noise]);
 	const size_t dmc = static_cast<size_t>(0.0f);
@@ -1094,14 +1172,14 @@ void DebugDrawAudio(SDL_Renderer* renderer)
 	};
 
 #if 0
-	auto pulse = g_apu->m_pulseChannels[1].get();
+	auto pulse = g_apu->m_pulseChannel1.get();
 
 	DrawBar(pulse->GetValue() / 15.0f, Color4::Yellow());
 	DrawBar(pulse->m_volumeEnvelope.GetVolume() / 15.0f, Color4::Red());
 	DrawBar(pulse->m_volumeEnvelope.m_counter / 15.0f, Color4::Cyan());
 	DrawBar(pulse->m_volumeEnvelope.m_constantVolume / 15.0f, Color4::Magenta());
-	DrawBar(pulse->m_sweepUnit.SilenceChannel() ? 0 : 1, Color4::Green());
-	DrawBar(pulse->m_pulseWaveGenerator.GetValue(), Color4::Blue());
+	DrawBar(pulse->m_sweepUnit.SilenceChannel() ? 0.0f : 1.0f, Color4::Green());
+	DrawBar(pulse->m_pulseWaveGenerator.GetValue() * 1.0f, Color4::Blue());
 	DrawBar(pulse->m_lengthCounter.GetValue() / 255.0f, Color4::Black());
 
 	DrawBar(pulse->m_sweepUnit.m_divider.GetCounter() / 7.0f, Color4::Red());

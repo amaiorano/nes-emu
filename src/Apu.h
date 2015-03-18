@@ -33,11 +33,12 @@ private:
 	friend void DebugDrawAudio(struct SDL_Renderer* renderer);
 
 	bool m_evenFrame;
+	float64 m_elapsedCpuCycles;
 	float32 m_channelVolumes[ApuChannel::NumTypes];
 	std::shared_ptr<FrameCounter> m_frameCounter;
-	std::shared_ptr<PulseChannel> m_pulseChannels[2];
+	std::shared_ptr<PulseChannel> m_pulseChannel0;
+	std::shared_ptr<PulseChannel> m_pulseChannel1;
 	std::shared_ptr<TriangleChannel> m_triangleChannel;
 	std::shared_ptr<NoiseChannel> m_noiseChannel;
-	float64 m_elapsedCpuCycles;
 	std::shared_ptr<AudioDriver> m_audioDriver;
 };
