@@ -800,16 +800,7 @@ public:
 
 		case 0x400E:
 			m_shiftRegister.m_mode = TestBits(value, BIT(7));
-
-			//@TODO: Move this into helper function SetNoiseTimerPeriod()
-			{
-				size_t ntscPeriods[] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
-				static_assert(ARRAYSIZE(ntscPeriods) == 16, "Size error");
-				//size_t palPeriods[] = { 4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778 };
-				//static_assert(ARRAYSIZE(palPeriods) == 16, "Size error");
-				size_t index = ReadBits(value, BITS(0, 1, 2, 3));
-				m_timer.SetPeriod(ntscPeriods[index]);
-			}
+			SetNoiseTimerPeriod(ReadBits(value, BITS(0, 1, 2, 3)));
 			break;
 
 		case 0x400F:
@@ -824,6 +815,22 @@ public:
 	}
 
 private:
+	void SetNoiseTimerPeriod(size_t lutIndex)
+	{
+		static size_t ntscPeriods[] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
+		static_assert(ARRAYSIZE(ntscPeriods) == 16, "Size error");
+		//size_t palPeriods[] = { 4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778 };
+		//static_assert(ARRAYSIZE(palPeriods) == 16, "Size error");
+
+		assert(lutIndex < ARRAYSIZE(ntscPeriods));
+
+		// The LUT contains the effective period for the channel, but the timer is clocked
+		// every second CPU cycle so we divide by 2, and the divider's input is the period
+		// reload value so we subtract by 1.
+		const size_t periodReloadValue = (ntscPeriods[lutIndex] / 2) - 1;
+		m_timer.SetPeriod(periodReloadValue);
+	}
+
 	VolumeEnvelope m_volumeEnvelope;
 	LinearFeedbackShiftRegister m_shiftRegister;
 };
@@ -1023,6 +1030,7 @@ void Apu::Execute(uint32 cpuCycles)
 				m_pulseChannel1->ClockTimer();
 				m_noiseChannel->ClockTimer();
 			}
+
 			m_evenFrame = !m_evenFrame;
 		}
 
