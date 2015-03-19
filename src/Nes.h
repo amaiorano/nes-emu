@@ -2,6 +2,7 @@
 
 #include "Cpu.h"
 #include "Ppu.h"
+#include "Apu.h"
 #include "Cartridge.h"
 #include "Memory.h"
 #include "CpuInternalRam.h"
@@ -21,6 +22,7 @@ public:
 	void ExecuteFrame(bool paused);
 
 	void SetTurboEnabled(bool enabled) { m_turbo = enabled; }
+	void SetChannelVolume(ApuChannel::Type type, float32 volume) { m_apu.SetChannelVolume(type, volume); }
 
 	void SignalCpuNmi() { m_cpu.Nmi(); }
 	void SignalCpuIrq() { m_cpu.Irq(); }
@@ -37,6 +39,7 @@ private:
 	FrameTimer m_frameTimer;
 	Cpu m_cpu;
 	Ppu m_ppu;
+	Apu m_apu; // Maybe should just be aggregated and updated by Cpu?
 	Cartridge m_cartridge;
 	CpuInternalRam m_cpuInternalRam;
 	CpuMemoryBus m_cpuMemoryBus;

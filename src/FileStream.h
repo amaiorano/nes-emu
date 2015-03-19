@@ -57,7 +57,6 @@ public:
 	template <typename T>
 	size_t Write(T* srcBuffer, int count = 1)
 	{
-		//return fread(destBuffer, sizeof(T), count, m_file) == (sizeof(T) * count);
 		return fwrite(srcBuffer, sizeof(T), count, m_file);
 	}
 

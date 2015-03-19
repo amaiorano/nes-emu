@@ -5,6 +5,7 @@
 #include "ControllerPorts.h"
 
 class CpuMemoryBus;
+class Apu;
 struct OpCodeEntry;
 
 namespace StatusFlag
@@ -26,7 +27,7 @@ class Cpu
 {
 public:
 	Cpu();
-	void Initialize(CpuMemoryBus& cpuMemoryBus);
+	void Initialize(CpuMemoryBus& cpuMemoryBus, Apu& apu);
 
 	void Reset();
 	void Nmi();
@@ -75,6 +76,7 @@ private:
 	// Data members
 
 	CpuMemoryBus* m_cpuMemoryBus;
+	Apu* m_apu;
 	OpCodeEntry* m_opCodeEntry; // Current opcode entry
 	
 	// Registers - not using the usual m_ prefix because I find the code looks

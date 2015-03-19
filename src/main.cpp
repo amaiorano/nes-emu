@@ -50,6 +50,34 @@ namespace
 	{
 		return System::OpenFileDialog(fileSelected, "Open NES rom", FILE_FILTER("NES Rom", "*.nes"));
 	}
+
+	void ProcessInputForChannelVolumes(Nes& nes)
+	{
+		struct ChannelState
+		{
+			ApuChannel::Type channel;
+			SDL_Scancode key;
+			bool enabled;
+		};
+		
+		static ChannelState apuChannelState[] =
+		{
+			{ ApuChannel::Pulse1, SDL_SCANCODE_F5, true }, // We assume all channels are on (1.0f) by default
+			{ ApuChannel::Pulse2, SDL_SCANCODE_F6, true },
+			{ ApuChannel::Triangle, SDL_SCANCODE_F7, true },
+			{ ApuChannel::Noise, SDL_SCANCODE_F8, true },
+		};
+		static_assert(ARRAYSIZE(apuChannelState) == ApuChannel::NumTypes, "Invalid size");
+
+		for (auto& state : apuChannelState)
+		{
+			if (Input::KeyPressed(state.key))
+			{
+				state.enabled = !state.enabled;
+				nes.SetChannelVolume(state.channel, state.enabled ? 1.0f : 0.0f);
+			}
+		}
+	}
 }
 
 int main(int argc, char* argv[])
@@ -146,6 +174,8 @@ int main(int argc, char* argv[])
 
 			const bool turbo = Input::KeyDown(SDL_SCANCODE_GRAVE); // tilde '~' key
 			nes->SetTurboEnabled(turbo);
+
+			ProcessInputForChannelVolumes(*nes);
 		}
 	}
 	catch (const std::exception& ex)

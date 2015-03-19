@@ -15,7 +15,7 @@ public:
 	void Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes);
 
 	void Reset();
-	void Execute(uint32 ppuCycles, bool& completedFrame);
+	void Execute(uint32 cpuCycles, bool& completedFrame);
 	void RenderFrame(); // Call when Execute() sets completedFrame to true
 
 	uint8 HandleCpuRead(uint16 cpuAddress);

@@ -63,13 +63,16 @@ namespace
 
 Cpu::Cpu()
 	: m_cpuMemoryBus(nullptr)
+	, m_apu(nullptr)
 	, m_opCodeEntry(nullptr)
 {
 }
 
-void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus)
+void Cpu::Initialize(CpuMemoryBus& cpuMemoryBus, Apu& apu)
 {
 	m_cpuMemoryBus = &cpuMemoryBus;
+	m_apu = &apu;
+
 	m_controllerPorts.Initialize();
 }
 
@@ -136,19 +139,25 @@ void Cpu::Execute(uint32& cpuCyclesElapsed)
 
 uint8 Cpu::HandleCpuRead(uint16 cpuAddress)
 {
+	uint8 result = 0;
+
 	switch (cpuAddress)
 	{
 	case CpuMemory::kSpriteDmaReg: // $4014
-		return m_spriteDmaRegister;
+		result = m_spriteDmaRegister;
+		break;
 
 	case CpuMemory::kControllerPort1: // $4016
 	case CpuMemory::kControllerPort2: // $4017
-		return m_controllerPorts.HandleCpuRead(cpuAddress);
+		result = m_controllerPorts.HandleCpuRead(cpuAddress);
+		break;
+
+	default:
+		result = m_apu->HandleCpuRead(cpuAddress);
 		break;
 	}
-
-	//@TODO: Implement pAPU registers
-	return 0;
+	
+	return result;
 }
 
 void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
@@ -183,12 +192,12 @@ void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 		break;
 
 	case CpuMemory::kControllerPort1: // $4016
-	case CpuMemory::kControllerPort2: // $4017
 		m_controllerPorts.HandleCpuWrite(cpuAddress, value);
 		break;
 
+	case CpuMemory::kControllerPort2: // $4017 For writes, this address is mapped to the APU!
 	default:
-		//@TODO: Implement pAPU registers
+		m_apu->HandleCpuWrite(cpuAddress, value);
 		break;
 	}
 }
@@ -839,7 +848,9 @@ uint8 Cpu::Pop8()
 
 uint16 Cpu::Pop16()
 {
-	return TO16(Pop8()) | TO16(Pop8()) << 8;
+	const uint16 low = TO16(Pop8());
+	const uint16 high = TO16(Pop8());
+	return (high << 8) | low;
 }
 
 void Cpu::PushProcessorStatus(bool softwareInterrupt)

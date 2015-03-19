@@ -12,7 +12,8 @@ Nes::~Nes()
 
 void Nes::Initialize()
 {
-	m_cpu.Initialize(m_cpuMemoryBus);
+	m_apu.Initialize();
+	m_cpu.Initialize(m_cpuMemoryBus, m_apu);
 	m_ppu.Initialize(m_ppuMemoryBus, *this);
 	m_cartridge.Initialize(*this);
 	m_cpuInternalRam.Initialize();
@@ -35,6 +36,7 @@ void Nes::Reset()
 	m_frameTimer.Reset();
 	m_cpu.Reset();
 	m_ppu.Reset();
+	m_apu.Reset();
 	//@TODO: Maybe reset cartridge (and mapper)?
 
 	m_lastSaveRamTime = System::GetTimeSec();
@@ -74,7 +76,8 @@ void Nes::ExecuteCpuAndPpuFrame()
 		m_cpu.Execute(cpuCycles);
 
 		// Update PPU with that many cycles
-		const uint32 ppuCycles = cpuCycles * 3;
-		m_ppu.Execute(ppuCycles, completedFrame);
+		m_ppu.Execute(cpuCycles, completedFrame);
+
+		m_apu.Execute(cpuCycles);
 	}
 }
