@@ -2,10 +2,10 @@
 #include "Base.h"
 #include <memory>
 
+class FrameCounter;
 class PulseChannel;
 class TriangleChannel;
 class NoiseChannel;
-class FrameCounter;
 class AudioDriver;
 
 namespace ApuChannel
@@ -31,6 +31,7 @@ public:
 private:
 	float32 SampleChannelsAndMix();
 	friend void DebugDrawAudio(struct SDL_Renderer* renderer);
+	friend class FrameCounter;
 
 	bool m_evenFrame;
 	float64 m_elapsedCpuCycles;
