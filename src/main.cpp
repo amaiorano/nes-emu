@@ -6,7 +6,7 @@
 #include "Debugger.h"
 
 #define kVersionMajor 1
-#define kVersionMinor 0
+#define kVersionMinor 1
 #if CONFIG_DEBUG
 	#define kVersionConfig "d"
 #else
