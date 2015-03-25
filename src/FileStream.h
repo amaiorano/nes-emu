@@ -37,9 +37,17 @@ public:
 		}
 	}
 
+	bool IsOpen() const { return m_file != nullptr; }
+
 	void SetPos(size_t pos)
 	{
 		fseek(m_file, pos, 0);
+	}
+
+	template <typename T>
+	size_t ReadValue(T& value)
+	{
+		return fread(&value, sizeof(T), 1, m_file);
 	}
 
 	template <typename T>
@@ -49,7 +57,7 @@ public:
 	}
 
 	template <typename T>
-	size_t WriteValue(T value)
+	size_t WriteValue(const T& value)
 	{
 		return fwrite(&value, sizeof(T), 1, m_file);
 	}

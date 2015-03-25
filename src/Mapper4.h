@@ -5,12 +5,15 @@
 class Mapper4 : public Mapper
 {
 public:
+	typedef Mapper Base;
+
 	virtual const char* MapperName() const
 	{
 		return "MMC3,MMC6";
 	}
 
 	virtual void PostInitialize();
+	virtual void Serialize(class Serializer& serializer);
 	virtual void OnCpuWrite(uint16 cpuAddress, uint8 value);
 
 	bool TestAndClearIrqPending()

@@ -21,6 +21,7 @@ class Apu
 public:
 	void Initialize();
 	void Reset();
+	void Serialize(class Serializer& serializer);
 	void Execute(uint32 cpuCycles);
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);

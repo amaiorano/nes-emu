@@ -30,6 +30,8 @@ public:
 	void Initialize(CpuMemoryBus& cpuMemoryBus, Apu& apu);
 
 	void Reset();
+	void Serialize(class Serializer& serializer);
+
 	void Nmi();
 	void Irq();
 

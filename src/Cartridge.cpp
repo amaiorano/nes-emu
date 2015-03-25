@@ -32,6 +32,15 @@ void Cartridge::Initialize(Nes& nes)
 	m_mapper = nullptr;
 }
 
+void Cartridge::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(m_cartNameTableMirroring);
+	SERIALIZE(m_prgBanks);
+	SERIALIZE(m_chrBanks);
+	SERIALIZE(m_savBanks);
+	serializer.SerializeObject(*m_mapper);
+}
+
 RomHeader Cartridge::LoadRom(const char* file)
 {
 	m_romDirectory = IO::Path::GetDirectoryName(file);

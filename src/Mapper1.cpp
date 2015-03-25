@@ -1,4 +1,5 @@
 #include "Mapper1.h"
+#include "Serializer.h"
 #include <algorithm>
 
 void Mapper1::PostInitialize()
@@ -17,6 +18,17 @@ void Mapper1::PostInitialize()
 	UpdatePrgBanks();
 	UpdateChrBanks();
 	UpdateMirroring();
+}
+
+void Mapper1::Serialize(class Serializer& serializer)
+{
+	Base::Serialize(serializer);
+	SERIALIZE(m_loadReg);
+	SERIALIZE(m_controlReg);
+	SERIALIZE(m_chrReg0);
+	SERIALIZE(m_chrReg1);
+	SERIALIZE(m_prgReg);
+	SERIALIZE(m_boardType);
 }
 
 void Mapper1::OnCpuWrite(uint16 cpuAddress, uint8 value)

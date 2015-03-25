@@ -12,6 +12,7 @@ class Cartridge
 {
 public:
 	void Initialize(Nes& nes);
+	void Serialize(class Serializer& serializer);
 	
 	RomHeader LoadRom(const char* file);
 	bool IsRomLoaded() const { return m_mapper != nullptr; }

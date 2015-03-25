@@ -1,4 +1,5 @@
 #include "Mapper4.h"
+#include "Serializer.h"
 
 // http://wiki.nesdev.com/w/index.php/INES_Mapper_004
 
@@ -10,6 +11,19 @@ void Mapper4::PostInitialize()
 	m_irqEnabled = false;
 	m_irqReloadPending = false;
 	m_irqPending = false;
+}
+
+void Mapper4::Serialize(class Serializer& serializer)
+{
+	Base::Serialize(serializer);
+	SERIALIZE(m_prgBankMode);
+	SERIALIZE(m_chrBankMode);
+	SERIALIZE(m_nextBankToUpdate);
+	SERIALIZE(m_irqEnabled);
+	SERIALIZE(m_irqCounter);
+	SERIALIZE(m_irqReloadPending);
+	SERIALIZE(m_irqReloadValue);
+	SERIALIZE(m_irqPending);
 }
 
 void Mapper4::OnCpuWrite(uint16 cpuAddress, uint8 value)

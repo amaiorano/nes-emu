@@ -1,6 +1,7 @@
 #include "Apu.h"
 #include "AudioDriver.h"
 #include "Bitfield.h"
+#include "Serializer.h"
 #include <vector>
 #include <algorithm>
 
@@ -809,6 +810,13 @@ public:
 	{
 	}
 
+	void Serialize(class Serializer& serializer)
+	{
+		SERIALIZE(m_cpuCycles);
+		SERIALIZE(m_numSteps);
+		SERIALIZE(m_inhibitInterrupt);
+	}
+
 	void SetMode(uint8 mode)
 	{
 		assert(mode < 2);
@@ -960,6 +968,19 @@ void Apu::Reset()
 	HandleCpuWrite(0x4015, 0);
 	for (uint16 address = 0x4000; address <= 0x400F; ++address)
 		HandleCpuWrite(address, 0);
+}
+
+void Apu::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(m_evenFrame);
+	SERIALIZE(m_elapsedCpuCycles);
+	SERIALIZE(m_sampleSum);
+	SERIALIZE(m_numSamples);
+	SERIALIZE(*m_pulseChannel0);
+	SERIALIZE(*m_pulseChannel1);
+	SERIALIZE(*m_triangleChannel);
+	SERIALIZE(*m_noiseChannel);
+	serializer.SerializeObject(*m_frameCounter);
 }
 
 void Apu::Execute(uint32 cpuCycles)

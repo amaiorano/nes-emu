@@ -2,6 +2,7 @@
 #include "FileStream.h"
 #include "Rom.h"
 #include "System.h"
+#include "Serializer.h"
 #include "Renderer.h"
 
 Nes::~Nes()
@@ -40,6 +41,34 @@ void Nes::Reset()
 	//@TODO: Maybe reset cartridge (and mapper)?
 
 	m_lastSaveRamTime = System::GetTimeSec();
+}
+
+void Nes::SerializeState(bool save)
+{
+	Serializer serializer;
+
+	if (save)
+	{
+		serializer.BeginSave("test-save-state.st");
+	}
+	else
+	{
+		Reset();
+		serializer.BeginLoad("test-save-state.st");
+	}
+	
+	serializer.SerializeObject(*this);	
+	serializer.End();
+}
+
+void Nes::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(m_turbo);
+	serializer.SerializeObject(m_cpu);
+	serializer.SerializeObject(m_ppu);
+	serializer.SerializeObject(m_apu);
+	serializer.SerializeObject(m_cartridge);
+	serializer.SerializeObject(m_cpuInternalRam);
 }
 
 void Nes::ExecuteFrame(bool paused)

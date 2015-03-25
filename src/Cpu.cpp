@@ -2,6 +2,7 @@
 #include "Nes.h"
 #include "OpCodeTable.h"
 #include "MemoryMap.h"
+#include "Serializer.h"
 #include "Debugger.h"
 
 // Some retail games overflow (on purpose?) like Battletoads
@@ -94,6 +95,22 @@ void Cpu::Reset()
 	m_pendingNmi = m_pendingIrq = false;
 
 	m_controllerPorts.Reset();
+}
+
+void Cpu::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(PC);
+	SERIALIZE(SP);
+	SERIALIZE(A);
+	SERIALIZE(X);
+	SERIALIZE(Y);
+	SERIALIZE(P);
+	SERIALIZE(m_cycles);
+	SERIALIZE(m_totalCycles);
+	SERIALIZE(m_pendingNmi);
+	SERIALIZE(m_pendingIrq);
+	SERIALIZE(m_spriteDmaRegister);
+	serializer.SerializeObject(m_controllerPorts);
 }
 
 void Cpu::Nmi()

@@ -62,10 +62,10 @@ namespace
 		
 		static ChannelState apuChannelState[] =
 		{
-			{ ApuChannel::Pulse1, SDL_SCANCODE_F5, true }, // We assume all channels are on (1.0f) by default
-			{ ApuChannel::Pulse2, SDL_SCANCODE_F6, true },
-			{ ApuChannel::Triangle, SDL_SCANCODE_F7, true },
-			{ ApuChannel::Noise, SDL_SCANCODE_F8, true },
+			{ ApuChannel::Pulse1, SDL_SCANCODE_F1, true }, // We assume all channels are on (1.0f) by default
+			{ ApuChannel::Pulse2, SDL_SCANCODE_F2, true },
+			{ ApuChannel::Triangle, SDL_SCANCODE_F3, true },
+			{ ApuChannel::Noise, SDL_SCANCODE_F4, true },
 		};
 		static_assert(ARRAYSIZE(apuChannelState) == ApuChannel::NumTypes, "Invalid size");
 
@@ -174,6 +174,15 @@ int main(int argc, char* argv[])
 
 			const bool turbo = Input::KeyDown(SDL_SCANCODE_GRAVE); // tilde '~' key
 			nes->SetTurboEnabled(turbo);
+
+			if (Input::KeyPressed(SDL_SCANCODE_F5))
+			{
+				nes->SerializeState(true);
+			}
+			if (Input::KeyPressed(SDL_SCANCODE_F7))
+			{
+				nes->SerializeState(false);
+			}
 
 			ProcessInputForChannelVolumes(*nes);
 		}

@@ -19,6 +19,9 @@ public:
 	RomHeader LoadRom(const char* file);
 	void Reset();
 
+	void SerializeState(bool save);
+	void Serialize(class Serializer& serializer);
+
 	void ExecuteFrame(bool paused);
 
 	void SetTurboEnabled(bool enabled) { m_turbo = enabled; }

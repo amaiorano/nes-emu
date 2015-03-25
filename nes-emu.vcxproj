@@ -39,6 +39,7 @@
     <ClInclude Include="src\Ppu.h" />
     <ClInclude Include="src\Renderer.h" />
     <ClInclude Include="src\Rom.h" />
+    <ClInclude Include="src\Serializer.h" />
     <ClInclude Include="src\System.h" />
   </ItemGroup>
   <ItemGroup>
