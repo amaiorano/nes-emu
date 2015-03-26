@@ -114,10 +114,10 @@ void Cpu::Irq()
 
 void Cpu::Execute(uint32& cpuCyclesElapsed)
 {
+	m_cycles = 0;
+	
 	ExecutePendingInterrupts(); // Handle when interrupts are called "between" CPU updates (e.g. PPU sends NMI)
 	
-	m_cycles = 0;
-
 	const uint8 opCode = Read8(PC);
 	m_opCodeEntry = g_opCodeTable[opCode];
 
@@ -749,6 +749,8 @@ void Cpu::ExecuteInstruction()
 
 void Cpu::ExecutePendingInterrupts()
 {
+	const uint16 kInterruptCycles = 7;
+
 	if (m_pendingNmi)
 	{
 		Push16(PC);
@@ -756,6 +758,12 @@ void Cpu::ExecutePendingInterrupts()
 		P.Clear(StatusFlag::BrkExecuted);
 		P.Set(StatusFlag::IrqDisabled);
 		PC = Read16(CpuMemory::kNmiVector);
+		
+		//@HACK: *2 here fixes Battletoads not loading levels, and also Marble Madness
+		// not rendering start of level text box correctly. This is likely due to discrepencies
+		// in cycle timing for when PPU signals an NMI and CPU handles it.
+		m_cycles += kInterruptCycles * 2;
+		
 		m_pendingNmi = false;
 	}
 	else if (m_pendingIrq)
@@ -765,6 +773,7 @@ void Cpu::ExecutePendingInterrupts()
 		P.Clear(StatusFlag::BrkExecuted);
 		P.Set(StatusFlag::IrqDisabled);
 		PC = Read16(CpuMemory::kIrqVector);
+		m_cycles += kInterruptCycles;
 		m_pendingIrq = false;
 	}
 }
