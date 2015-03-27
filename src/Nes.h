@@ -19,7 +19,8 @@ public:
 	RomHeader LoadRom(const char* file);
 	void Reset();
 
-	void SerializeState(bool save);
+	bool SerializeSaveState(bool save);
+
 	void Serialize(class Serializer& serializer);
 
 	void ExecuteFrame(bool paused);

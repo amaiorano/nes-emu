@@ -43,22 +43,37 @@ void Nes::Reset()
 	m_lastSaveRamTime = System::GetTimeSec();
 }
 
-void Nes::SerializeState(bool save)
+bool Nes::SerializeSaveState(bool save)
 {
 	Serializer serializer;
+	const std::string saveStateFilePath = "test-save-state.st";
 
-	if (save)
+	try
 	{
-		serializer.BeginSave("test-save-state.st");
+		if (save)
+		{
+			if (!serializer.BeginSave(saveStateFilePath.c_str()))
+				throw std::logic_error("Failed to open file for save");
+		}
+		else
+		{
+			if (!serializer.BeginLoad(saveStateFilePath.c_str()))
+				throw std::logic_error("Failed to open file for load");
+
+			Reset();
+		}
+
+		serializer.SerializeObject(*this);
+		serializer.End();
+
+		printf("%s SaveState: %s\n", save ? "Saved" : "Loaded", saveStateFilePath.c_str());
+		return true;
 	}
-	else
+	catch (const std::exception& ex)
 	{
-		Reset();
-		serializer.BeginLoad("test-save-state.st");
+		printf("Failed to %s SaveState: %s, Reason: %s\n", save ? "Save" : "Load", saveStateFilePath.c_str(), ex.what());
 	}
-	
-	serializer.SerializeObject(*this);	
-	serializer.End();
+	return false;
 }
 
 void Nes::Serialize(class Serializer& serializer)

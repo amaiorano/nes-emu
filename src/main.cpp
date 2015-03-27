@@ -177,11 +177,11 @@ int main(int argc, char* argv[])
 
 			if (Input::KeyPressed(SDL_SCANCODE_F5))
 			{
-				nes->SerializeState(true);
+				nes->SerializeSaveState(true);
 			}
 			if (Input::KeyPressed(SDL_SCANCODE_F7))
 			{
-				nes->SerializeState(false);
+				nes->SerializeSaveState(false);
 			}
 
 			ProcessInputForChannelVolumes(*nes);

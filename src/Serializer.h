@@ -53,7 +53,7 @@ public:
 			std::string nameFromFile;
 			ReadString(nameFromFile);
 			if (nameFromFile.compare(name) != 0)
-				FAIL("Save State data mismatch! Looking for %s, found %s", name, nameFromFile);
+				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile);
 			ReadValue(value);
 		}
 	}
