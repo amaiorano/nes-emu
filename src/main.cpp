@@ -19,12 +19,12 @@ namespace
 	void PrintAppInfo()
 	{
 		const char* text =
-			"### nes-emu %s - Nintendo Entertainment System Emulator\n"
+			"### %s %s - Nintendo Entertainment System Emulator\n"
 			"### Author: Antonio Maiorano (amaiorano at gmail dot com)\n"
 			"### Source code available at http://github.com/amaiorano/nes-emu/ \n"
 			"\n";
 
-		printf(text, kVersionString);
+		printf(text, APP_NAME, kVersionString);
 	}
 
 	inline size_t BytesToKB(size_t bytes) { return bytes / 1024; }
@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
 
 			nes->ExecuteFrame(paused);
 
-			Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f] %s", kVersionString, nes->GetFps(), paused? "*PAUSED*" : "").Value() );
+			Renderer::SetWindowTitle( FormattedString<>("%s %s [FPS: %2.2f] %s", APP_NAME, kVersionString, nes->GetFps(), paused? "*PAUSED*" : "").Value() );
 
 			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_O))
 			{

@@ -3,7 +3,6 @@
 #include "FileStream.h"
 #include "Rom.h"
 #include "MemoryMap.h"
-#include "IO.h"
 #include "Debugger.h"
 #include "Mapper0.h"
 #include "Mapper1.h"
@@ -43,10 +42,6 @@ void Cartridge::Serialize(class Serializer& serializer)
 
 RomHeader Cartridge::LoadRom(const char* file)
 {
-	m_romDirectory = IO::Path::GetDirectoryName(file);
-	m_romFileNameNoExt = IO::Path::GetFileNameWithoutExtension(file);
-	m_saveRamPath = IO::Path::Combine(m_romDirectory, m_romFileNameNoExt + ".sav");
-
 	FileStream fs(file, "rb");
 	RomHeader romHeader;
 
@@ -107,8 +102,6 @@ RomHeader Cartridge::LoadRom(const char* file)
 	m_mapper->Initialize(numPrgBanks, numChrBanks, numSavBanks);
 
 	m_cartNameTableMirroring = romHeader.GetNameTableMirroring();
-
-	LoadSaveRamFile();
 
 	return romHeader;
 }
@@ -184,17 +177,16 @@ void Cartridge::HandlePpuWrite(uint16 ppuAddress, uint8 value)
 	}
 }
 
-void Cartridge::WriteSaveRamFile()
+void Cartridge::WriteSaveRamFile(const char* file)
 {
-	if (!IsRomLoaded())
-		return;
+	assert(IsRomLoaded());
 
 	const size_t numSavBanks = m_mapper->NumSavBanks8k();
 	if (numSavBanks == 0)
 		return;
 
 	FileStream saveFS;
-	if (saveFS.Open(m_saveRamPath.c_str(), "wb"))
+	if (saveFS.Open(file, "wb"))
 	{
 		for (size_t i = 0; i < numSavBanks; ++i)
 		{
@@ -203,7 +195,28 @@ void Cartridge::WriteSaveRamFile()
 		}
 		saveFS.Close();
 
-		printf("Saved save ram file: %s\n", m_saveRamPath.c_str());
+		printf("Saved save ram file: %s\n", file);
+	}
+}
+
+void Cartridge::LoadSaveRamFile(const char* file)
+{
+	const size_t numSavBanks = m_mapper->NumSavBanks8k();
+
+	if (numSavBanks == 0)
+		return;
+
+	FileStream saveFS;
+	if (saveFS.Open(file, "rb"))
+	{
+		for (size_t i = 0; i < m_mapper->NumSavBanks8k(); ++i)
+		{
+			auto& bank = m_savBanks[i];
+			saveFS.Read(bank.RawPtr(), kSavBankSize);
+		}
+		saveFS.Close();
+
+		printf("Loaded save ram file: %s\n", file);
 	}
 }
 
@@ -216,27 +229,6 @@ void Cartridge::HACK_OnScanline()
 		{
 			m_nes->SignalCpuIrq();
 		}
-	}
-}
-
-void Cartridge::LoadSaveRamFile()
-{
-	const size_t numSavBanks = m_mapper->NumSavBanks8k();
-
-	if (numSavBanks == 0)
-		return;
-
-	FileStream saveFS;
-	if (saveFS.Open(m_saveRamPath.c_str(), "rb"))
-	{
-		for (size_t i = 0; i < m_mapper->NumSavBanks8k(); ++i)
-		{
-			auto& bank = m_savBanks[i];
-			saveFS.Read(bank.RawPtr(), kSavBankSize);
-		}
-		saveFS.Close();
-
-		printf("Loaded save ram file: %s\n", m_saveRamPath.c_str());
 	}
 }
 

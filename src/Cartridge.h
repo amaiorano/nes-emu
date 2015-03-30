@@ -24,24 +24,21 @@ public:
 	uint8 HandlePpuRead(uint16 ppuAddress);
 	void HandlePpuWrite(uint16 ppuAddress, uint8 value);
 
-	void WriteSaveRamFile();
+	//@TODO: Rename to SerializeSaveRam to mimic SerializeSaveState
+	void WriteSaveRamFile(const char* file);
+	void LoadSaveRamFile(const char* file);
+
 	void HACK_OnScanline();
 	
 	size_t GetPrgBankIndex16k(uint16 cpuAddress) const;
 	
 private:
-	void LoadSaveRamFile();
-
 	uint8& AccessPrgMem(uint16 cpuAddress);
 	uint8& AccessChrMem(uint16 ppuAddress);
 	uint8& AccessSavMem(uint16 cpuAddress);
 
 	Nes* m_nes;
 	
-	std::string m_romDirectory;
-	std::string m_romFileNameNoExt;
-	std::string m_saveRamPath;
-
 	NameTableMirroring m_cartNameTableMirroring;
 	std::shared_ptr<Mapper> m_mapperHolder;
 	Mapper* m_mapper;

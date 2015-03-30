@@ -4,11 +4,12 @@
 #include "System.h"
 #include "Serializer.h"
 #include "Renderer.h"
+#include "IO.h"
 
 Nes::~Nes()
 {
 	// Save sram on exit
-	m_cartridge.WriteSaveRamFile();
+	SerializeSaveRam(true);
 }
 
 void Nes::Initialize()
@@ -21,14 +22,24 @@ void Nes::Initialize()
 	m_cpuMemoryBus.Initialize(m_cpu, m_ppu, m_cartridge, m_cpuInternalRam);
 	m_ppuMemoryBus.Initialize(m_ppu, m_cartridge);
 	m_turbo = false;
+
+	// Create directories
+	const std::string& appDir = System::GetAppDirectory();
+	m_saveDir = appDir + "saves/";
+	System::CreateDirectory(m_saveDir.c_str());
 }
 
 RomHeader Nes::LoadRom(const char* file)
 {
 	// Save sram of current cart before loading a new one
-	m_cartridge.WriteSaveRamFile();
+	SerializeSaveRam(true);
 
+	m_romName = IO::Path::GetFileNameWithoutExtension(file);
+
+	// Load rom and last sram state, if any
 	RomHeader romHeader = m_cartridge.LoadRom(file);
+	SerializeSaveRam(false);
+
 	return romHeader;
 }
 
@@ -43,21 +54,39 @@ void Nes::Reset()
 	m_lastSaveRamTime = System::GetTimeSec();
 }
 
+void Nes::SerializeSaveRam(bool save)
+{
+	if (!m_cartridge.IsRomLoaded())
+		return;
+
+	assert(!m_romName.empty());
+	const std::string& saveRamePath = m_saveDir + m_romName + ".sav";
+
+	if (save)
+	{
+		m_cartridge.WriteSaveRamFile(saveRamePath.c_str());
+	}
+	else
+	{
+		m_cartridge.LoadSaveRamFile(saveRamePath.c_str());
+	}
+}
+
 bool Nes::SerializeSaveState(bool save)
 {
 	Serializer serializer;
-	const std::string saveStateFilePath = "test-save-state.st";
+	const std::string& saveStatePath = m_saveDir + m_romName + ".st0";
 
 	try
 	{
 		if (save)
 		{
-			if (!serializer.BeginSave(saveStateFilePath.c_str()))
+			if (!serializer.BeginSave(saveStatePath.c_str()))
 				throw std::logic_error("Failed to open file for save");
 		}
 		else
 		{
-			if (!serializer.BeginLoad(saveStateFilePath.c_str()))
+			if (!serializer.BeginLoad(saveStatePath.c_str()))
 				throw std::logic_error("Failed to open file for load");
 
 			Reset();
@@ -66,12 +95,12 @@ bool Nes::SerializeSaveState(bool save)
 		serializer.SerializeObject(*this);
 		serializer.End();
 
-		printf("%s SaveState: %s\n", save ? "Saved" : "Loaded", saveStateFilePath.c_str());
+		printf("%s SaveState: %s\n", save ? "Saved" : "Loaded", saveStatePath.c_str());
 		return true;
 	}
 	catch (const std::exception& ex)
 	{
-		printf("Failed to %s SaveState: %s, Reason: %s\n", save ? "Save" : "Load", saveStateFilePath.c_str(), ex.what());
+		printf("Failed to %s SaveState: %s, Reason: %s\n", save ? "Save" : "Load", saveStatePath.c_str(), ex.what());
 	}
 	return false;
 }
@@ -104,7 +133,7 @@ void Nes::ExecuteFrame(bool paused)
 	float64 currTime = System::GetTimeSec();
 	if (currTime - m_lastSaveRamTime >= saveInterval)
 	{
-		m_cartridge.WriteSaveRamFile();
+		SerializeSaveRam(true);
 		m_lastSaveRamTime = currTime;
 	}
 }

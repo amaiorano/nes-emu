@@ -69,7 +69,7 @@ namespace IO
 			return path1 + DirectorySeparatorChar + path2;
 		}
 
-		string ChangeExtension(const string& path, const string& extension)
+		inline string ChangeExtension(const string& path, const string& extension)
 		{
 			const string& d = GetDirectoryName(path);
 			const string& f = GetFileNameWithoutExtension(path);

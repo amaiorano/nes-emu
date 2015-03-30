@@ -4,6 +4,8 @@
 #include <cassert>
 #include <stdexcept>
 
+#define APP_NAME "nes-emu"
+
 // Platform defines
 #ifdef _MSC_VER
 	#define PLATFORM_WINDOWS 1
