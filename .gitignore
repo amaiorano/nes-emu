@@ -31,6 +31,6 @@ ipch/
 # Project-specific
 temp/
 saves/
-*.dmp
+dumps/
 *.log
 *.raw

@@ -44,7 +44,7 @@ namespace
 			}
 		}
 		
-void FlushToFileStream();
+		void FlushToFileStream();
 
 		void Close()
 		{
@@ -137,8 +137,11 @@ public:
 
 	void DumpMemory()
 	{
-		MemoryDumpPpu(m_nes->m_ppuMemoryBus);
-		MemoryDumpCpu(m_nes->m_cpuMemoryBus);
+		const std::string& dumpDir = System::GetAppDirectory() + std::string("dumps/");
+		System::CreateDirectory(dumpDir.c_str());
+
+		MemoryDumpPpu(dumpDir, m_nes->m_ppuMemoryBus);
+		MemoryDumpCpu(dumpDir, m_nes->m_cpuMemoryBus);
 	}
 
 	void PreCpuInstruction()
@@ -206,18 +209,18 @@ private:
 		MemoryDump(memoryBus, fs, start, size);
 	}
 
-	void MemoryDumpPpu(PpuMemoryBus& ppuMemoryBus)
+	void MemoryDumpPpu(const std::string& dumpDir, PpuMemoryBus& ppuMemoryBus)
 	{
 		// Dump full memory
-		const char* file = "PpuMemory.dmp";
-		printf("Dumping: %s\n", file);
-		MemoryDump(ppuMemoryBus, "PpuRam.dmp");
+		std::string file = dumpDir + "PpuMemory.dmp";
+		printf("Dumping: %s\n", file.c_str());
+		MemoryDump(ppuMemoryBus, file.c_str());
 		
 		// Dump detailed break down
-		file = "PpuMemory-detail.dmp";
-		printf("Dumping: %s\n", file);
+		file = dumpDir + "PpuMemory-detail.dmp";
+		printf("Dumping: %s\n", file.c_str());
 
-		FileStream fs(file, "w");
+		FileStream fs(file.c_str(), "w");
 
 		for (size_t i = 0; i < PpuMemory::kNumPatternTables; ++i)
 		{
@@ -243,11 +246,11 @@ private:
 		MemoryDump(ppuMemoryBus, fs, PpuMemory::kImagePalette, PpuMemory::kSinglePaletteSize);
 	}
 
-	void MemoryDumpCpu(CpuMemoryBus& cpuMemoryBus)
+	void MemoryDumpCpu(const std::string& dumpDir, CpuMemoryBus& cpuMemoryBus)
 	{
-		const char* file = "CpuMemory.dmp";
-		printf("Dumping: %s\n", file);
-		MemoryDump(cpuMemoryBus, file);
+		const std::string& file = dumpDir + "CpuMemory.dmp";
+		printf("Dumping: %s\n", file.c_str());
+		MemoryDump(cpuMemoryBus, file.c_str());
 	}
 
 	void PrintRegisters()
