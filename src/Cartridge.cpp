@@ -34,9 +34,16 @@ void Cartridge::Initialize(Nes& nes)
 void Cartridge::Serialize(class Serializer& serializer)
 {
 	SERIALIZE(m_cartNameTableMirroring);
-	SERIALIZE(m_prgBanks);
-	SERIALIZE(m_chrBanks);
-	SERIALIZE(m_savBanks);
+	
+	if (m_mapper->CanWritePrgMemory())
+		SERIALIZE_BUFFER(m_prgBanks.data(), m_mapper->PrgMemorySize());
+
+	if (m_mapper->CanWriteChrMemory())
+		SERIALIZE_BUFFER(m_chrBanks.data(), m_mapper->ChrMemorySize());
+
+	if (m_mapper->CanWriteSavMemory())
+		SERIALIZE_BUFFER(m_savBanks.data(), m_mapper->SavMemorySize());
+	
 	serializer.SerializeObject(*m_mapper);
 }
 

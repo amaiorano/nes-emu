@@ -51,7 +51,7 @@ public:
 	}
 
 	template <typename T>
-	size_t Read(T* destBuffer, int count = 1)
+	size_t Read(T* destBuffer, size_t count = 1)
 	{
 		return fread(destBuffer, sizeof(T), count, m_file) == (sizeof(T) * count);
 	}
@@ -63,7 +63,7 @@ public:
 	}
 
 	template <typename T>
-	size_t Write(T* srcBuffer, int count = 1)
+	size_t Write(T* srcBuffer, size_t count = 1)
 	{
 		return fwrite(srcBuffer, sizeof(T), count, m_file);
 	}

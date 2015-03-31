@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #define SERIALIZE(value) serializer.SerializeValue(#value, value)
+#define SERIALIZE_BUFFER(buffer, size) serializer.SerializeBuffer(#buffer, reinterpret_cast<uint8*>(buffer), size)
 
 class Serializer
 {
@@ -58,6 +59,26 @@ public:
 		}
 	}
 
+	// User SERIALIZE_BUFFER macro to invoke this function
+	void SerializeBuffer(const char* name, uint8* buffer, size_t size)
+	{
+		if (m_saving)
+		{
+			WriteString(name);
+			WriteBuffer(buffer, size);
+		}
+		else
+		{
+			std::string nameFromFile;
+			ReadString(nameFromFile);
+			if (nameFromFile.compare(name) != 0)
+				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile);
+			const size_t sizeRead = ReadBuffer(buffer);
+			if (sizeRead != size)
+				FAIL("SaveState buffer size mismatch! Expecting %d, got %d", size, sizeRead);
+		}
+	}
+
 private:
 	void WriteString(const std::string& s)
 	{
@@ -93,6 +114,20 @@ private:
 		m_fs.ReadValue(size);
 		assert(size == sizeof(T));
 		m_fs.ReadValue(value);
+	}
+
+	void WriteBuffer(uint8* buffer, size_t size)
+	{
+		m_fs.WriteValue<size_t>(size);
+		m_fs.Write(buffer, size);
+	}
+
+	size_t ReadBuffer(uint8* buffer)
+	{
+		size_t size;
+		m_fs.ReadValue(size);
+		m_fs.Read(buffer, size);
+		return size;
 	}
 
 	FileStream m_fs;
