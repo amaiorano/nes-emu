@@ -1,6 +1,6 @@
 #include "AudioDriver.h"
 #include "CircularBuffer.h"
-#include "FileStream.h"
+#include "Stream.h"
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
 #include <SDL.h>
 #include <SDL_audio.h>

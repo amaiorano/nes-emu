@@ -1,5 +1,5 @@
 #include "Nes.h"
-#include "FileStream.h"
+#include "Stream.h"
 #include "Rom.h"
 #include "System.h"
 #include "Serializer.h"
@@ -74,26 +74,29 @@ void Nes::SerializeSaveRam(bool save)
 
 bool Nes::SerializeSaveState(bool save)
 {
-	Serializer serializer;
 	const std::string& saveStatePath = m_saveDir + m_romName + ".st0";
 
 	try
 	{
 		if (save)
 		{
-			if (!serializer.BeginSave(saveStatePath.c_str()))
+			FileStream fs;
+			if (!fs.Open(saveStatePath.c_str(), "wb"))
 				throw std::logic_error("Failed to open file for save");
+
+			Serializer::SaveRootObject(fs, *this);
 		}
 		else
 		{
-			if (!serializer.BeginLoad(saveStatePath.c_str()))
+			FileStream fs;
+			if (!fs.Open(saveStatePath.c_str(), "rb"))
+			{
 				throw std::logic_error("Failed to open file for load");
+			}
 
 			Reset();
+			Serializer::LoadRootObject(fs, *this);
 		}
-
-		serializer.SerializeObject(*this);
-		serializer.End();
 
 		printf("%s SaveState: %s\n", save ? "Saved" : "Loaded", saveStatePath.c_str());
 		return true;

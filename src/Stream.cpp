@@ -1,7 +1,7 @@
-#include "FileStream.h"
+#include "Stream.h"
 #include <cstdarg>
 
-void FileStream::Printf(const char* format, ...)
+void IStream::Printf(const char* format, ...)
 {
 	static char buffer[2048];
 	va_list args;
@@ -11,5 +11,5 @@ void FileStream::Printf(const char* format, ...)
 
 	assert(bytesWritten < sizeof(buffer));
 
-	fwrite(buffer, bytesWritten, 1, m_file);
+	ReadImpl(buffer, bytesWritten, 1);
 }

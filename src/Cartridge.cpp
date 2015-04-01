@@ -1,6 +1,6 @@
 #include "Cartridge.h"
 #include "Nes.h"
-#include "FileStream.h"
+#include "Stream.h"
 #include "Rom.h"
 #include "MemoryMap.h"
 #include "Debugger.h"
