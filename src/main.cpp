@@ -19,12 +19,12 @@ namespace
 	void PrintAppInfo()
 	{
 		const char* text =
-			"### nes-emu %s - Nintendo Entertainment System Emulator\n"
+			"### %s %s - Nintendo Entertainment System Emulator\n"
 			"### Author: Antonio Maiorano (amaiorano at gmail dot com)\n"
 			"### Source code available at http://github.com/amaiorano/nes-emu/ \n"
 			"\n";
 
-		printf(text, kVersionString);
+		printf(text, APP_NAME, kVersionString);
 	}
 
 	inline size_t BytesToKB(size_t bytes) { return bytes / 1024; }
@@ -62,10 +62,10 @@ namespace
 		
 		static ChannelState apuChannelState[] =
 		{
-			{ ApuChannel::Pulse1, SDL_SCANCODE_F5, true }, // We assume all channels are on (1.0f) by default
-			{ ApuChannel::Pulse2, SDL_SCANCODE_F6, true },
-			{ ApuChannel::Triangle, SDL_SCANCODE_F7, true },
-			{ ApuChannel::Noise, SDL_SCANCODE_F8, true },
+			{ ApuChannel::Pulse1, SDL_SCANCODE_F1, true }, // We assume all channels are on (1.0f) by default
+			{ ApuChannel::Pulse2, SDL_SCANCODE_F2, true },
+			{ ApuChannel::Triangle, SDL_SCANCODE_F3, true },
+			{ ApuChannel::Noise, SDL_SCANCODE_F4, true },
 		};
 		static_assert(ARRAYSIZE(apuChannelState) == ApuChannel::NumTypes, "Invalid size");
 
@@ -129,7 +129,7 @@ int main(int argc, char* argv[])
 
 			nes->ExecuteFrame(paused);
 
-			Renderer::SetWindowTitle( FormattedString<>("nes-emu %s [FPS: %2.2f] %s", kVersionString, nes->GetFps(), paused? "*PAUSED*" : "").Value() );
+			Renderer::SetWindowTitle( FormattedString<>("%s %s [FPS: %2.2f] %s", APP_NAME, kVersionString, nes->GetFps(), paused? "*PAUSED*" : "").Value() );
 
 			if (Input::CtrlDown() && Input::KeyPressed(SDL_SCANCODE_O))
 			{
@@ -174,6 +174,15 @@ int main(int argc, char* argv[])
 
 			const bool turbo = Input::KeyDown(SDL_SCANCODE_GRAVE); // tilde '~' key
 			nes->SetTurboEnabled(turbo);
+
+			if (Input::KeyPressed(SDL_SCANCODE_F5))
+			{
+				nes->SerializeSaveState(true);
+			}
+			if (Input::KeyPressed(SDL_SCANCODE_F7))
+			{
+				nes->SerializeSaveState(false);
+			}
 
 			ProcessInputForChannelVolumes(*nes);
 		}

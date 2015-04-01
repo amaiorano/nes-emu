@@ -293,6 +293,25 @@ void Ppu::Reset()
 	m_vblankFlagSetThisFrame = false;
 }
 
+void Ppu::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(m_nameTables);
+	SERIALIZE(m_palette);
+	SERIALIZE(m_oam);
+	SERIALIZE(m_oam2);
+	SERIALIZE(m_ppuRegisters);
+	SERIALIZE(m_vramAndScrollFirstWrite);
+	SERIALIZE(m_vramAddress);
+	SERIALIZE(m_tempVRamAddress);
+	SERIALIZE(m_fineX);
+	SERIALIZE(m_vramBufferedValue);
+	SERIALIZE(m_cycle);
+	SERIALIZE(m_evenFrame);
+	SERIALIZE(m_vblankFlagSetThisFrame);
+	SERIALIZE(m_bgTileFetchDataPipeline);
+	SERIALIZE(m_spriteFetchData);
+}
+
 void Ppu::Execute(uint32 cpuCycles, bool& completedFrame)
 {
 	const size_t kNumTotalScanlines = 262;
@@ -731,11 +750,12 @@ void Ppu::FetchBackgroundTileData()
 	nextTile.paletteHighBits = paletteHighBits;
 
 #if CONFIG_DEBUG
-	nextTile.debug.vramAddress = m_vramAddress;
-	nextTile.debug.tileIndexAddress = tileIndexAddress;
-	nextTile.debug.attributeAddress = attributeAddress;
-	nextTile.debug.attributeShift = attributeShift;
-	nextTile.debug.byte1Address = byte1Address;
+	auto& nextTile_DEBUG = m_bgTileFetchDataPipeline_DEBUG[1];
+	nextTile_DEBUG.vramAddress = m_vramAddress;
+	nextTile_DEBUG.tileIndexAddress = tileIndexAddress;
+	nextTile_DEBUG.attributeAddress = attributeAddress;
+	nextTile_DEBUG.attributeShift = attributeShift;
+	nextTile_DEBUG.byte1Address = byte1Address;
 #endif
 }
 

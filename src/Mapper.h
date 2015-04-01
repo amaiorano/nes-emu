@@ -2,6 +2,7 @@
 
 #include "Base.h"
 #include "Rom.h"
+#include "Serializer.h"
 #include <array>
 
 const size_t kPrgBankCount = 8;
@@ -50,6 +51,7 @@ public:
 
 	virtual const char* MapperName() const = 0;
 	virtual void PostInitialize() = 0;
+	virtual void Serialize(class Serializer& serializer);
 	virtual void OnCpuWrite(uint16 cpuAddress, uint8 value) = 0;
 
 	NameTableMirroring GetNameTableMirroring() const { return m_nametableMirroring; }
@@ -110,6 +112,20 @@ private:
 	bool m_canWriteSavMemory;
 };
 
+// Derived Mappers must call Base::Serialize() if overridden
+inline void Mapper::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(m_nametableMirroring);
+	SERIALIZE(m_numPrgBanks);
+	SERIALIZE(m_numChrBanks);
+	SERIALIZE(m_numSavBanks);
+	SERIALIZE(m_prgBankIndices);
+	SERIALIZE(m_chrBankIndices);
+	SERIALIZE(m_savBankIndices);
+	SERIALIZE(m_canWritePrgMemory);
+	SERIALIZE(m_canWriteChrMemory);
+	SERIALIZE(m_canWriteSavMemory);
+}
 
 FORCEINLINE void Mapper::SetPrgBankIndex4k(size_t cpuBankIndex, size_t cartBankIndex)
 {

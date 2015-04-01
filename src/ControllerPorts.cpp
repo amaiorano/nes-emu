@@ -2,6 +2,7 @@
 #include "MemoryMap.h"
 #include "Debugger.h"
 #include "Input.h"
+#include "Serializer.h"
 #include <string>
 #include <algorithm>
 
@@ -45,6 +46,14 @@ void ControllerPorts::Reset()
 	m_ports[0] = m_ports[1] = 0;
 	m_readIndex[0] = m_readIndex[1] = 0;
 	memset(m_lastIsButtonDown, 0, sizeof(m_lastIsButtonDown));
+}
+
+void ControllerPorts::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(m_strobe);
+	SERIALIZE(m_ports);
+	SERIALIZE(m_readIndex);
+	SERIALIZE(m_lastIsButtonDown);
 }
 
 uint8 ControllerPorts::HandleCpuRead(uint16 cpuAddress)

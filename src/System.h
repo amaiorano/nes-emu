@@ -9,6 +9,8 @@
 
 namespace System
 {
+	const char* GetAppDirectory();
+	bool CreateDirectory(const char* directory);
 	void Sleep(uint32 ms);
 	bool GetKeyPress(char& key);
 	char WaitForKeyPress();

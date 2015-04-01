@@ -15,6 +15,8 @@ public:
 	void Initialize(PpuMemoryBus& ppuMemoryBus, Nes& nes);
 
 	void Reset();
+	void Serialize(class Serializer& serializer);
+
 	void Execute(uint32 cpuCycles, bool& completedFrame);
 	void RenderFrame(); // Call when Execute() sets completedFrame to true
 
@@ -86,22 +88,23 @@ private:
 
 	struct BgTileFetchData
 	{
-		uint8 bmpLow; //@TODO: rename bmpLow and bmpHigh
+		uint8 bmpLow;
 		uint8 bmpHigh;
 		uint8 paletteHighBits;
-
-#if CONFIG_DEBUG
-		struct
-		{
-			uint16 vramAddress;
-			uint16 tileIndexAddress;
-			uint16 attributeAddress;
-			uint16 attributeShift;
-			uint16 byte1Address;
-		} debug;
-#endif
 	};
 	BgTileFetchData m_bgTileFetchDataPipeline[2];
+
+#if CONFIG_DEBUG
+	struct BgTileFetchData_DEBUG
+	{
+		uint16 vramAddress;
+		uint16 tileIndexAddress;
+		uint16 attributeAddress;
+		uint16 attributeShift;
+		uint16 byte1Address;
+	};
+	BgTileFetchData_DEBUG m_bgTileFetchDataPipeline_DEBUG[2];
+#endif
 
 	struct SpriteFetchData
 	{

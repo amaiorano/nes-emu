@@ -6,12 +6,15 @@
 class Mapper1 : public Mapper
 {
 public:
+	typedef Mapper Base;
+
 	virtual const char* MapperName() const
 	{
 		return "SxROM/MMC1";
 	}
 
 	virtual void PostInitialize();
+	virtual void Serialize(class Serializer& serializer);
 	virtual void OnCpuWrite(uint16 cpuAddress, uint8 value);
 
 private:

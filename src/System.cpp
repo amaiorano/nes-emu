@@ -1,4 +1,38 @@
 #include "System.h"
+#include "IO.h"
+#include <SDL_filesystem.h>
+
+namespace System
+{
+	const char* GetAppDirectory()
+	{
+		static char appDir[2048] = { 0 };
+		
+		// Lazily build the app directory
+		if (appDir[0] == 0)
+		{
+			std::string temp = SDL_GetBasePath();
+
+			// Find the app name directory in the path and return full path to that directory.
+			// Mostly useful when running out of Debug/Release during development.
+			auto npos = temp.find(APP_NAME);
+			if (npos != std::string::npos)
+			{
+				temp.copy(appDir, npos + strlen(APP_NAME) + 1, 0);
+			}
+			else
+			{
+				temp.copy(appDir, temp.length(), 0);
+			}
+
+			temp = appDir; // Just for asserting
+			assert(temp.size() > 0 && temp.size() < ARRAYSIZE(appDir));
+			assert(temp.back() == '\\' || temp.back() == '/');
+		}
+
+		return appDir;
+	}
+}
 
 #if PLATFORM_WINDOWS
 
@@ -10,12 +44,21 @@
 #include <conio.h>
 #include <cstdio>
 
-// Undef the macro in WinUser.h so we can use this name as our function. We invoke MessageBoxA directly.
+// Undef the macros in WinUser.h so we can use these names
 #undef MessageBox
+#undef CreateDirectory
 
 namespace System
 {
-	void Sleep(uint32 ms) { ::Sleep(ms); }
+	bool CreateDirectory(const char* directory)
+	{
+		return ::CreateDirectoryA(directory, NULL) != FALSE;
+	}
+
+	void Sleep(uint32 ms)
+	{
+		::Sleep(ms);
+	}
 
 	bool GetKeyPress(char& key)
 	{

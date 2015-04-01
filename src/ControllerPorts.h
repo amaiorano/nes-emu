@@ -37,6 +37,7 @@ class ControllerPorts
 public:
 	void Initialize();
 	void Reset();
+	void Serialize(class Serializer& serializer);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);

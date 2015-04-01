@@ -19,6 +19,9 @@ public:
 	RomHeader LoadRom(const char* file);
 	void Reset();
 
+	bool SerializeSaveState(bool save);
+	void Serialize(class Serializer& serializer);
+
 	void ExecuteFrame(bool paused);
 
 	void SetTurboEnabled(bool enabled) { m_turbo = enabled; }
@@ -35,6 +38,7 @@ private:
 	friend class DebuggerImpl;
 
 	void ExecuteCpuAndPpuFrame();
+	void SerializeSaveRam(bool save);
 
 	FrameTimer m_frameTimer;
 	Cpu m_cpu;
@@ -44,6 +48,9 @@ private:
 	CpuInternalRam m_cpuInternalRam;
 	CpuMemoryBus m_cpuMemoryBus;
 	PpuMemoryBus m_ppuMemoryBus;
+
+	std::string m_romName;
+	std::string m_saveDir;
 
 	float64 m_lastSaveRamTime;
 	bool m_turbo;

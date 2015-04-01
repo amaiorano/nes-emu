@@ -1,6 +1,7 @@
 #include "Apu.h"
 #include "AudioDriver.h"
 #include "Bitfield.h"
+#include "Serializer.h"
 #include <vector>
 #include <algorithm>
 
@@ -13,22 +14,7 @@ Apu* g_apu = nullptr; //@HACK: get rid of this
 // otherwise will only sample at output rate (e.g. 44.1 KHz)
 #define SAMPLE_EVERY_CPU_CYCLE 1
 
-class AudioChip
-{
-public:
-	virtual void Clock() = 0;
-};
-
 class LengthCounter;
-
-class IAudioChannel
-{
-public:
-	virtual void ClockQuarterFrameChips() = 0;
-	virtual void ClockHalfFrameChips() = 0;
-	virtual void ClockTimer() = 0;
-	virtual LengthCounter& GetLengthCounter() = 0;
-};
 
 // Divider outputs a clock periodically.
 // Note that the term 'period' in this code really means 'period reload value', P,
@@ -201,7 +187,7 @@ private:
 
 // Produces the square wave based on one of 4 duty cycles
 // http://wiki.nesdev.com/w/index.php/APU_Pulse
-class PulseWaveGenerator : public AudioChip
+class PulseWaveGenerator
 {
 public:
 	PulseWaveGenerator() : m_duty(0), m_step(0) {}
@@ -218,7 +204,7 @@ public:
 	}
 
 	// Clocked by an Timer, outputs bit (0 or 1)
-	virtual void Clock()
+	void Clock()
 	{
 		m_step = (m_step + 1) % 8;
 	}
@@ -249,13 +235,7 @@ private:
 class Timer
 {
 public:
-	Timer() : m_outputChip(nullptr), m_minPeriod(0) {}
-
-	void Connect(AudioChip& outputChip)
-	{
-		assert(m_outputChip == nullptr);
-		m_outputChip = &outputChip;
-	}
+	Timer() : m_minPeriod(0) {}
 
 	void Reset()
 	{
@@ -292,23 +272,24 @@ public:
 	}
 
 	// Clocked by CPU clock every cycle (triangle channel) or second cycle (pulse/noise channels)
-	void Clock()
+	// Returns true when output chip should be clocked
+	bool Clock()
 	{
 		// Avoid popping and weird noises from ultra sonic frequencies
 		if (m_divider.GetPeriod() < m_minPeriod)
-			return;
+			return false;
 
 		if (m_divider.Clock())
 		{
-			m_outputChip->Clock();
+			return true;
 		}
+		return false;
 	}
 
 private:
 	friend void DebugDrawAudio(SDL_Renderer* renderer);
 
 	Divider m_divider;
-	AudioChip* m_outputChip;
 	size_t m_minPeriod;
 };
 
@@ -324,7 +305,6 @@ public:
 		, m_reload(false)
 		, m_silenceChannel(false)
 		, m_shiftCount(0)
-		, m_timer(nullptr)
 		, m_targetPeriod(0)
 	{
 	}
@@ -334,20 +314,17 @@ public:
 		m_subtractExtra = 1;
 	}
 
-	void Connect(Timer& timer)
-	{
-		assert(m_timer == nullptr);
-		m_timer = &timer;
-	}
-
 	void SetEnabled(bool enabled) { m_enabled = enabled; }
 	void SetNegate(bool negate) { m_negate = negate; }
 
-	void SetPeriod(size_t period)
+	void SetPeriod(size_t period, Timer& timer)
 	{
 		assert(period < 8); // 3 bits
 		m_divider.SetPeriod(period); // Don't reset counter
-		ComputeTargetPeriod();
+
+		// From wiki: The adder computes the next target period immediately after the period is updated by $400x writes
+		// or by the frame counter.
+		ComputeTargetPeriod(timer);
 	}
 
 	void SetShiftCount(uint8 shiftCount)
@@ -359,9 +336,9 @@ public:
 	void Restart() { m_reload = true;  }
 
 	// Clocked by FrameCounter
-	void Clock()
+	void Clock(Timer& timer)
 	{
-		ComputeTargetPeriod();
+		ComputeTargetPeriod(timer);
 
 		if (m_reload)
 		{
@@ -370,7 +347,7 @@ public:
 			// clocked and reset as usual, adjust the timer period.
 			if (m_enabled && m_divider.Clock())
 			{
-				AdjustTimerPeriod();
+				AdjustTimerPeriod(timer);
 			}
 
 			m_divider.ResetCounter();
@@ -383,7 +360,7 @@ public:
 			// Only clock divider while sweep is enabled
 			if (m_enabled && m_divider.Clock())
 			{
-				AdjustTimerPeriod();
+				AdjustTimerPeriod(timer);
 			}
 #else
 			// From the nesdev wiki, it looks like the divider is always decremented, but only
@@ -394,7 +371,7 @@ public:
 			}
 			else if (m_enabled && m_divider.Clock())
 			{
-				AdjustTimerPeriod();
+				AdjustTimerPeriod(timer);
 			}
 #endif
 		}
@@ -406,11 +383,11 @@ public:
 	}
 
 private:
-	void ComputeTargetPeriod()
+	void ComputeTargetPeriod(Timer& timer)
 	{
 		assert(m_shiftCount < 8); // 3 bits
 
-		const size_t currPeriod = m_timer->GetPeriod();
+		const size_t currPeriod = timer.GetPeriod();
 		const size_t shiftedPeriod = currPeriod >> m_shiftCount;
 
 		if (m_negate)
@@ -428,12 +405,12 @@ private:
 		m_silenceChannel = (currPeriod < 8 || m_targetPeriod > 0x7FF);
 	}
 
-	void AdjustTimerPeriod()
+	void AdjustTimerPeriod(Timer& timer)
 	{
 		// If channel is not silenced, it means we're in range
 		if (m_enabled && m_shiftCount > 0 && !m_silenceChannel)
 		{
-			m_timer->SetPeriod(m_targetPeriod);
+			timer.SetPeriod(m_targetPeriod);
 		}
 	}
 
@@ -447,20 +424,14 @@ private:
 	bool m_silenceChannel; // This is the Sweep -> Gate connection, if true channel is silenced
 	uint8 m_shiftCount; // [0,7]
 	Divider m_divider;
-	Timer* m_timer;
 	size_t m_targetPeriod; // Target period for the timer; is computed continuously in real hardware
 };
 
 // Concrete base class for audio channels
-class AudioChannel : public IAudioChannel
+class AudioChannel
 {
 public:
-	virtual void ClockTimer()
-	{
-		m_timer.Clock();
-	}
-
-	virtual LengthCounter& GetLengthCounter()
+	LengthCounter& GetLengthCounter()
 	{
 		return m_lengthCounter;
 	}
@@ -479,23 +450,25 @@ public:
 		assert(pulseChannelNumber < 2);
 		if (pulseChannelNumber == 0)
 			m_sweepUnit.SetSubtractExtra();
-
-		// Connect timer to sequencer
-		m_timer.Connect(m_pulseWaveGenerator);
-
-		// Connect sweep unit to timer
-		m_sweepUnit.Connect(m_timer);
 	}
 
-	virtual void ClockQuarterFrameChips()
+	void ClockQuarterFrameChips()
 	{
 		m_volumeEnvelope.Clock();
 	}
 
-	virtual void ClockHalfFrameChips()
+	void ClockHalfFrameChips()
 	{
 		m_lengthCounter.Clock();
-		m_sweepUnit.Clock();
+		m_sweepUnit.Clock(m_timer);
+	}
+
+	void ClockTimer()
+	{
+		if (m_timer.Clock())
+		{
+			m_pulseWaveGenerator.Clock();
+		}
 	}
 
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value)
@@ -512,7 +485,7 @@ public:
 
 		case 1: // Sweep unit setup
 			m_sweepUnit.SetEnabled(TestBits(value, BIT(7)));
-			m_sweepUnit.SetPeriod(ReadBits(value, BITS(4, 5, 6)) >> 4);
+			m_sweepUnit.SetPeriod(ReadBits(value, BITS(4, 5, 6)) >> 4, m_timer);
 			m_sweepUnit.SetNegate(TestBits(value, BIT(3)));
 			m_sweepUnit.SetShiftCount(ReadBits(value, BITS(0, 1, 2)));
 			m_sweepUnit.Restart(); // Side effect
@@ -614,12 +587,12 @@ private:
 	Divider m_divider;
 };
 
-class TriangleWaveGenerator : public AudioChip
+class TriangleWaveGenerator
 {
 public:
 	TriangleWaveGenerator() : m_step(0) {}
 
-	virtual void Clock()
+	void Clock()
 	{
 		m_step = (m_step + 1) % 32;
 	}
@@ -639,50 +612,33 @@ private:
 	uint8 m_step;
 };
 
-// Proxy that handles clocking TriangleWaveGenerator when both linear and length counters are non-zero
-class TriangleWaveGeneratorClocker : public AudioChip
-{
-public:
-	TriangleWaveGeneratorClocker()
-		: m_linearCounter(nullptr)
-		, m_lengthCounter(nullptr)
-		, m_triangleWaveGenerator(nullptr)
-	{
-	}
-
-	virtual void Clock()
-	{
-		if (m_linearCounter->GetValue() > 0 && m_lengthCounter->GetValue() > 0)
-			m_triangleWaveGenerator->Clock();
-	}
-
-	LinearCounter* m_linearCounter;
-	LengthCounter* m_lengthCounter;
-	TriangleWaveGenerator* m_triangleWaveGenerator;
-};
-
 class TriangleChannel : public AudioChannel
 {
 public:
 	TriangleChannel()
 	{
-		m_timer.Connect(m_clocker);
 		m_timer.SetMinPeriod(2); // Avoid popping from ultrasonic frequencies
-
-		//@TODO: Connect funcs
-		m_clocker.m_linearCounter = &m_linearCounter;
-		m_clocker.m_lengthCounter = &m_lengthCounter;
-		m_clocker.m_triangleWaveGenerator = &m_triangleWaveGenerator;
 	}
 
-	virtual void ClockQuarterFrameChips()
+	void ClockQuarterFrameChips()
 	{
 		m_linearCounter.Clock();
 	}
 
-	virtual void ClockHalfFrameChips()
+	void ClockHalfFrameChips()
 	{
 		m_lengthCounter.Clock();
+	}
+
+	void ClockTimer()
+	{
+		if (m_timer.Clock())
+		{
+			if (m_linearCounter.GetValue() > 0 && m_lengthCounter.GetValue() > 0)
+			{
+				m_triangleWaveGenerator.Clock();
+			}
+		}
 	}
 
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value)
@@ -727,17 +683,16 @@ public:
 	}
 
 	LinearCounter m_linearCounter;
-	TriangleWaveGeneratorClocker m_clocker;
 	TriangleWaveGenerator m_triangleWaveGenerator;
 };
 
-class LinearFeedbackShiftRegister : public AudioChip
+class LinearFeedbackShiftRegister
 {
 public:
 	LinearFeedbackShiftRegister() : m_register(1), m_mode(false){}
 
 	// Clocked by noise channel timer
-	virtual void Clock()
+	void Clock()
 	{
 		uint16 bit0 = ReadBits(m_register, BIT(0));
 
@@ -767,17 +722,24 @@ public:
 	NoiseChannel()
 	{
 		m_volumeEnvelope.SetLoop(true); // Always looping
-		m_timer.Connect(m_shiftRegister);
 	}
 
-	virtual void ClockQuarterFrameChips()
+	void ClockQuarterFrameChips()
 	{
 		m_volumeEnvelope.Clock();
 	}
 
-	virtual void ClockHalfFrameChips()
+	void ClockHalfFrameChips()
 	{
 		m_lengthCounter.Clock();
+	}
+
+	void ClockTimer()
+	{
+		if (m_timer.Clock())
+		{
+			m_shiftRegister.Clock();
+		}
 	}
 
 	size_t GetValue() const
@@ -840,16 +802,19 @@ private:
 class FrameCounter
 {
 public:
-	FrameCounter()
-		: m_cpuCycles(0)
+	FrameCounter(Apu& apu)
+		: m_apu(&apu)
+		, m_cpuCycles(0)
 		, m_numSteps(4)
 		, m_inhibitInterrupt(true)
 	{
 	}
 
-	void AddChannel(AudioChannel& channel)
+	void Serialize(class Serializer& serializer)
 	{
-		m_channels.push_back(&channel);
+		SERIALIZE(m_cpuCycles);
+		SERIALIZE(m_numSteps);
+		SERIALIZE(m_inhibitInterrupt);
 	}
 
 	void SetMode(uint8 mode)
@@ -957,20 +922,24 @@ public:
 private:
 	void ClockQuarterFrameChips()
 	{
-		for (auto& channel : m_channels)
-			channel->ClockQuarterFrameChips();
+		m_apu->m_pulseChannel0->ClockQuarterFrameChips();
+		m_apu->m_pulseChannel1->ClockQuarterFrameChips();
+		m_apu->m_triangleChannel->ClockQuarterFrameChips();
+		m_apu->m_noiseChannel->ClockQuarterFrameChips();
 	}
 
 	void ClockHalfFrameChips()
 	{
-		for (auto& channel : m_channels)
-			channel->ClockHalfFrameChips();
+		m_apu->m_pulseChannel0->ClockHalfFrameChips();
+		m_apu->m_pulseChannel1->ClockHalfFrameChips();
+		m_apu->m_triangleChannel->ClockHalfFrameChips();
+		m_apu->m_noiseChannel->ClockHalfFrameChips();
 	}
 
+	Apu* m_apu;
 	size_t m_cpuCycles;
 	size_t m_numSteps;
 	bool m_inhibitInterrupt;
-	std::vector<AudioChannel*> m_channels;
 };
 
 void Apu::Initialize()
@@ -979,18 +948,13 @@ void Apu::Initialize()
 
 	std::fill(std::begin(m_channelVolumes), std::end(m_channelVolumes), 1.0f);
 
-	m_frameCounter.reset(new FrameCounter());
+	m_frameCounter.reset(new FrameCounter(*this));
 
 	m_pulseChannel0 = std::make_shared<PulseChannel>(0);
 	m_pulseChannel1 = std::make_shared<PulseChannel>(1);
 	m_triangleChannel = std::make_shared<TriangleChannel>();
 	m_noiseChannel = std::make_shared<NoiseChannel>();
 
-	m_frameCounter->AddChannel(*m_pulseChannel0);
-	m_frameCounter->AddChannel(*m_pulseChannel1);
-	m_frameCounter->AddChannel(*m_triangleChannel);
-	m_frameCounter->AddChannel(*m_noiseChannel);
-		
 	m_audioDriver = std::make_shared<AudioDriver>();
 	m_audioDriver->Initialize();
 }
@@ -1004,6 +968,19 @@ void Apu::Reset()
 	HandleCpuWrite(0x4015, 0);
 	for (uint16 address = 0x4000; address <= 0x400F; ++address)
 		HandleCpuWrite(address, 0);
+}
+
+void Apu::Serialize(class Serializer& serializer)
+{
+	SERIALIZE(m_evenFrame);
+	SERIALIZE(m_elapsedCpuCycles);
+	SERIALIZE(m_sampleSum);
+	SERIALIZE(m_numSamples);
+	SERIALIZE(*m_pulseChannel0);
+	SERIALIZE(*m_pulseChannel1);
+	SERIALIZE(*m_triangleChannel);
+	SERIALIZE(*m_noiseChannel);
+	serializer.SerializeObject(*m_frameCounter);
 }
 
 void Apu::Execute(uint32 cpuCycles)

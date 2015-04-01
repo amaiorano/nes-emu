@@ -94,6 +94,9 @@
     <ClInclude Include="src\AudioDriver.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Serializer.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
