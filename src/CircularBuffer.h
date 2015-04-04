@@ -10,6 +10,11 @@ public:
 	void Init(size_t maxSize)
 	{
 		m_buffer.resize(maxSize);
+		Clear();
+	}
+
+	void Clear()
+	{
 		m_begin = &m_buffer.front();
 		m_front = m_back = m_begin;
 		m_end = &m_buffer.back() + 1;

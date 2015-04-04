@@ -37,6 +37,8 @@
     <ClInclude Include="src\OpCodeTable.h" />
     <ClInclude Include="src\Ppu.h" />
     <ClInclude Include="src\Renderer.h" />
+    <ClInclude Include="src\RewindBuffer.h" />
+    <ClInclude Include="src\RewindManager.h" />
     <ClInclude Include="src\Rom.h" />
     <ClInclude Include="src\Serializer.h" />
     <ClInclude Include="src\Stream.h" />
@@ -49,6 +51,7 @@
     <ClCompile Include="src\ControllerPorts.cpp" />
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\Debugger.cpp" />
+    <ClCompile Include="src\RewindManager.cpp" />
     <ClCompile Include="src\Stream.cpp" />
     <ClCompile Include="src\Input.cpp" />
     <ClCompile Include="src\main.cpp" />

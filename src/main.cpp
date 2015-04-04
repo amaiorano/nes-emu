@@ -184,6 +184,8 @@ int main(int argc, char* argv[])
 				nes->SerializeSaveState(false);
 			}
 
+			nes->RewindSaveStates(Input::KeyDown(SDL_SCANCODE_BACKSPACE));
+
 			ProcessInputForChannelVolumes(*nes);
 		}
 	}

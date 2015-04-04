@@ -194,7 +194,7 @@ protected:
 
 	virtual size_t ReadImpl(void* /*dest*/, size_t /*elemSize*/, size_t /*count*/)
 	{
-		FAIL("For couting output streams only");
+		assert(false); // For couting output streams only
 		return 1;
 	}
 
@@ -206,7 +206,7 @@ protected:
 
 	virtual bool SetPosImpl(size_t /*pos*/)
 	{
-		FAIL("Not supported");
+		assert(false); // Not supported
 		return false;
 	}
 

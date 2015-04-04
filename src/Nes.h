@@ -8,6 +8,7 @@
 #include "CpuInternalRam.h"
 #include "MemoryBus.h"
 #include "FrameTimer.h"
+#include "RewindManager.h"
 
 class Nes
 {
@@ -21,6 +22,8 @@ public:
 
 	bool SerializeSaveState(bool save);
 	void Serialize(class Serializer& serializer);
+
+	void RewindSaveStates(bool enable);
 
 	void ExecuteFrame(bool paused);
 
@@ -40,7 +43,6 @@ private:
 	void ExecuteCpuAndPpuFrame();
 	void SerializeSaveRam(bool save);
 
-	FrameTimer m_frameTimer;
 	Cpu m_cpu;
 	Ppu m_ppu;
 	Apu m_apu; // Maybe should just be aggregated and updated by Cpu?
@@ -48,6 +50,9 @@ private:
 	CpuInternalRam m_cpuInternalRam;
 	CpuMemoryBus m_cpuMemoryBus;
 	PpuMemoryBus m_ppuMemoryBus;
+
+	FrameTimer m_frameTimer;
+	RewindManager m_rewindManager;
 
 	std::string m_romName;
 	std::string m_saveDir;

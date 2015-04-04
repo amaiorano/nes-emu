@@ -5,6 +5,7 @@
 #include "Serializer.h"
 #include "Renderer.h"
 #include "IO.h"
+#include "CircularBuffer.h"
 
 Nes::~Nes()
 {
@@ -39,6 +40,9 @@ RomHeader Nes::LoadRom(const char* file)
 	// Load rom and last sram state, if any
 	RomHeader romHeader = m_cartridge.LoadRom(file);
 	SerializeSaveRam(false);
+
+	// Initialize rewind buffer
+	m_rewindManager.Initialize(*this);
 
 	return romHeader;
 }
@@ -96,6 +100,9 @@ bool Nes::SerializeSaveState(bool save)
 
 			Reset();
 			Serializer::LoadRootObject(fs, *this);
+
+			// Clear rewind states so user can't rewind to before this save state was loaded
+			m_rewindManager.ClearRewindStates();
 		}
 
 		printf("%s SaveState: %s\n", save ? "Saved" : "Loaded", saveStatePath.c_str());
@@ -118,12 +125,30 @@ void Nes::Serialize(class Serializer& serializer)
 	serializer.SerializeObject(m_cpuInternalRam);
 }
 
+void Nes::RewindSaveStates(bool enable)
+{
+	m_rewindManager.SetRewinding(enable);
+}
+
 void Nes::ExecuteFrame(bool paused)
 {
+	if (m_rewindManager.IsRewinding())
+	{
+		if (m_rewindManager.RewindFrame())
+		{
+			// Execute a single frame so that we can render it and play audio
+			ExecuteCpuAndPpuFrame();
+			m_ppu.RenderFrame();
+		}
+		return;
+	}
+
 	if (!paused)
 	{
 		ExecuteCpuAndPpuFrame();
 		m_ppu.RenderFrame();
+
+		m_rewindManager.SaveRewindState();
 	}
 
 	// Just rendered a screen; FrameTimer will wait until we hit 60 FPS (if machine is too fast).
@@ -133,7 +158,7 @@ void Nes::ExecuteFrame(bool paused)
 
 	// Auto-save sram at fixed intervals
 	const float64 saveInterval = 5.0;
-	float64 currTime = System::GetTimeSec();
+	const float64 currTime = System::GetTimeSec();
 	if (currTime - m_lastSaveRamTime >= saveInterval)
 	{
 		SerializeSaveRam(true);

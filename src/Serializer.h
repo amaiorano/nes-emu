@@ -90,7 +90,7 @@ public:
 			std::string nameFromFile;
 			ReadString(nameFromFile);
 			if (nameFromFile.compare(name) != 0)
-				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile);
+				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile.c_str());
 			const size_t sizeRead = ReadBuffer(buffer);
 			if (sizeRead != size)
 				FAIL("SaveState buffer size mismatch! Expecting %d, got %d", size, sizeRead);
