@@ -11,5 +11,5 @@ void IStream::Printf(const char* format, ...)
 
 	assert(bytesWritten < sizeof(buffer));
 
-	ReadImpl(buffer, bytesWritten, 1);
+	WriteImpl(buffer, bytesWritten, 1);
 }
