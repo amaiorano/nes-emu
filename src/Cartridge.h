@@ -39,9 +39,10 @@ private:
 
 	Nes* m_nes;
 	
-	NameTableMirroring m_cartNameTableMirroring;
 	std::shared_ptr<Mapper> m_mapperHolder;
 	Mapper* m_mapper;
+	NameTableMirroring m_cartNameTableMirroring;
+	bool m_hasSRAM;
 
 	// Set arbitrarily large max number of banks
 	static const size_t kMaxPrgBanks = 128;
