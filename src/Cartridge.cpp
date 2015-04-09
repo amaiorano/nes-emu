@@ -1,6 +1,6 @@
 #include "Cartridge.h"
 #include "Nes.h"
-#include "FileStream.h"
+#include "Stream.h"
 #include "Rom.h"
 #include "MemoryMap.h"
 #include "Debugger.h"
@@ -41,7 +41,7 @@ void Cartridge::Serialize(class Serializer& serializer)
 	if (m_mapper->CanWriteChrMemory())
 		SERIALIZE_BUFFER(m_chrBanks.data(), m_mapper->ChrMemorySize());
 
-	if (m_mapper->CanWriteSavMemory())
+	if (m_mapper->SavMemorySize() > 0)
 		SERIALIZE_BUFFER(m_savBanks.data(), m_mapper->SavMemorySize());
 	
 	serializer.SerializeObject(*m_mapper);
@@ -50,12 +50,11 @@ void Cartridge::Serialize(class Serializer& serializer)
 RomHeader Cartridge::LoadRom(const char* file)
 {
 	FileStream fs(file, "rb");
+
+	uint8 headerBytes[16];
+	fs.ReadValue(headerBytes);
 	RomHeader romHeader;
-
-	fs.Read((uint8*)&romHeader, sizeof(RomHeader));
-
-	if ( !romHeader.IsValidHeader() )
-		FAIL("Invalid romHeader");
+	romHeader.Initialize(headerBytes);
 
 	// Next is Trainer, if present (0 or 512 bytes)
 	if ( romHeader.HasTrainer() )
@@ -91,7 +90,9 @@ RomHeader Cartridge::LoadRom(const char* file)
 		}
 	}
 
-	size_t numSavBanks = romHeader.HasSRAM()? 1 : 0; // @TODO: Some boards switch sram banks (SOROM)
+	// Note that "save" here doesn't imply battery-backed
+	const size_t numSavBanks = romHeader.GetNumPrgRamBanks();
+	assert(numSavBanks <= kMaxSavBanks);
 
 	switch (romHeader.GetMapperNumber())
 	{
@@ -109,6 +110,7 @@ RomHeader Cartridge::LoadRom(const char* file)
 	m_mapper->Initialize(numPrgBanks, numChrBanks, numSavBanks);
 
 	m_cartNameTableMirroring = romHeader.GetNameTableMirroring();
+	m_hasSRAM = romHeader.HasSRAM();
 
 	return romHeader;
 }
@@ -188,6 +190,12 @@ void Cartridge::WriteSaveRamFile(const char* file)
 {
 	assert(IsRomLoaded());
 
+	if (!m_hasSRAM)
+		return;
+
+	//@NOTE: We assume all prg-ram is battery-backed here, even though this may not
+	// be true.
+
 	const size_t numSavBanks = m_mapper->NumSavBanks8k();
 	if (numSavBanks == 0)
 		return;
@@ -208,8 +216,10 @@ void Cartridge::WriteSaveRamFile(const char* file)
 
 void Cartridge::LoadSaveRamFile(const char* file)
 {
-	const size_t numSavBanks = m_mapper->NumSavBanks8k();
+	if (!m_hasSRAM)
+		return;
 
+	const size_t numSavBanks = m_mapper->NumSavBanks8k();
 	if (numSavBanks == 0)
 		return;
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Base.h"
-#include <cstring> 
 
 enum class NameTableMirroring
 {
@@ -14,85 +13,58 @@ enum class NameTableMirroring
 	Undefined
 };
 
-#pragma pack(push)
-#pragma pack(1)
-struct RomHeader
+enum class NesHeaderType
 {
-	uint8 name[4];
-	uint8 prgRomUnits; // in 16kb units
-	uint8 chrRomUnits; // in 8 kb units (if 0, board uses CHR RAM)
-	uint8 flags6;
-	uint8 flags7;
-	uint8 prgRamUnits; // in 8kb units *IGNORE*: Recently added to spec, most roms don't have this set
-	uint8 flags9;
-	uint8 flags10; // Unofficial
-	uint8 zero[5]; // Should all be 0
+	iNesArchaic,
+	iNes,
+	Nes2
+};
 
-	size_t GetPrgRomSizeBytes() const
-	{
-		return prgRomUnits * KB(16);
-	}
+class RomHeader
+{
+public:
+	// Initialize from first 16 bytes of rom file
+	void Initialize(uint8 headerBytes[16]);
 
-	// If 0, board uses CHR RAM
-	size_t GetChrRomSizeBytes() const
-	{
-		return chrRomUnits * KB(8);
-	}
+	NesHeaderType GetHeaderType() const { return m_nesHeaderType; }
+	
+	// Number of 16K CHR-ROM banks
+	size_t GetNumPrgRomBanks() const { return m_prgRomBanks; }
 
-	NameTableMirroring GetNameTableMirroring() const
-	{
-		if (flags6 & 0x80)
-			return NameTableMirroring::FourScreen;
+	// Number of 8K CHR-ROM banks. If 0, board uses CHR-RAM.
+	size_t GetNumChrRomBanks() const { return m_chrRomBanks; }
+	
+	// Total number of PRG-RAM (potentially) used. All/part/none of it
+	// may be battery-backed (aka "SRAM").
+	//@TODO: NES 2.0 splits into battery-backed and non.
+	size_t GetNumPrgRamBanks() const { return m_prgRamBanks; }
 
-		return (flags6 & 0x01)==1? NameTableMirroring::Vertical : NameTableMirroring::Horizontal;
-	}
+	size_t GetPrgRomSizeBytes() const { return m_prgRomBanks * KB(16); }
+	size_t GetChrRomSizeBytes() const { return m_chrRomBanks * KB(8); }
+	size_t GetPrgRamSizeBytes() const { return m_prgRamBanks * KB(8); }
+	
+	NameTableMirroring GetNameTableMirroring() const { return m_mirroring; }
+	
+	uint8 GetMapperNumber() const { return m_mapperNumber; }
+	
+	bool HasSRAM() const { return m_hasSaveRam; }
 
-	uint8 GetMapperNumber() const
-	{
-		const uint8 result = (flags7 & 0xF0) | ((flags6 & 0xF0)>>4);
-		return result;
-	}
+	bool HasTrainer() const { return m_hasTrainer; }
 
-	// SRAM in CPU $6000-$7FFF, if present, is battery backed
-	bool HasSRAM() const
-	{
-		return (flags6 & 0x02) != 0;
-	}
-
-	bool HasTrainer() const
-	{
-		return (flags6 & 0x04) != 0;
-	}
-
-	bool IsVSUnisystem() const
-	{
-		return (flags7 & 0x01) != 0;
-	}
+	bool IsVSUnisystem() const { return m_isVSUnisystem; }
 
 	// 8KB of Hint Screen data stored after CHR data
-	bool IsPlayChoice10() const
-	{
-		return (flags7 & 0x02) != 0;
-	}
+	bool IsPlayChoice10() const { return m_isPlayChoice10; }
 
-	bool IsNES2Header() const
-	{
-		return (flags7 & 0xC0) == 2;
-	}
-
-	bool IsValidHeader() const
-	{
-		if (memcmp((const char*)name, "NES\x1A", 4) != 0)
-			return false;
-
-		// A general rule of thumb: if the last 4 bytes are not all zero, and the header is not marked for
-		// NES 2.0 format, an emulator should either mask off the upper 4 bits of the mapper number or simply
-		// refuse to load the ROM.
-		if ( (zero[1]!=0 || zero[2]!=0 || zero[3]!=0 || zero[4]!=0) && IsNES2Header() )
-			return false;
-
-		return true;
-	}
+private:
+	NesHeaderType m_nesHeaderType;
+	size_t m_prgRomBanks;
+	size_t m_chrRomBanks;
+	size_t m_prgRamBanks;
+	NameTableMirroring m_mirroring;
+	uint8 m_mapperNumber;
+	bool m_hasSaveRam;
+	bool m_hasTrainer;
+	bool m_isVSUnisystem;
+	bool m_isPlayChoice10;
 };
-#pragma pack(pop)
-static_assert(sizeof(RomHeader)==16, "RomHeader must be 16 bytes");

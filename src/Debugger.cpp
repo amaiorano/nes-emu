@@ -6,7 +6,7 @@
 #include "Nes.h"
 #include "OpCodeTable.h"
 #include "System.h"
-#include "FileStream.h"
+#include "Stream.h"
 #include "Input.h"
 #include <cassert>
 

@@ -13,9 +13,6 @@
     <ClInclude Include="src\Cpu.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\FileStream.h">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="src\OpCodeTable.h">
       <Filter>src</Filter>
     </ClInclude>
@@ -97,6 +94,15 @@
     <ClInclude Include="src\Serializer.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\Stream.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RewindManager.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\RewindBuffer.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
@@ -123,9 +129,6 @@
     <ClCompile Include="src\OpCodeTable.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\FileStream.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\Cartridge.cpp">
       <Filter>src</Filter>
     </ClCompile>
@@ -148,6 +151,15 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\AudioDriver.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Stream.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\RewindManager.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Rom.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>

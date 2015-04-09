@@ -31,15 +31,17 @@
     <ClInclude Include="src\Mapper4.h" />
     <ClInclude Include="src\Mapper7.h" />
     <ClInclude Include="src\Memory.h" />
-    <ClInclude Include="src\FileStream.h" />
     <ClInclude Include="src\MemoryBus.h" />
     <ClInclude Include="src\MemoryMap.h" />
     <ClInclude Include="src\Nes.h" />
     <ClInclude Include="src\OpCodeTable.h" />
     <ClInclude Include="src\Ppu.h" />
     <ClInclude Include="src\Renderer.h" />
+    <ClInclude Include="src\RewindBuffer.h" />
+    <ClInclude Include="src\RewindManager.h" />
     <ClInclude Include="src\Rom.h" />
     <ClInclude Include="src\Serializer.h" />
+    <ClInclude Include="src\Stream.h" />
     <ClInclude Include="src\System.h" />
   </ItemGroup>
   <ItemGroup>
@@ -49,7 +51,9 @@
     <ClCompile Include="src\ControllerPorts.cpp" />
     <ClCompile Include="src\Cpu.cpp" />
     <ClCompile Include="src\Debugger.cpp" />
-    <ClCompile Include="src\FileStream.cpp" />
+    <ClCompile Include="src\RewindManager.cpp" />
+    <ClCompile Include="src\Rom.cpp" />
+    <ClCompile Include="src\Stream.cpp" />
     <ClCompile Include="src\Input.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Mapper1.cpp" />

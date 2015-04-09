@@ -1,6 +1,6 @@
 #include "AudioDriver.h"
 #include "CircularBuffer.h"
-#include "FileStream.h"
+#include "Stream.h"
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
 #include <SDL.h>
 #include <SDL_audio.h>
@@ -102,7 +102,7 @@ public:
 		float targetSample = sample * std::numeric_limits<SampleFormatType>::max();
 
 		SDL_LockAudioDevice(m_audioDeviceID);
-		m_samples.Write(static_cast<SampleFormatType>(targetSample));
+		m_samples.PushBack(static_cast<SampleFormatType>(targetSample));
 		SDL_UnlockAudioDevice(m_audioDeviceID);
 
 		// Unpause when buffer is half full; pause if almost depleted to give buffer a chance to
@@ -130,7 +130,7 @@ private:
 
 		size_t numSamplesToRead = byteStreamLength / sizeof(SampleFormatType);
 
-		size_t numSamplesRead = audioDriver->m_samples.Read(stream, numSamplesToRead);
+		size_t numSamplesRead = audioDriver->m_samples.PopBack(stream, numSamplesToRead);
 
 		// If we haven't written enough samples, fill out the rest with the last sample
 		// written. This will usually hide the error.

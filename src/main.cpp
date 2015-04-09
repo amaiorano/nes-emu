@@ -35,6 +35,7 @@ namespace
 		printf("  File: %s\n", romFile);
 		printf("  PRG ROM size: %d kb\n", BytesToKB(header.GetPrgRomSizeBytes()));
 		printf("  CHR ROM size: %d kb\n", BytesToKB(header.GetChrRomSizeBytes()));
+		printf("  PRG RAM size: %d kb\n", BytesToKB(header.GetPrgRamSizeBytes()));
 		printf("  Mapper number: %d\n", header.GetMapperNumber());
 		printf("  Has SRAM: %s\n", header.HasSRAM()? "yes" : "no");
 		printf("\n");
@@ -183,6 +184,8 @@ int main(int argc, char* argv[])
 			{
 				nes->SerializeSaveState(false);
 			}
+
+			nes->RewindSaveStates(Input::KeyDown(SDL_SCANCODE_BACKSPACE));
 
 			ProcessInputForChannelVolumes(*nes);
 		}
