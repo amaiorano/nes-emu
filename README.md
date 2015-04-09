@@ -4,21 +4,35 @@ A Nintendo Entertainment System (NES) emulator written in C++
 
 As this is just a pet project, don't expect a full-featured emulator. There is no GUI, many typical features are missing, and only a few mappers have been implemented. However, the code is pretty clean and straightforward, and I think can be useful to learn from. Of course, if someone wanted to fork this code to write a full-featured emulator, that would be cool as well :)
 
+## Features
+
+- Mappers 0,1,2,3,4,7 (~90% of games)
+- Accurate audio emulation (no DMC)
+- Automatic saving of SRAM
+- Save state support
+- Rewind any time up to 1 minute at normal speed
+- Single and multi frame stepping when paused
 
 ## Controls
 
-Input     | Keyboard Key(s)
-----------|----------------
-D-Pad     | arrows
-A         | A
-B         | S
-Select    | Tab
-Start     | Enter
-          |
-Open Rom  | Ctrl + O
-Reset     | Ctrl + R
-Quit      | Alt + F4
-
+Input                 | Keyboard Key(s)
+----------------------|----------------
+D-Pad                 | arrows
+A                     | A
+B                     | S
+Select                | Tab
+Start                 | Enter
+                      |
+Open Rom              | Ctrl + O
+Reset                 | Ctrl + R
+Quit                  | Alt + F4
+                      |
+Rewind	              | Backspace
+Pause	              | P
+Step frame            |	[
+Step many frames      |	]
+			          |
+Toggle audio channels |	F1-F4
 
 ## Challenge
 
