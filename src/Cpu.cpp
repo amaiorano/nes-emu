@@ -145,10 +145,10 @@ void Cpu::Execute(uint32& cpuCyclesElapsed)
 
 	UpdateOperandAddress();
 
-	Debugger::PreCpuInstruction();
+	NesDebugger::PreCpuInstruction();
 	ExecuteInstruction();
 	ExecutePendingInterrupts(); // Handle when instruction (memory read) causes interrupt
-	Debugger::PostCpuInstruction();		
+	NesDebugger::PostCpuInstruction();		
 
 	cpuCyclesElapsed = m_cycles;
 	m_totalCycles += m_cycles;

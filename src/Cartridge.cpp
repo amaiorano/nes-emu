@@ -139,7 +139,7 @@ uint8 Cartridge::HandleCpuRead(uint16 cpuAddress)
 	}
 	
 #if CONFIG_DEBUG
-	if (!Debugger::IsExecuting())
+	if (!NesDebugger::IsExecuting())
 		printf("Unhandled by mapper - read: $%04X\n", cpuAddress);
 #endif
 
@@ -167,7 +167,7 @@ void Cartridge::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 	else
 	{
 #if CONFIG_DEBUG
-		if (!Debugger::IsExecuting())
+		if (!NesDebugger::IsExecuting())
 			printf("Unhandled by mapper - write: $%04X\n", cpuAddress);
 #endif
 	}

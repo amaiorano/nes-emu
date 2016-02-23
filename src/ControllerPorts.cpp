@@ -64,7 +64,7 @@ uint8 ControllerPorts::HandleCpuRead(uint16 cpuAddress)
 	uint8& readIndex = m_readIndex[controllerIndex];
 	auto& lastIsButtonDown = m_lastIsButtonDown[controllerIndex];
 
-	if (Debugger::IsExecuting()) // For debugger, return last port value
+	if (NesDebugger::IsExecuting()) // For debugger, return last port value
 	{
 		return port;
 	}

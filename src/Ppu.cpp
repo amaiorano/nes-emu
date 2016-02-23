@@ -451,7 +451,7 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 	assert(cpuAddress >= CpuMemory::kPpuRegistersBase && cpuAddress < CpuMemory::kPpuRegistersEnd);
 
 	// If debugger is reading, we don't want any register side-effects, so just return the value
-	if ( Debugger::IsExecuting() )
+	if ( NesDebugger::IsExecuting() )
 	{
 		return ReadPpuRegister(cpuAddress);
 	}

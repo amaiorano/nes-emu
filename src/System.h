@@ -5,6 +5,8 @@
 
 #if PLATFORM_WINDOWS
 	#define FILE_FILTER(name, types) name " (" types ")\0" types "\0"
+#elif defined PLATFORM_MAC
+	#define FILE_FILTER(name, types) types
 #endif
 
 namespace System

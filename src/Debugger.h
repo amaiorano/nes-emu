@@ -7,7 +7,7 @@
 
 class Nes;
 
-namespace Debugger
+namespace NesDebugger
 {
 #if DEBUGGING_ENABLED
 	void Initialize(Nes& nes);

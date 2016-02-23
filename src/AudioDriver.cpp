@@ -1,11 +1,25 @@
 #include "AudioDriver.h"
 #include "CircularBuffer.h"
 #include "Stream.h"
+
+#include <stdexcept>
+
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
 #include <SDL.h>
 #include <SDL_audio.h>
 
 #define OUTPUT_RAW_AUDIO_FILE_STREAM 0
+
+template <int type>
+struct AudioFormatToType {
+	AudioFormatToType() {
+		throw std::runtime_error("General format type is not supported. Specialized type should be used");
+	}
+};
+
+template <> struct AudioFormatToType<AUDIO_S16> { typedef int16 Type; };
+template <> struct AudioFormatToType<AUDIO_U16> { typedef uint16 Type; };
+template <> struct AudioFormatToType<AUDIO_F32> { typedef float32 Type; };
 
 class AudioDriver::AudioDriverImpl
 {
@@ -20,11 +34,8 @@ public:
 	static const int kSamplesPerCallback = 1024;
 
 	template <SDL_AudioFormat Format> struct FormatToType;
-	template <> struct FormatToType<AUDIO_S16> { typedef int16 Type; };
-	template <> struct FormatToType<AUDIO_U16> { typedef uint16 Type; };
-	template <> struct FormatToType<AUDIO_F32> { typedef float32 Type; };
-
-	typedef FormatToType<kSampleFormat>::Type SampleFormatType;
+	
+	typedef AudioFormatToType<kSampleFormat>::Type SampleFormatType;
 
 	AudioDriverImpl()
 		: m_audioDeviceID(0)

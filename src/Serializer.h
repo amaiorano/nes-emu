@@ -3,6 +3,7 @@
 #include "Base.h"
 #include "Stream.h"
 #include <type_traits>
+#include <string>
 
 #define SERIALIZE(value) serializer.SerializeValue(#value, value)
 #define SERIALIZE_BUFFER(buffer, size) serializer.SerializeBuffer(#buffer, reinterpret_cast<uint8*>(buffer), size)
@@ -72,7 +73,7 @@ public:
 			std::string nameFromFile;
 			ReadString(nameFromFile);
 			if (nameFromFile.compare(name) != 0)
-				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile);
+				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile.c_str());
 			ReadValue(value);
 		}
 	}
