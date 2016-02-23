@@ -1,5 +1,6 @@
 #include "Apu.h"
 #include "Cpu.h"
+#include "MemoryBus.h"
 #include "AudioDriver.h"
 #include "Serializer.h"
 
@@ -16,7 +17,7 @@ static int dmc_read_function(void* memoryReader, cpu_addr_t cpuAddress) {
 	auto cpu = reinterpret_cast<Cpu*>(memoryReader);
 
 	cpu->StealCycles(4);
-	return cpu->HandleCpuRead(cpuAddress);
+	return cpu->GetMemoryBus()->Read(cpuAddress);
 }
 
 Apu::~Apu()

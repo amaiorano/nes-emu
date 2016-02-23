@@ -43,6 +43,8 @@ public:
 
 	void EndFrame() { m_frameCycles = 0; }
 	uint32 GetFrameCycles() const { return m_frameCycles; }
+
+	CpuMemoryBus* GetMemoryBus() { return m_cpuMemoryBus; }
 private:
 	friend class DebuggerImpl;
 
