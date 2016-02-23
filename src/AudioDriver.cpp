@@ -26,7 +26,7 @@ class AudioDriver::AudioDriverImpl
 public:
 	friend class AudioDriver;
 
-	static const int kSampleRate = 44100;
+	static const int kSampleRate = 48000;
 	static const SDL_AudioFormat kSampleFormat = AUDIO_S16; // Apparently supported by all drivers?
 	//static const SDL_AudioFormat kSampleFormat = AUDIO_U16;
 	//static const SDL_AudioFormat kSampleFormat = AUDIO_F32;

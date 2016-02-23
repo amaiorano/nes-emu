@@ -29,6 +29,10 @@ public:
 		serializer.End();
 	}
 
+	bool IsSaving() const {
+		return m_saving;
+	}
+
 	void BeginSave(IStream& stream)
 	{
 		m_saving = true;
