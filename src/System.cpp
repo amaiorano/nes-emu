@@ -226,6 +226,8 @@ namespace System
 		
 		NSOpenPanel* panel = [NSOpenPanel openPanel];
 		
+		panel.title = [NSString stringWithUTF8String:title];
+		
 		panel.canChooseFiles = YES;
 		panel.allowedFileTypes = nsFilterTypes;
 		
