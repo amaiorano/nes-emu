@@ -2,11 +2,12 @@
 
 A Nintendo Entertainment System (NES) emulator written in C++
 
-This is a fork of https://github.com/amaiorano/nes-emu. Improvments including: 
+This is a fork of https://github.com/amaiorano/nes-emu. 
+Improvements including: 
 - APU DMC channel implementation. 
 - OSX port (with xcode project provided)
 
-## From amaiorano:
+## From amaiorano
 As this is just a pet project, don't expect a full-featured emulator. There is no GUI, many typical features are missing, and only a few mappers have been implemented. However, the code is pretty clean and straightforward, and I think can be useful to learn from. Of course, if someone wanted to fork this code to write a full-featured emulator, that would be cool as well :)
 
 ## Features
