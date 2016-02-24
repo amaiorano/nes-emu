@@ -59,4 +59,4 @@ Although I did not look at other emulator source code, I did get a lot of inform
   - [NO$NES](http://problemkaputt.de/nes.htm)
 
 ## License
-APU implementation uses Shay Green's Nes_snd_emu library which is licensed under the GNU LGPL. See http://www.slack.net/~ant/libs/audio.html for details and visit http://www.gnu.org/licenses/lgpl.html for a copy of the LGPL License.
+The main code is MIT license. The APU implementation uses Shay Green's Nes_snd_emu library which is licensed under the GNU LGPL. See http://www.slack.net/~ant/libs/audio.html for details and visit http://www.gnu.org/licenses/lgpl.html for a copy of the LGPL License.
