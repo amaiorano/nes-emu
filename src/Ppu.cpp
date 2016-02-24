@@ -451,7 +451,7 @@ uint8 Ppu::HandleCpuRead(uint16 cpuAddress)
 	assert(cpuAddress >= CpuMemory::kPpuRegistersBase && cpuAddress < CpuMemory::kPpuRegistersEnd);
 
 	// If debugger is reading, we don't want any register side-effects, so just return the value
-	if ( Debugger::IsExecuting() )
+	if ( NesDebugger::IsExecuting() )
 	{
 		return ReadPpuRegister(cpuAddress);
 	}
@@ -692,7 +692,10 @@ uint16 Ppu::MapPpuToVRam(uint16 ppuAddress)
 
 uint16 Ppu::MapPpuToPalette(uint16 ppuAddress)
 {
-	assert(ppuAddress >= PpuMemory::kPalettesBase && ppuAddress < PpuMemory::kPalettesEnd);
+	//assert(ppuAddress >= PpuMemory::kPalettesBase && ppuAddress < PpuMemory::kPalettesEnd);
+	//LHQ
+	if (!(ppuAddress >= PpuMemory::kPalettesBase && ppuAddress < PpuMemory::kPalettesEnd))
+		return 0;
 
 	uint16 paletteAddress = (ppuAddress - PpuMemory::kPalettesBase) % PpuMemory::kPalettesSize;
 
@@ -894,7 +897,10 @@ void Ppu::FetchSpriteData(uint32 y) // OAM2 -> render (shift) registers
 		}
 
 		uint8 yOffset = static_cast<uint8>(y) - spriteY;
-		assert(yOffset < (isSprite8x16? 16 : 8));
+		//assert(yOffset < (isSprite8x16? 16 : 8));
+		//LHQ:
+		if (yOffset > (isSprite8x16 ? 16 : 8))
+			yOffset = (isSprite8x16 ? 16 : 8);
 
 		if (isSprite8x16)
 		{
@@ -919,7 +925,10 @@ void Ppu::FetchSpriteData(uint32 y) // OAM2 -> render (shift) registers
 		{
 			yOffset = 7 - yOffset;
 		}
-		assert(yOffset < 8);
+		//assert(yOffset < 8);
+		//LHQ
+		if (yOffset >= 8)
+			yOffset = 8;
 		
 		const uint16 tileOffset = TO16(tileIndex) * 16;
 		const uint16 byte1Address = patternTableAddress + tileOffset + yOffset;

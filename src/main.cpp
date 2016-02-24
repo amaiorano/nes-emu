@@ -5,6 +5,8 @@
 #include "Renderer.h"
 #include "Debugger.h"
 
+#include <vector>
+
 #define kVersionMajor 1
 #define kVersionMinor 3
 #if CONFIG_DEBUG
@@ -81,8 +83,21 @@ namespace
 	}
 }
 
-int main(int argc, char* argv[])
+int main(int raw_argc, char* raw_argv[])
 {
+	//HACK: filter out Cocoa Application's specific arguments
+	std::vector<char*> arg_list;
+	for (int i = 0; i < raw_argc; ++i) {
+		auto arg = raw_argv[i];
+		if (!((arg[0] == '-' && arg[1] != '-' && strlen(arg) > 2) || strcmp(arg, "YES") == 0 || strcmp(arg, "NO") == 0))
+		{
+			arg_list.push_back(arg);
+		}
+	}
+	
+	int argc = (int)arg_list.size();
+	char** argv = arg_list.data();
+	
 	try
 	{
 		PrintAppInfo();
@@ -112,7 +127,7 @@ int main(int argc, char* argv[])
 		Nes* nes = nesHolder.get();
 		nes->Initialize();
 		
-		Debugger::Initialize(*nes);
+		NesDebugger::Initialize(*nes);
 
 		RomHeader romHeader = nes->LoadRom(romFile.c_str());
 		PrintRomInfo(romFile.c_str(), romHeader);
@@ -126,7 +141,7 @@ int main(int argc, char* argv[])
 		{
 			Input::Update();
 			
-			Debugger::Update();
+			NesDebugger::Update();
 
 			nes->ExecuteFrame(paused);
 
@@ -199,7 +214,7 @@ int main(int argc, char* argv[])
 		System::MessageBox("Exception", "Unknown exception");
 	}
 
-	Debugger::Shutdown();
+	NesDebugger::Shutdown();
 
 	return 0;
 }

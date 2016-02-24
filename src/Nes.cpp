@@ -15,7 +15,7 @@ Nes::~Nes()
 
 void Nes::Initialize()
 {
-	m_apu.Initialize();
+	m_apu.Initialize(m_cpu);
 	m_cpu.Initialize(m_cpuMemoryBus, m_apu);
 	m_ppu.Initialize(m_ppuMemoryBus, *this);
 	m_cartridge.Initialize(*this);
@@ -179,6 +179,11 @@ void Nes::ExecuteCpuAndPpuFrame()
 		// Update PPU with that many cycles
 		m_ppu.Execute(cpuCycles, completedFrame);
 
-		m_apu.Execute(cpuCycles);
+		m_apu.Execute(m_cpu.GetFrameCycles());
+
+		if (completedFrame) {
+			m_apu.EndFrame(m_cpu.GetFrameCycles());
+			m_cpu.EndFrame();
+		}
 	}
 }

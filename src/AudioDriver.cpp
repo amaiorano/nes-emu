@@ -1,18 +1,51 @@
 #include "AudioDriver.h"
 #include "CircularBuffer.h"
 #include "Stream.h"
+
+#include <stdexcept>
+
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
 #include <SDL.h>
 #include <SDL_audio.h>
 
 #define OUTPUT_RAW_AUDIO_FILE_STREAM 0
 
+template <int type>
+struct AudioFormatToType {
+	AudioFormatToType() {
+		throw std::runtime_error("General format type is not supported. Specialized type should be used");
+	}
+};
+
+template <> struct AudioFormatToType<AUDIO_S16> {
+	typedef int16 Type;
+	
+	static Type convertFromF32(float32 sample) {
+		sample = 2.f * sample - 1.f;
+		return static_cast<Type>(sample * std::numeric_limits<int16>::max());
+	}
+};
+template <> struct AudioFormatToType<AUDIO_U16> {
+	typedef uint16 Type;
+	
+	static Type convertFromF32(float32 sample) {
+		return static_cast<Type>(sample * std::numeric_limits<int16>::max());
+	}
+};
+template <> struct AudioFormatToType<AUDIO_F32> {
+	typedef float32 Type;
+	
+	static Type convertFromF32(float32 sample) {
+		return sample;
+	}
+};
+
 class AudioDriver::AudioDriverImpl
 {
 public:
 	friend class AudioDriver;
 
-	static const int kSampleRate = 44100;
+	static const int kSampleRate = 48000;
 	static const SDL_AudioFormat kSampleFormat = AUDIO_S16; // Apparently supported by all drivers?
 	//static const SDL_AudioFormat kSampleFormat = AUDIO_U16;
 	//static const SDL_AudioFormat kSampleFormat = AUDIO_F32;
@@ -20,11 +53,8 @@ public:
 	static const int kSamplesPerCallback = 1024;
 
 	template <SDL_AudioFormat Format> struct FormatToType;
-	template <> struct FormatToType<AUDIO_S16> { typedef int16 Type; };
-	template <> struct FormatToType<AUDIO_U16> { typedef uint16 Type; };
-	template <> struct FormatToType<AUDIO_F32> { typedef float32 Type; };
-
-	typedef FormatToType<kSampleFormat>::Type SampleFormatType;
+	
+	typedef AudioFormatToType<kSampleFormat>::Type SampleFormatType;
 
 	AudioDriverImpl()
 		: m_audioDeviceID(0)
@@ -56,7 +86,7 @@ public:
 			FAIL("Failed to open audio device (error code %d)", SDL_GetError());
 
 		// Set buffer size as a function of the latency we allow
-		const float32 kDesiredLatencySecs = 50 / 1000.0f;
+		const float32 kDesiredLatencySecs = 100 / 1000.0f;
 		const float32 desiredLatencySamples = kDesiredLatencySecs * GetSampleRate();
 		const size_t bufferSize = static_cast<size_t>(desiredLatencySamples * 2); // We wait until buffer is 50% full to start playing
 		m_samples.Init(bufferSize);
@@ -98,9 +128,15 @@ public:
 	void AddSampleF32(float32 sample)
 	{
 		assert(sample >= 0.0f && sample <= 1.0f);
-		//@TODO: This multiply is wrong for signed format types (S16, S32)
-		float targetSample = sample * std::numeric_limits<SampleFormatType>::max();
+		auto targetSample = AudioFormatToType<kSampleFormat>::convertFromF32(sample);
+		
+		AddSampleS16(targetSample);
+	}
 
+	void AddSampleS16(int16 targetSample)
+	{
+		static_assert(kSampleFormat == AUDIO_S16, "only S16 format is supported");
+		
 		SDL_LockAudioDevice(m_audioDeviceID);
 		m_samples.PushBack(static_cast<SampleFormatType>(targetSample));
 		SDL_UnlockAudioDevice(m_audioDeviceID);
@@ -182,4 +218,8 @@ float32 AudioDriver::GetBufferUsageRatio() const
 void AudioDriver::AddSampleF32(float32 sample)
 {
 	m_impl->AddSampleF32(sample);
+}
+
+void AudioDriver::AddSampleS16(int16 sample) {
+	m_impl->AddSampleS16(sample);
 }

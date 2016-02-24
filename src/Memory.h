@@ -42,30 +42,30 @@ class Memory : public StorageType
 public:
 	uint8 Read(uint16 address)
 	{
-		return m_memory[address];
+		return this->m_memory[address];
 	}
 
 	void Write(uint16 address, uint8 value)
 	{
-		m_memory[address] = value;
+		this->m_memory[address] = value;
 	}
 
 	uint8* RawPtr(uint16 address = 0)
 	{
-		return &m_memory[address];
+		return &this->m_memory[address];
 	}
 
 	uint8& RawRef(uint16 address = 0)
 	{
-		return m_memory[address];
+		return this->m_memory[address];
 	}
 
 	template <typename T>
 	T RawPtrAs(uint16 address = 0)
 	{
-		return reinterpret_cast<T>(&m_memory[address]);
+		return reinterpret_cast<T>(&this->m_memory[address]);
 	}
 
-	const uint8* Begin() const { return &m_memory[0]; }
-	const uint8* End() const { return Begin() + Size(); }
+	const uint8* Begin() const { return &this->m_memory[0]; }
+	const uint8* End() const { return Begin() + this->Size(); }
 };

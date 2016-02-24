@@ -3,6 +3,7 @@
 #include "Base.h"
 #include "Stream.h"
 #include <type_traits>
+#include <string>
 
 #define SERIALIZE(value) serializer.SerializeValue(#value, value)
 #define SERIALIZE_BUFFER(buffer, size) serializer.SerializeBuffer(#buffer, reinterpret_cast<uint8*>(buffer), size)
@@ -26,6 +27,10 @@ public:
 		serializer.BeginLoad(stream);
 		serializer.SerializeObject(serializable);
 		serializer.End();
+	}
+
+	bool IsSaving() const {
+		return m_saving;
 	}
 
 	void BeginSave(IStream& stream)
@@ -59,7 +64,9 @@ public:
 	{
 		// This catches types with vtables, non-trivial copy constructors and assignment operators, etc.
 		// But we can't determine if the type aggregates a pointer, which would be a problem.
+#if !defined _MSC_VER || _MSC_VER >= 1900 //VS2013 has bug on array type
 		static_assert(std::is_trivially_copyable<T>::value, "Type must be trivially copyable to serialize");
+#endif
 		static_assert(!std::is_pointer<T>::value, "Unsafe to serialize a pointer");
 
 		if (m_saving)
@@ -72,7 +79,7 @@ public:
 			std::string nameFromFile;
 			ReadString(nameFromFile);
 			if (nameFromFile.compare(name) != 0)
-				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile);
+				FAIL("SaveState data mismatch! Looking for %s, found %s", name, nameFromFile.c_str());
 			ReadValue(value);
 		}
 	}

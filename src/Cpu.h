@@ -35,11 +35,16 @@ public:
 	void Nmi();
 	void Irq();
 
+	void StealCycles(uint16 cycles);
 	void Execute(uint32& cpuCyclesElapsed);
 
 	uint8 HandleCpuRead(uint16 cpuAddress);
 	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
 
+	void EndFrame() { m_frameCycles = 0; }
+	uint32 GetFrameCycles() const { return m_frameCycles; }
+
+	CpuMemoryBus* GetMemoryBus() { return m_cpuMemoryBus; }
 private:
 	friend class DebuggerImpl;
 
@@ -91,7 +96,9 @@ private:
 	Bitfield8 P;	// Processor status (flags)
 
 	uint16 m_cycles; // Elapsed cycles of each fetch and execute of an instruction
+	uint32 m_frameCycles;
 	uint64 m_totalCycles;
+	uint16 m_lastStolenCycles;
 
 	bool m_pendingNmi;
 	bool m_pendingIrq;

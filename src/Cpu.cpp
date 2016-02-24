@@ -91,6 +91,7 @@ void Cpu::Reset()
 	PC = Read16(CpuMemory::kResetVector);
 
 	m_cycles = 0;
+	m_frameCycles = 0;
 	m_totalCycles = 0;	 
 	m_pendingNmi = m_pendingIrq = false;
 
@@ -106,6 +107,7 @@ void Cpu::Serialize(class Serializer& serializer)
 	SERIALIZE(Y);
 	SERIALIZE(P);
 	SERIALIZE(m_cycles);
+	SERIALIZE(m_frameCycles);
 	SERIALIZE(m_totalCycles);
 	SERIALIZE(m_pendingNmi);
 	SERIALIZE(m_pendingIrq);
@@ -129,9 +131,15 @@ void Cpu::Irq()
 		m_pendingIrq = true;
 }
 
+void Cpu::StealCycles(uint16 cycles) {
+	//TODO: is it the correct way?
+	m_lastStolenCycles += cycles;
+}
+
 void Cpu::Execute(uint32& cpuCyclesElapsed)
 {
-	m_cycles = 0;
+	m_cycles = m_lastStolenCycles;
+	m_lastStolenCycles = 0;
 	
 	ExecutePendingInterrupts(); // Handle when interrupts are called "between" CPU updates (e.g. PPU sends NMI)
 	
@@ -145,12 +153,13 @@ void Cpu::Execute(uint32& cpuCyclesElapsed)
 
 	UpdateOperandAddress();
 
-	Debugger::PreCpuInstruction();
+	NesDebugger::PreCpuInstruction();
 	ExecuteInstruction();
 	ExecutePendingInterrupts(); // Handle when instruction (memory read) causes interrupt
-	Debugger::PostCpuInstruction();		
+	NesDebugger::PostCpuInstruction();		
 
 	cpuCyclesElapsed = m_cycles;
+	m_frameCycles += m_cycles;
 	m_totalCycles += m_cycles;
 }
 
@@ -163,14 +172,15 @@ uint8 Cpu::HandleCpuRead(uint16 cpuAddress)
 	case CpuMemory::kSpriteDmaReg: // $4014
 		result = m_spriteDmaRegister;
 		break;
-
+	case CpuMemory::kApuStatusReg:
+		result = m_apu->HandleCpuReadStatus(m_frameCycles + m_cycles);
+		break;
 	case CpuMemory::kControllerPort1: // $4016
 	case CpuMemory::kControllerPort2: // $4017
 		result = m_controllerPorts.HandleCpuRead(cpuAddress);
 		break;
 
 	default:
-		result = m_apu->HandleCpuRead(cpuAddress);
 		break;
 	}
 	
@@ -214,7 +224,7 @@ void Cpu::HandleCpuWrite(uint16 cpuAddress, uint8 value)
 
 	case CpuMemory::kControllerPort2: // $4017 For writes, this address is mapped to the APU!
 	default:
-		m_apu->HandleCpuWrite(cpuAddress, value);
+		m_apu->HandleCpuWrite(m_frameCycles + m_cycles, cpuAddress, value);
 		break;
 	}
 }

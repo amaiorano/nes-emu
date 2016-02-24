@@ -1,13 +1,11 @@
 #pragma once
 
-#include "Base.h"
-
 // If set, debugging features are enabled for the emulator (slower)
 #define DEBUGGING_ENABLED 0
 
 class Nes;
 
-namespace Debugger
+namespace NesDebugger
 {
 #if DEBUGGING_ENABLED
 	void Initialize(Nes& nes);
@@ -18,12 +16,12 @@ namespace Debugger
 	void PostCpuInstruction();
 	bool IsExecuting();
 #else
-	FORCEINLINE void Initialize(Nes&) {}
-	FORCEINLINE void Shutdown() {}
-	FORCEINLINE void Update() {};
-	FORCEINLINE void DumpMemory() {}
-	FORCEINLINE void PreCpuInstruction() {}
-	FORCEINLINE void PostCpuInstruction() {}
-	FORCEINLINE bool IsExecuting() { return false; }
+	inline void Initialize(Nes&) {}
+	inline void Shutdown() {}
+	inline void Update() {};
+	inline void DumpMemory() {}
+	inline void PreCpuInstruction() {}
+	inline void PostCpuInstruction() {}
+	inline bool IsExecuting() { return false; }
 #endif
 }

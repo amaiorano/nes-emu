@@ -5,6 +5,9 @@
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
+    <Filter Include="src\nes_apu">
+      <UniqueIdentifier>{99f1cd8f-6564-4020-a535-578105cc0aa0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Base.h">
@@ -103,6 +106,42 @@
     <ClInclude Include="src\RewindBuffer.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="external\nes_apu\apu_snapshot.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\blargg_common.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\blargg_source.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Blip_Buffer.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Blip_Synth.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Multi_Buffer.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Nes_Apu.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Nes_Namco.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Nes_Oscs.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Nes_Vrc6.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="external\nes_apu\Nonlinear_Buffer.h">
+      <Filter>src\nes_apu</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Apu.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Cpu.cpp">
@@ -161,6 +200,30 @@
     </ClCompile>
     <ClCompile Include="src\Rom.cpp">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\apu_snapshot.cpp">
+      <Filter>src\nes_apu</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\Blip_Buffer.cpp">
+      <Filter>src\nes_apu</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\Multi_Buffer.cpp">
+      <Filter>src\nes_apu</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\Nes_Apu.cpp">
+      <Filter>src\nes_apu</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\Nes_Namco.cpp">
+      <Filter>src\nes_apu</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\Nes_Oscs.cpp">
+      <Filter>src\nes_apu</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\Nes_Vrc6.cpp">
+      <Filter>src\nes_apu</Filter>
+    </ClCompile>
+    <ClCompile Include="external\nes_apu\Nonlinear_Buffer.cpp">
+      <Filter>src\nes_apu</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

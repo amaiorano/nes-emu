@@ -2,6 +2,7 @@
 
 #include "Base.h"
 #include <cstdio>
+#include <algorithm>
 
 class IStream
 {

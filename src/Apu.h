@@ -2,11 +2,15 @@
 #include "Base.h"
 #include <memory>
 
+class Cpu;
 class FrameCounter;
 class PulseChannel;
 class TriangleChannel;
 class NoiseChannel;
 class AudioDriver;
+
+class Nes_Apu;
+class Blip_Buffer;
 
 namespace ApuChannel
 {
@@ -19,30 +23,23 @@ namespace ApuChannel
 class Apu
 {
 public:
-	void Initialize();
+	~Apu();
+
+	void Initialize(Cpu& cpu);
 	void Reset();
 	void Serialize(class Serializer& serializer);
-	void Execute(uint32 cpuCycles);
-	uint8 HandleCpuRead(uint16 cpuAddress);
-	void HandleCpuWrite(uint16 cpuAddress, uint8 value);
+	void Execute(uint32 currentFrameCycle);
+	void EndFrame(uint32 currentFrameCycle);
+	uint8 HandleCpuReadStatus(uint32 currentFrameCycle);
+	void HandleCpuWrite(uint32 currentFrameCycle, uint16 cpuAddress, uint8 value);
 	
-	float32 GetChannelVolume(ApuChannel::Type type) const { return m_channelVolumes[type]; }
+	float32 GetChannelVolume(ApuChannel::Type type) const;
 	void SetChannelVolume(ApuChannel::Type type, float32 volume);
 
 private:
-	float32 SampleChannelsAndMix();
-	friend void DebugDrawAudio(struct SDL_Renderer* renderer);
-	friend class FrameCounter;
-
-	bool m_evenFrame;
-	float64 m_elapsedCpuCycles;
-	float32 m_sampleSum;
-	float32 m_numSamples;
-	float32 m_channelVolumes[ApuChannel::NumTypes];
-	std::shared_ptr<FrameCounter> m_frameCounter;
-	std::shared_ptr<PulseChannel> m_pulseChannel0;
-	std::shared_ptr<PulseChannel> m_pulseChannel1;
-	std::shared_ptr<TriangleChannel> m_triangleChannel;
-	std::shared_ptr<NoiseChannel> m_noiseChannel;
+	std::shared_ptr<Nes_Apu> m_apuImpl;
+	std::shared_ptr<Blip_Buffer> m_buffer;
 	std::shared_ptr<AudioDriver> m_audioDriver;
+
+	float32 m_volume;
 };

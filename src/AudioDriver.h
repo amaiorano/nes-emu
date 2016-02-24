@@ -13,6 +13,7 @@ public:
 	size_t GetSampleRate() const;
 	float32 GetBufferUsageRatio() const;
 
+	void AddSampleS16(int16 sample);
 	void AddSampleF32(float32 sample);
 
 private:

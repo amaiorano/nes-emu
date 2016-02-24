@@ -470,7 +470,7 @@ private:
 	Nes* m_nes;
 };
 
-namespace Debugger
+namespace NesDebugger
 {
 	static DebuggerImpl g_debugger;
 	static bool g_isExecuting;
