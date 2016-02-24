@@ -246,7 +246,9 @@ namespace System
 	
 	Ticks GetTicks()
 	{
-		return mach_absolute_time();
+		//avoid time overflow
+		static Ticks startTick = mach_absolute_time();
+		return mach_absolute_time() - startTick;
 	}
 	
 	float64 TicksToSec(Ticks t1)
