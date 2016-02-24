@@ -2,12 +2,17 @@
 
 A Nintendo Entertainment System (NES) emulator written in C++
 
+This is a fork of https://github.com/amaiorano/nes-emu. Improvments including: 
+- APU DMC channel implementation. 
+- OSX port (with xcode project provided)
+
+## From amaiorano:
 As this is just a pet project, don't expect a full-featured emulator. There is no GUI, many typical features are missing, and only a few mappers have been implemented. However, the code is pretty clean and straightforward, and I think can be useful to learn from. Of course, if someone wanted to fork this code to write a full-featured emulator, that would be cool as well :)
 
 ## Features
 
 - Mappers 0,1,2,3,4,7 (~90% of games)
-- Accurate audio emulation (no DMC)
+- Accurate audio emulation (<del>no DMC</del>)
 - Automatic saving of SRAM
 - Save state support
 - Rewind any time up to 1 minute at normal speed
@@ -51,3 +56,6 @@ Although I did not look at other emulator source code, I did get a lot of inform
   - [fceux](http://www.fceux.com/)
   - [Nintendulator](http://www.qmtpro.com/~nes/nintendulator/)
   - [NO$NES](http://problemkaputt.de/nes.htm)
+
+## License
+APU implementation uses Shay Green's Nes_snd_emu library which is licensed under the GNU LGPL. See http://www.slack.net/~ant/libs/audio.html for details and visit http://www.gnu.org/licenses/lgpl.html for a copy of the LGPL License.
