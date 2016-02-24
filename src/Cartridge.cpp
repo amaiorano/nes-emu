@@ -72,6 +72,11 @@ RomHeader Cartridge::LoadRom(const char* file)
 	const size_t prgRomSize = romHeader.GetPrgRomSizeBytes();
 	assert(prgRomSize % kPrgBankSize == 0);
 	const size_t numPrgBanks = prgRomSize / kPrgBankSize;
+	if (numPrgBanks > kMaxPrgBanks)
+	{
+		FAIL("Unsupported prg rom banks = %lld (max=%lld)", (uint64)numPrgBanks, (uint64)kMaxPrgBanks);
+	}
+	
 	for (size_t i = 0; i < numPrgBanks; ++i)
 	{
 		fs.Read(m_prgBanks[i].RawPtr(), kPrgBankSize);
@@ -81,7 +86,11 @@ RomHeader Cartridge::LoadRom(const char* file)
 	const size_t chrRomSize = romHeader.GetChrRomSizeBytes();
 	assert(chrRomSize % kChrBankSize == 0);
 	const size_t numChrBanks = chrRomSize / kChrBankSize;
-
+	if (numChrBanks > kMaxChrBanks)
+	{
+		FAIL("Unsupported chr rom banks = %lld (max=%lld)", (uint64)numChrBanks, (uint64)kMaxChrBanks);
+	}
+	
 	if (chrRomSize > 0)
 	{
 		for (size_t i = 0; i < numChrBanks; ++i)
@@ -92,7 +101,10 @@ RomHeader Cartridge::LoadRom(const char* file)
 
 	// Note that "save" here doesn't imply battery-backed
 	const size_t numSavBanks = romHeader.GetNumPrgRamBanks();
-	assert(numSavBanks <= kMaxSavBanks);
+	if (numSavBanks > kMaxSavBanks)
+	{
+		FAIL("Unsupported prg ram banks = %lld (max=%lld)", (uint64)numSavBanks, (uint64)kMaxSavBanks);
+	}
 
 	switch (romHeader.GetMapperNumber())
 	{
