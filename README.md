@@ -7,9 +7,6 @@ Improvements including:
 - APU DMC channel implementation. 
 - OSX port (with xcode project provided)
 
-## From amaiorano
-As this is just a pet project, don't expect a full-featured emulator. There is no GUI, many typical features are missing, and only a few mappers have been implemented. However, the code is pretty clean and straightforward, and I think can be useful to learn from. Of course, if someone wanted to fork this code to write a full-featured emulator, that would be cool as well :)
-
 ## Features
 
 - Mappers 0,1,2,3,4,7 (~90% of games)
@@ -40,14 +37,17 @@ Step many frames      |	]
 			          |
 Toggle audio channels |	F1-F4
 
-## Challenge
+## From amaiorano
+As this is just a pet project, don't expect a full-featured emulator. There is no GUI, many typical features are missing, and only a few mappers have been implemented. However, the code is pretty clean and straightforward, and I think can be useful to learn from. Of course, if someone wanted to fork this code to write a full-featured emulator, that would be cool as well :)
+
+### Challenge
 
 As with most pet projects, the purpose of writing this emulator was mainly to learn. My background is not in hardware, but I have always had a keen interest in computer architecture, so part of my goals was to learn more about how a console works at the hardware level. The NES is simple enough in that respect, although it has enough quirks to make it interesting to emulate.
 
 To further my learning, I challenged myself to write this emulator without looking at any other emulator code. So the implementation is completely my own, and I suspect parts of my code may seem strange or inefficient as compared to other implementations.
 
 
-## Thanks
+### Thanks
 
 Although I did not look at other emulator source code, I did get a lot of information and help from other sources:
 
