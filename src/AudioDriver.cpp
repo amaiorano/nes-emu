@@ -86,7 +86,7 @@ public:
 			FAIL("Failed to open audio device (error code %d)", SDL_GetError());
 
 		// Set buffer size as a function of the latency we allow
-		const float32 kDesiredLatencySecs = 50 / 1000.0f;
+		const float32 kDesiredLatencySecs = 100 / 1000.0f;
 		const float32 desiredLatencySamples = kDesiredLatencySecs * GetSampleRate();
 		const size_t bufferSize = static_cast<size_t>(desiredLatencySamples * 2); // We wait until buffer is 50% full to start playing
 		m_samples.Init(bufferSize);
