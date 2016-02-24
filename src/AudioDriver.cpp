@@ -17,9 +17,28 @@ struct AudioFormatToType {
 	}
 };
 
-template <> struct AudioFormatToType<AUDIO_S16> { typedef int16 Type; };
-template <> struct AudioFormatToType<AUDIO_U16> { typedef uint16 Type; };
-template <> struct AudioFormatToType<AUDIO_F32> { typedef float32 Type; };
+template <> struct AudioFormatToType<AUDIO_S16> {
+	typedef int16 Type;
+	
+	static Type convertFromF32(float32 sample) {
+		sample = 2.f * sample - 1.f;
+		return static_cast<Type>(sample * std::numeric_limits<int16>::max());
+	}
+};
+template <> struct AudioFormatToType<AUDIO_U16> {
+	typedef uint16 Type;
+	
+	static Type convertFromF32(float32 sample) {
+		return static_cast<Type>(sample * std::numeric_limits<int16>::max());
+	}
+};
+template <> struct AudioFormatToType<AUDIO_F32> {
+	typedef float32 Type;
+	
+	static Type convertFromF32(float32 sample) {
+		return sample;
+	}
+};
 
 class AudioDriver::AudioDriverImpl
 {
@@ -109,9 +128,15 @@ public:
 	void AddSampleF32(float32 sample)
 	{
 		assert(sample >= 0.0f && sample <= 1.0f);
-		//@TODO: This multiply is wrong for signed format types (S16, S32)
-		float targetSample = sample * std::numeric_limits<SampleFormatType>::max();
+		auto targetSample = AudioFormatToType<kSampleFormat>::convertFromF32(sample);
+		
+		AddSampleS16(targetSample);
+	}
 
+	void AddSampleS16(int16 targetSample)
+	{
+		static_assert(kSampleFormat == AUDIO_S16, "only S16 format is supported");
+		
 		SDL_LockAudioDevice(m_audioDeviceID);
 		m_samples.PushBack(static_cast<SampleFormatType>(targetSample));
 		SDL_UnlockAudioDevice(m_audioDeviceID);
@@ -193,4 +218,8 @@ float32 AudioDriver::GetBufferUsageRatio() const
 void AudioDriver::AddSampleF32(float32 sample)
 {
 	m_impl->AddSampleF32(sample);
+}
+
+void AudioDriver::AddSampleS16(int16 sample) {
+	m_impl->AddSampleS16(sample);
 }

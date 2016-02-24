@@ -75,8 +75,7 @@ void Apu::EndFrame(uint32 currentFrameCycle) {
 	while ((numSamples = m_buffer->read_samples(samples, MAX_SAMPLES)) > 0)
 	{
 		for (long i = 0; i < numSamples; ++i) {
-			float sample = 0.5f + 0.5f * (float)samples[i] / std::numeric_limits<blip_sample_t>::max();
-			m_audioDriver->AddSampleF32(sample);
+			m_audioDriver->AddSampleS16(samples[i]);
 		}
 	}
 }
