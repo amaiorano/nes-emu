@@ -4,6 +4,8 @@
 #include <cassert>
 #include <stdexcept>
 
+#include "Debugger.h"
+
 #define APP_NAME "nes-emu"
 
 // Platform defines
@@ -158,7 +160,6 @@ T Clamp(T value, T min, T max)
 // FAIL macro
 
 namespace System { extern void DebugBreak(); }
-namespace NesDebugger { extern void Shutdown(); }
 
 inline void FailHandler(const char* msg)
 {
