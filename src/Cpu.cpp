@@ -132,6 +132,7 @@ void Cpu::Irq()
 }
 
 void Cpu::StealCycles(uint16 cycles) {
+	//TODO: is it the correct way?
 	m_lastStolenCycles += cycles;
 }
 
