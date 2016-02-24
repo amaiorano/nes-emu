@@ -71,7 +71,7 @@ public:
 	
 	// See Multi_Buffer
 	blargg_err_t sample_rate( long rate, int msec = blip_default_length );
-	Multi_Buffer::sample_rate;
+	using Multi_Buffer::sample_rate;
 	void clock_rate( long );
 	void bass_freq( int );
 	void clear();
@@ -94,7 +94,7 @@ public:
 	
 	// See Multi_Buffer
 	blargg_err_t sample_rate( long, int msec = blip_default_length );
-	Multi_Buffer::sample_rate;
+	using Multi_Buffer::sample_rate;
 	void clock_rate( long );
 	void bass_freq( int );
 	void clear();

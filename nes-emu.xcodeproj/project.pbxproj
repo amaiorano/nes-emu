@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A34189D1C7D501C0039DA83 /* apu_snapshot.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A34188A1C7D501C0039DA83 /* apu_snapshot.cpp */; };
+		0A34189E1C7D501C0039DA83 /* Blip_Buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A34188E1C7D501C0039DA83 /* Blip_Buffer.cpp */; };
+		0A34189F1C7D501C0039DA83 /* Multi_Buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A3418911C7D501C0039DA83 /* Multi_Buffer.cpp */; };
+		0A3418A01C7D501C0039DA83 /* Nes_Apu.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A3418931C7D501C0039DA83 /* Nes_Apu.cpp */; };
+		0A3418A11C7D501C0039DA83 /* Nes_Namco.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A3418951C7D501C0039DA83 /* Nes_Namco.cpp */; };
+		0A3418A21C7D501C0039DA83 /* Nes_Oscs.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A3418971C7D501C0039DA83 /* Nes_Oscs.cpp */; };
+		0A3418A31C7D501C0039DA83 /* Nes_Vrc6.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A3418991C7D501C0039DA83 /* Nes_Vrc6.cpp */; };
+		0A3418A41C7D501C0039DA83 /* Nonlinear_Buffer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A34189B1C7D501C0039DA83 /* Nonlinear_Buffer.cpp */; };
 		0A5BBDE31C7C0339005D56C6 /* Apu.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A5BBDAF1C7C0339005D56C6 /* Apu.cpp */; };
 		0A5BBDE41C7C0339005D56C6 /* AudioDriver.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A5BBDB11C7C0339005D56C6 /* AudioDriver.cpp */; };
 		0A5BBDE51C7C0339005D56C6 /* Cartridge.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A5BBDB51C7C0339005D56C6 /* Cartridge.cpp */; };
@@ -47,6 +55,25 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0A34188A1C7D501C0039DA83 /* apu_snapshot.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = apu_snapshot.cpp; path = external/nes_apu/apu_snapshot.cpp; sourceTree = SOURCE_ROOT; };
+		0A34188B1C7D501C0039DA83 /* apu_snapshot.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = apu_snapshot.h; path = external/nes_apu/apu_snapshot.h; sourceTree = SOURCE_ROOT; };
+		0A34188C1C7D501C0039DA83 /* blargg_common.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = blargg_common.h; path = external/nes_apu/blargg_common.h; sourceTree = SOURCE_ROOT; };
+		0A34188D1C7D501C0039DA83 /* blargg_source.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = blargg_source.h; path = external/nes_apu/blargg_source.h; sourceTree = SOURCE_ROOT; };
+		0A34188E1C7D501C0039DA83 /* Blip_Buffer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Blip_Buffer.cpp; path = external/nes_apu/Blip_Buffer.cpp; sourceTree = SOURCE_ROOT; };
+		0A34188F1C7D501C0039DA83 /* Blip_Buffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Blip_Buffer.h; path = external/nes_apu/Blip_Buffer.h; sourceTree = SOURCE_ROOT; };
+		0A3418901C7D501C0039DA83 /* Blip_Synth.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Blip_Synth.h; path = external/nes_apu/Blip_Synth.h; sourceTree = SOURCE_ROOT; };
+		0A3418911C7D501C0039DA83 /* Multi_Buffer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Multi_Buffer.cpp; path = external/nes_apu/Multi_Buffer.cpp; sourceTree = SOURCE_ROOT; };
+		0A3418921C7D501C0039DA83 /* Multi_Buffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Multi_Buffer.h; path = external/nes_apu/Multi_Buffer.h; sourceTree = SOURCE_ROOT; };
+		0A3418931C7D501C0039DA83 /* Nes_Apu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Nes_Apu.cpp; path = external/nes_apu/Nes_Apu.cpp; sourceTree = SOURCE_ROOT; };
+		0A3418941C7D501C0039DA83 /* Nes_Apu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Nes_Apu.h; path = external/nes_apu/Nes_Apu.h; sourceTree = SOURCE_ROOT; };
+		0A3418951C7D501C0039DA83 /* Nes_Namco.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Nes_Namco.cpp; path = external/nes_apu/Nes_Namco.cpp; sourceTree = SOURCE_ROOT; };
+		0A3418961C7D501C0039DA83 /* Nes_Namco.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Nes_Namco.h; path = external/nes_apu/Nes_Namco.h; sourceTree = SOURCE_ROOT; };
+		0A3418971C7D501C0039DA83 /* Nes_Oscs.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Nes_Oscs.cpp; path = external/nes_apu/Nes_Oscs.cpp; sourceTree = SOURCE_ROOT; };
+		0A3418981C7D501C0039DA83 /* Nes_Oscs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Nes_Oscs.h; path = external/nes_apu/Nes_Oscs.h; sourceTree = SOURCE_ROOT; };
+		0A3418991C7D501C0039DA83 /* Nes_Vrc6.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Nes_Vrc6.cpp; path = external/nes_apu/Nes_Vrc6.cpp; sourceTree = SOURCE_ROOT; };
+		0A34189A1C7D501C0039DA83 /* Nes_Vrc6.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Nes_Vrc6.h; path = external/nes_apu/Nes_Vrc6.h; sourceTree = SOURCE_ROOT; };
+		0A34189B1C7D501C0039DA83 /* Nonlinear_Buffer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Nonlinear_Buffer.cpp; path = external/nes_apu/Nonlinear_Buffer.cpp; sourceTree = SOURCE_ROOT; };
+		0A34189C1C7D501C0039DA83 /* Nonlinear_Buffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Nonlinear_Buffer.h; path = external/nes_apu/Nonlinear_Buffer.h; sourceTree = SOURCE_ROOT; };
 		0A5BBD9A1C7C02E4005D56C6 /* nes-emu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "nes-emu.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0A5BBDA81C7C02E4005D56C6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0A5BBDAF1C7C0339005D56C6 /* Apu.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Apu.cpp; path = src/Apu.cpp; sourceTree = SOURCE_ROOT; };
@@ -122,6 +149,32 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0A3418891C7D50050039DA83 /* nes-apu */ = {
+			isa = PBXGroup;
+			children = (
+				0A34188A1C7D501C0039DA83 /* apu_snapshot.cpp */,
+				0A34188B1C7D501C0039DA83 /* apu_snapshot.h */,
+				0A34188C1C7D501C0039DA83 /* blargg_common.h */,
+				0A34188D1C7D501C0039DA83 /* blargg_source.h */,
+				0A34188E1C7D501C0039DA83 /* Blip_Buffer.cpp */,
+				0A34188F1C7D501C0039DA83 /* Blip_Buffer.h */,
+				0A3418901C7D501C0039DA83 /* Blip_Synth.h */,
+				0A3418911C7D501C0039DA83 /* Multi_Buffer.cpp */,
+				0A3418921C7D501C0039DA83 /* Multi_Buffer.h */,
+				0A3418931C7D501C0039DA83 /* Nes_Apu.cpp */,
+				0A3418941C7D501C0039DA83 /* Nes_Apu.h */,
+				0A3418951C7D501C0039DA83 /* Nes_Namco.cpp */,
+				0A3418961C7D501C0039DA83 /* Nes_Namco.h */,
+				0A3418971C7D501C0039DA83 /* Nes_Oscs.cpp */,
+				0A3418981C7D501C0039DA83 /* Nes_Oscs.h */,
+				0A3418991C7D501C0039DA83 /* Nes_Vrc6.cpp */,
+				0A34189A1C7D501C0039DA83 /* Nes_Vrc6.h */,
+				0A34189B1C7D501C0039DA83 /* Nonlinear_Buffer.cpp */,
+				0A34189C1C7D501C0039DA83 /* Nonlinear_Buffer.h */,
+			);
+			name = "nes-apu";
+			sourceTree = "<group>";
+		};
 		0A5BBD911C7C02E4005D56C6 = {
 			isa = PBXGroup;
 			children = (
@@ -145,6 +198,7 @@
 		0A5BBD9C1C7C02E4005D56C6 /* nes-emu */ = {
 			isa = PBXGroup;
 			children = (
+				0A3418891C7D50050039DA83 /* nes-apu */,
 				0A5BBDAE1C7C0329005D56C6 /* src */,
 				0A5BBDA81C7C02E4005D56C6 /* Info.plist */,
 				0A5BBDA01C7C02E4005D56C6 /* Supporting Files */,
@@ -287,16 +341,23 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A5BBDEF1C7C0339005D56C6 /* OpCodeTable.cpp in Sources */,
+				0A3418A11C7D501C0039DA83 /* Nes_Namco.cpp in Sources */,
 				0A5BBDED1C7C0339005D56C6 /* MemoryBus.cpp in Sources */,
+				0A3418A41C7D501C0039DA83 /* Nonlinear_Buffer.cpp in Sources */,
+				0A34189D1C7D501C0039DA83 /* apu_snapshot.cpp in Sources */,
 				0A5BBDE81C7C0339005D56C6 /* Debugger.cpp in Sources */,
 				0A5BBDE61C7C0339005D56C6 /* ControllerPorts.cpp in Sources */,
 				0A5BBDE71C7C0339005D56C6 /* Cpu.cpp in Sources */,
+				0A3418A21C7D501C0039DA83 /* Nes_Oscs.cpp in Sources */,
 				0A5BBDEB1C7C0339005D56C6 /* Mapper1.cpp in Sources */,
 				0A5BBDF21C7C0339005D56C6 /* RewindManager.cpp in Sources */,
 				0A5BBDF11C7C0339005D56C6 /* Renderer.cpp in Sources */,
 				0A5BBDE91C7C0339005D56C6 /* Input.cpp in Sources */,
 				0A5BBDF41C7C0339005D56C6 /* Stream.cpp in Sources */,
 				0A5BBDF31C7C0339005D56C6 /* Rom.cpp in Sources */,
+				0A34189E1C7D501C0039DA83 /* Blip_Buffer.cpp in Sources */,
+				0A3418A31C7D501C0039DA83 /* Nes_Vrc6.cpp in Sources */,
+				0A34189F1C7D501C0039DA83 /* Multi_Buffer.cpp in Sources */,
 				0A5BBDEE1C7C0339005D56C6 /* Nes.cpp in Sources */,
 				0A5BBDE41C7C0339005D56C6 /* AudioDriver.cpp in Sources */,
 				0A5BBDE51C7C0339005D56C6 /* Cartridge.cpp in Sources */,
@@ -305,6 +366,7 @@
 				0A5BBDF51C7C0339005D56C6 /* System.cpp in Sources */,
 				0A5BBDE31C7C0339005D56C6 /* Apu.cpp in Sources */,
 				0A5BBDEC1C7C0339005D56C6 /* Mapper4.cpp in Sources */,
+				0A3418A01C7D501C0039DA83 /* Nes_Apu.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -400,7 +462,10 @@
 					"$(inherited)",
 					"_vsnprintf=vsnprintf",
 				);
-				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/external/SDL2/lib/x86/SDL2.framework/Headers";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/external/SDL2/lib/x86/SDL2.framework/Headers",
+					"$(PROJECT_DIR)/external/nes_apu",
+				);
 				INFOPLIST_FILE = "nes-emu/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = "HQSoft.nes-emu";
@@ -415,7 +480,10 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/external/SDL2/lib/x86";
 				GCC_PREPROCESSOR_DEFINITIONS = "_vsnprintf=vsnprintf";
-				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/external/SDL2/lib/x86/SDL2.framework/Headers";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/external/SDL2/lib/x86/SDL2.framework/Headers",
+					"$(PROJECT_DIR)/external/nes_apu",
+				);
 				INFOPLIST_FILE = "nes-emu/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = "HQSoft.nes-emu";
