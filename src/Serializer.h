@@ -64,7 +64,9 @@ public:
 	{
 		// This catches types with vtables, non-trivial copy constructors and assignment operators, etc.
 		// But we can't determine if the type aggregates a pointer, which would be a problem.
+#if _MSC_VER >= 1900 //VS2013 has bug on array type
 		static_assert(std::is_trivially_copyable<T>::value, "Type must be trivially copyable to serialize");
+#endif
 		static_assert(!std::is_pointer<T>::value, "Unsafe to serialize a pointer");
 
 		if (m_saving)
