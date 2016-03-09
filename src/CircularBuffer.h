@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cassert>
+#include <algorithm>
 
 template <typename T>
 class CircularBuffer
