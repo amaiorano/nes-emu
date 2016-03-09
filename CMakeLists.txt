@@ -20,7 +20,7 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 
-file(GLOB SRC "SRC/*.cpp")
+file(GLOB SRC "src/*.cpp")
 add_executable(nes-emu ${SRC})
 target_link_libraries(nes-emu ${SDL2_LIBRARY})
 
