@@ -16,6 +16,7 @@ namespace System
 	void Sleep(uint32 ms);
 	void DebugBreak();
 	void MessageBox(const char* title, const char* message);
+	bool SupportsOpenFileDialog();
 	bool OpenFileDialog(std::string& fileSelected, const char* title = "Open", const char* filter = FILE_FILTER("All files", "*.*"));
 	float64 GetTimeSec();
 }

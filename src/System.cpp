@@ -77,6 +77,11 @@ namespace System
 		printf(FormattedString<>("%s: %s\n", title, message).Value());
 		::MessageBoxA(::GetActiveWindow(), message, title, MB_OK);
 	}
+	
+	bool SupportsOpenFileDialog()
+	{
+		return true;
+	}
 
 	bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter)
 	{
@@ -124,10 +129,15 @@ namespace System
 	{
 		printf("%s: %s\n", title, message);
 	}
+	
+	bool SupportsOpenFileDialog()
+	{
+		return false;
+	}
 
 	bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter)
 	{
-		assert(false && "TO IMPLEMENT!");
+		assert(SupportsOpenFileDialog());
 		return false;
 	}
 }
