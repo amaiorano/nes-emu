@@ -2,6 +2,8 @@
 #define SDL_MAIN_HANDLED // Don't use SDL's main impl
 #include <SDL.h>
 
+extern void DebugDrawAudio(SDL_Renderer* renderer);
+	
 namespace
 {
 	SDL_Window* g_mainWindow = nullptr;
@@ -32,7 +34,6 @@ namespace
 			Unlock();
 			SDL_RenderCopy(renderer, m_backbufferTexture, NULL, NULL);
 
-			extern void DebugDrawAudio(SDL_Renderer* renderer);
 			DebugDrawAudio(renderer);
 
 			SDL_RenderPresent(renderer);

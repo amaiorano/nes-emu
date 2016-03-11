@@ -490,4 +490,12 @@ namespace Debugger
 	bool IsExecuting() { return g_isExecuting; }
 }
 
+#else
+
+namespace Debugger
+{
+	void Shutdown() {}
+}
+
 #endif // DEBUGGING_ENABLED
+

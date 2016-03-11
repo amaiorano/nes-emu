@@ -735,6 +735,10 @@ void Cpu::ExecuteInstruction()
 		P.Set(Negative, CalcNegativeFlag(A));
 		P.Set(Zero, CalcZeroFlag(A));
 		break;
+
+	default:
+		assert(false);
+		break;
 	}
 
 	// Compute cycles for instruction

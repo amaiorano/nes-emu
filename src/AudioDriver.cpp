@@ -7,6 +7,14 @@
 
 #define OUTPUT_RAW_AUDIO_FILE_STREAM 0
 
+namespace
+{
+	template <SDL_AudioFormat Format> struct FormatToType;
+	template <> struct FormatToType<AUDIO_S16> { typedef int16 Type; };
+	template <> struct FormatToType<AUDIO_U16> { typedef uint16 Type; };
+	template <> struct FormatToType<AUDIO_F32> { typedef float32 Type; };
+}
+
 class AudioDriver::AudioDriverImpl
 {
 public:
@@ -18,11 +26,6 @@ public:
 	//static const SDL_AudioFormat kSampleFormat = AUDIO_F32;
 	static const int kNumChannels = 1;
 	static const int kSamplesPerCallback = 1024;
-
-	template <SDL_AudioFormat Format> struct FormatToType;
-	template <> struct FormatToType<AUDIO_S16> { typedef int16 Type; };
-	template <> struct FormatToType<AUDIO_U16> { typedef uint16 Type; };
-	template <> struct FormatToType<AUDIO_F32> { typedef float32 Type; };
 
 	typedef FormatToType<kSampleFormat>::Type SampleFormatType;
 

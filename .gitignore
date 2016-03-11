@@ -7,7 +7,7 @@
 [Dd]ebugPublic/
 [Rr]elease/
 x64/
-build/
+build*/
 bld/
 [Bb]in/
 [Oo]bj/
@@ -34,3 +34,5 @@ saves/
 dumps/
 *.log
 *.raw
+*.nes
+

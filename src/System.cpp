@@ -1,6 +1,6 @@
 #include "System.h"
 #include "IO.h"
-#include <SDL_filesystem.h>
+#include <SDL.h>
 
 namespace System
 {
@@ -32,7 +32,19 @@ namespace System
 
 		return appDir;
 	}
+
+	void Sleep(uint32 ms)
+	{
+		SDL_Delay(ms);
+	}
+
+	float64 GetTimeSec()
+	{
+		return SDL_GetTicks() / 1000.0;
+	}
 }
+
+
 
 #if PLATFORM_WINDOWS
 
@@ -53,40 +65,6 @@ namespace System
 	bool CreateDirectory(const char* directory)
 	{
 		return ::CreateDirectoryA(directory, NULL) != FALSE;
-	}
-
-	void Sleep(uint32 ms)
-	{
-		::Sleep(ms);
-	}
-
-	bool GetKeyPress(char& key)
-	{
-		if (_kbhit())
-		{
-			int result = _getch();
-
-			// If user presses fn or arrow, we need two _getch() calls
-			if (result == 0 || result == 0xE0)
-			{
-				_getch();
-				result = 0xFF; // Return uncommon result
-			}
-
-			key = static_cast<char>(result);
-			return true;
-		}
-		return false;
-	}
-	
-	char WaitForKeyPress()
-	{
-		char key;
-		while (!GetKeyPress(key))
-		{
-			Sleep(1);
-		}
-		return key;
 	}
 
 	void DebugBreak()
@@ -124,29 +102,36 @@ namespace System
 		}
 		return false;
 	}
+}
 
-	static float64 GetPerfCountTicksPerSec()
+#elif PLATFORM_LINUX
+
+#include <sys/stat.h>
+
+namespace System
+{
+	bool CreateDirectory(const char* directory)
 	{
-		LARGE_INTEGER freq;
-		::QueryPerformanceFrequency(&freq);
-		return static_cast<float64>(freq.QuadPart);
+		return mkdir(directory, 0777) == 0;
 	}
 
-	Ticks GetTicks()
+	void DebugBreak()
 	{
-		LARGE_INTEGER li;
-		::QueryPerformanceCounter(&li);
-		return li.QuadPart;
+		assert(false); //@TODO: better way to do this?
 	}
 
-	float64 TicksToSec(Ticks t1)
+	void MessageBox(const char* title, const char* message)
 	{
-		static float64 ticksPerSec = GetPerfCountTicksPerSec();
-		return static_cast<float64>(t1)/ ticksPerSec;
+		printf("%s: %s\n", title, message);
+	}
+
+	bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter)
+	{
+		assert(false && "TO IMPLEMENT!");
+		return false;
 	}
 }
 
-
 #else
-#error "Implement for current platform
+#error "Implement for current platform"
 #endif
