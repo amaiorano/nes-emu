@@ -50,12 +50,14 @@ To further my learning, I challenged myself to write this emulator without looki
 
 - Download 32-bit SDL2 Development Libraries from https://www.libsdl.org/download-2.0.php
   - On Windows, set an environment variable named "SDL2" to the path of the extracted archive (e.g. ```set SDL2=C:\code\SDL2-2.0.4```)
+  - On Debian Linux, install SDL2: ```sudo apt-get install libsdl2-dev```
 
 - Run CMake and build. For example, on Windows:
 ```
 cd nes-emu
 md build
 cd build
+set SDL2=C:\code\SDL2-2.0.4
 cmake ..
 ```
 
