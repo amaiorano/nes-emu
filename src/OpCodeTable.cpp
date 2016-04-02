@@ -203,10 +203,7 @@ OpCodeEntry** GetOpCodeTable()
 		for (size_t i = 0; i < ARRAYSIZE(opCodeTable); ++i)
 		{
 			const uint8 opCode = opCodeTable[i].opCode;
-			
-			assert(opCode < ARRAYSIZE(opCodeTableOrdered) && "Ordered table not large enough");
 			assert(opCodeTableOrdered[opCode] == 0 && "Error in table: opCode collision");
-			
 			opCodeTableOrdered[opCode] = &opCodeTable[i];
 		}
 	}

@@ -19,7 +19,7 @@ namespace Debugger
 	bool IsExecuting();
 #else
 	FORCEINLINE void Initialize(Nes&) {}
-	FORCEINLINE void Shutdown() {}
+	void Shutdown(); // Requires definition (cpp) because of FailHandler
 	FORCEINLINE void Update() {};
 	FORCEINLINE void DumpMemory() {}
 	FORCEINLINE void PreCpuInstruction() {}

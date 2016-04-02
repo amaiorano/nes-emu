@@ -9,6 +9,8 @@
 // Platform defines
 #ifdef _MSC_VER
 	#define PLATFORM_WINDOWS 1
+#elif __linux__
+	#define PLATFORM_LINUX 1
 #else
 	#error "Define current platform"
 #endif
@@ -68,25 +70,25 @@ static_assert(sizeof(float64)==8, "Invalid type size");
 namespace Internal
 {
 	template <size_t value> struct ShiftLeft1 { static const size_t Result = 1 << value; };
-	template <> struct ShiftLeft1<~0> { static const size_t Result = 0; };
+	template <> struct ShiftLeft1<~0u> { static const size_t Result = 0; };
 
 	template <
 		size_t b0,
-		size_t b1 = ~0,
-		size_t b2 = ~0,
-		size_t b3 = ~0,
-		size_t b4 = ~0,
-		size_t b5 = ~0,
-		size_t b6 = ~0,
-		size_t b7 = ~0,
-		size_t b8 = ~0,
-		size_t b9 = ~0,
-		size_t b10 = ~0,
-		size_t b11 = ~0,
-		size_t b12 = ~0,
-		size_t b13 = ~0,
-		size_t b14 = ~0,
-		size_t b15 = ~0
+		size_t b1 = ~0u,
+		size_t b2 = ~0u,
+		size_t b3 = ~0u,
+		size_t b4 = ~0u,
+		size_t b5 = ~0u,
+		size_t b6 = ~0u,
+		size_t b7 = ~0u,
+		size_t b8 = ~0u,
+		size_t b9 = ~0u,
+		size_t b10 = ~0u,
+		size_t b11 = ~0u,
+		size_t b12 = ~0u,
+		size_t b13 = ~0u,
+		size_t b14 = ~0u,
+		size_t b15 = ~0u
 	>
 	struct BitMask
 	{
@@ -169,7 +171,10 @@ inline void FailHandler(const char* msg)
 	throw std::logic_error(msg);
 }
 
-#define FAIL(msg, ...) FailHandler(FormattedString<>(msg, __VA_ARGS__))
+// NOTE: Need this helper for clang/gcc so we can pass a single arg to FAIL
+#define FAIL_HELPER(msg, ...) FailHandler(FormattedString<>(msg, __VA_ARGS__))
+#define FAIL(...) FAIL_HELPER(__VA_ARGS__, "")
+
 
 // Bit operations
 

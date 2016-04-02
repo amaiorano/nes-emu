@@ -33,9 +33,9 @@ namespace
 	{
 		printf("Rom Info:\n");
 		printf("  File: %s\n", romFile);
-		printf("  PRG ROM size: %d kb\n", BytesToKB(header.GetPrgRomSizeBytes()));
-		printf("  CHR ROM size: %d kb\n", BytesToKB(header.GetChrRomSizeBytes()));
-		printf("  PRG RAM size: %d kb\n", BytesToKB(header.GetPrgRamSizeBytes()));
+		printf("  PRG ROM size: %d kb\n", (int)BytesToKB(header.GetPrgRomSizeBytes()));
+		printf("  CHR ROM size: %d kb\n", (int)BytesToKB(header.GetChrRomSizeBytes()));
+		printf("  PRG RAM size: %d kb\n", (int)BytesToKB(header.GetPrgRamSizeBytes()));
 		printf("  Mapper number: %d\n", header.GetMapperNumber());
 		printf("  Has SRAM: %s\n", header.HasSRAM()? "yes" : "no");
 		printf("\n");
@@ -49,7 +49,8 @@ namespace
 
 	bool OpenRomFileDialog(std::string& fileSelected)
 	{
-		return System::OpenFileDialog(fileSelected, "Open NES rom", FILE_FILTER("NES Rom", "*.nes"));
+		return System::SupportsOpenFileDialog() 
+			&& System::OpenFileDialog(fileSelected, "Open NES rom", FILE_FILTER("NES Rom", "*.nes"));
 	}
 
 	void ProcessInputForChannelVolumes(Nes& nes)

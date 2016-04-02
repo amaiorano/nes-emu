@@ -6,6 +6,7 @@
 #include "MemoryMap.h"
 #include "Debugger.h"
 #include <tuple>
+#include <cstring>
 
 namespace
 {
@@ -330,7 +331,7 @@ void Ppu::Execute(uint32 cpuCycles, bool& completedFrame)
 		const uint32 x = m_cycle % kNumScanlineCycles; // offset in current scanline
 		const uint32 y = m_cycle / kNumScanlineCycles; // scanline
 
-		if ( (y >= 0 && y <= 239) || y == 261 ) // Visible and Pre-render scanlines
+		if ( (y <= 239) || y == 261 ) // Visible and Pre-render scanlines
 		{
 			if (renderingEnabled) //@TODO: Not sure about this
 			{

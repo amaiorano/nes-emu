@@ -40,6 +40,9 @@ template <typename StorageType>
 class Memory : public StorageType
 {
 public:
+	using StorageType::m_memory;
+	using StorageType::Size;
+	
 	uint8 Read(uint16 address)
 	{
 		return m_memory[address];
