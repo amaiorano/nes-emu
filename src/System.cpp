@@ -1,6 +1,7 @@
 #include "System.h"
 #include "IO.h"
 #include <SDL.h>
+#include <chrono>
 
 namespace System
 {
@@ -40,7 +41,8 @@ namespace System
 
 	float64 GetTimeSec()
 	{
-		return SDL_GetTicks() / 1000.0;
+		static Uint64 start = SDL_GetPerformanceCounter();
+		return static_cast<float64>(SDL_GetPerformanceCounter() - start) / SDL_GetPerformanceFrequency();
 	}
 }
 
