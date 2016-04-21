@@ -5,14 +5,15 @@
 #include "Renderer.h"
 #include "Debugger.h"
 
-#define kVersionMajor 1
-#define kVersionMinor 4
+#define kVersionMajor  1
+#define kVersionMinor  4
+#define kVersionMinor2 1
 #if CONFIG_DEBUG
 	#define kVersionConfig "d"
 #else
 	#define kVersionConfig ""
 #endif
-const char* kVersionString = "v" STRINGIZE(kVersionMajor) "." STRINGIZE(kVersionMinor) kVersionConfig;
+const char* kVersionString = "v" STRINGIZE(kVersionMajor) "." STRINGIZE(kVersionMinor) "." STRINGIZE(kVersionMinor2) kVersionConfig;
 
 namespace
 {
