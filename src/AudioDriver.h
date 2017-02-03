@@ -1,21 +1,20 @@
 #pragma once
 #include "Base.h"
 
-class AudioDriver
-{
+class AudioDriver {
 public:
-	AudioDriver();
-	~AudioDriver();
+    AudioDriver();
+    ~AudioDriver();
 
-	void Initialize();
-	void Shutdown();
+    void Initialize();
+    void Shutdown();
 
-	size_t GetSampleRate() const;
-	float32 GetBufferUsageRatio() const;
+    size_t  GetSampleRate() const;
+    float32 GetBufferUsageRatio() const;
 
-	void AddSampleF32(float32 sample);
+    void AddSampleF32(float32 sample);
 
 private:
-	class AudioDriverImpl;
-	AudioDriverImpl* m_impl;
+    class AudioDriverImpl;
+    AudioDriverImpl* m_impl;
 };

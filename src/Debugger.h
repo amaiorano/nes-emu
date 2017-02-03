@@ -7,23 +7,22 @@
 
 class Nes;
 
-namespace Debugger
-{
+namespace Debugger {
 #if DEBUGGING_ENABLED
-	void Initialize(Nes& nes);
-	void Shutdown();
-	void Update();
-	void DumpMemory();
-	void PreCpuInstruction();
-	void PostCpuInstruction();
-	bool IsExecuting();
+    void Initialize(Nes& nes);
+    void Shutdown();
+    void Update();
+    void DumpMemory();
+    void PreCpuInstruction();
+    void PostCpuInstruction();
+    bool IsExecuting();
 #else
-	FORCEINLINE void Initialize(Nes&) {}
-	void Shutdown(); // Requires definition (cpp) because of FailHandler
-	FORCEINLINE void Update() {};
-	FORCEINLINE void DumpMemory() {}
-	FORCEINLINE void PreCpuInstruction() {}
-	FORCEINLINE void PostCpuInstruction() {}
-	FORCEINLINE bool IsExecuting() { return false; }
+    FORCEINLINE void Initialize(Nes&) {}
+    void             Shutdown(); // Requires definition (cpp) because of FailHandler
+    FORCEINLINE void Update(){};
+    FORCEINLINE void DumpMemory() {}
+    FORCEINLINE void PreCpuInstruction() {}
+    FORCEINLINE void PostCpuInstruction() {}
+    FORCEINLINE bool IsExecuting() { return false; }
 #endif
 }

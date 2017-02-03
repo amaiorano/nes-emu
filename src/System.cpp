@@ -3,50 +3,40 @@
 #include <SDL.h>
 #include <chrono>
 
-namespace System
-{
-	const char* GetAppDirectory()
-	{
-		static char appDir[2048] = { 0 };
-		
-		// Lazily build the app directory
-		if (appDir[0] == 0)
-		{
-			std::string temp = SDL_GetBasePath();
+namespace System {
+    const char* GetAppDirectory() {
+        static char appDir[2048] = {0};
 
-			// Find the app name directory in the path and return full path to that directory.
-			// Mostly useful when running out of Debug/Release during development.
-			auto npos = temp.find(APP_NAME);
-			if (npos != std::string::npos)
-			{
-				temp.copy(appDir, npos + strlen(APP_NAME) + 1, 0);
-			}
-			else
-			{
-				temp.copy(appDir, temp.length(), 0);
-			}
+        // Lazily build the app directory
+        if (appDir[0] == 0) {
+            std::string temp = SDL_GetBasePath();
 
-			temp = appDir; // Just for asserting
-			assert(temp.size() > 0 && temp.size() < ARRAYSIZE(appDir));
-			assert(temp.back() == '\\' || temp.back() == '/');
-		}
+            // Find the app name directory in the path and return full path to that directory.
+            // Mostly useful when running out of Debug/Release during development.
+            auto npos = temp.find(APP_NAME);
+            if (npos != std::string::npos) {
+                temp.copy(appDir, npos + strlen(APP_NAME) + 1, 0);
+            }
+            else {
+                temp.copy(appDir, temp.length(), 0);
+            }
 
-		return appDir;
-	}
+            temp = appDir; // Just for asserting
+            assert(temp.size() > 0 && temp.size() < ARRAYSIZE(appDir));
+            assert(temp.back() == '\\' || temp.back() == '/');
+        }
 
-	void Sleep(uint32 ms)
-	{
-		SDL_Delay(ms);
-	}
+        return appDir;
+    }
 
-	float64 GetTimeSec()
-	{
-		static Uint64 start = SDL_GetPerformanceCounter();
-		return static_cast<float64>(SDL_GetPerformanceCounter() - start) / SDL_GetPerformanceFrequency();
-	}
+    void Sleep(uint32 ms) { SDL_Delay(ms); }
+
+    float64 GetTimeSec() {
+        static Uint64 start = SDL_GetPerformanceCounter();
+        return static_cast<float64>(SDL_GetPerformanceCounter() - start) /
+               SDL_GetPerformanceFrequency();
+    }
 }
-
-
 
 #if PLATFORM_WINDOWS
 
@@ -62,86 +52,63 @@ namespace System
 #undef MessageBox
 #undef CreateDirectory
 
-namespace System
-{
-	bool CreateDirectory(const char* directory)
-	{
-		return ::CreateDirectoryA(directory, NULL) != FALSE;
-	}
+namespace System {
+    bool CreateDirectory(const char* directory) {
+        return ::CreateDirectoryA(directory, NULL) != FALSE;
+    }
 
-	void DebugBreak()
-	{
-		::DebugBreak();
-	}
+    void DebugBreak() { ::DebugBreak(); }
 
-	void MessageBox(const char* title, const char* message)
-	{
-		printf(FormattedString<>("%s: %s\n", title, message).Value());
-		::MessageBoxA(::GetActiveWindow(), message, title, MB_OK);
-	}
-	
-	bool SupportsOpenFileDialog()
-	{
-		return true;
-	}
+    void MessageBox(const char* title, const char* message) {
+        printf(FormattedString<>("%s: %s\n", title, message).Value());
+        ::MessageBoxA(::GetActiveWindow(), message, title, MB_OK);
+    }
 
-	bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter)
-	{
-		char file[_MAX_PATH] = "";
+    bool SupportsOpenFileDialog() { return true; }
 
-		char currDir[_MAX_PATH] = "";
-		::GetCurrentDirectoryA(sizeof(currDir), currDir);
+    bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter) {
+        char file[_MAX_PATH] = "";
 
-		OPENFILENAMEA ofn = {0};
-		ofn.lStructSize = sizeof(ofn);
-		ofn.lpstrFile = file;
-		ofn.nMaxFile = sizeof(file);
-		ofn.lpstrTitle = title;
-		ofn.lpstrFilter = filter;
-		ofn.nFilterIndex = 0;
-		ofn.lpstrInitialDir = currDir;
-		ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+        char currDir[_MAX_PATH] = "";
+        ::GetCurrentDirectoryA(sizeof(currDir), currDir);
 
-		if (::GetOpenFileNameA(&ofn) == TRUE)
-		{
-			fileSelected = ofn.lpstrFile;
-			return true;
-		}
-		return false;
-	}
+        OPENFILENAMEA ofn   = {0};
+        ofn.lStructSize     = sizeof(ofn);
+        ofn.lpstrFile       = file;
+        ofn.nMaxFile        = sizeof(file);
+        ofn.lpstrTitle      = title;
+        ofn.lpstrFilter     = filter;
+        ofn.nFilterIndex    = 0;
+        ofn.lpstrInitialDir = currDir;
+        ofn.Flags           = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+        if (::GetOpenFileNameA(&ofn) == TRUE) {
+            fileSelected = ofn.lpstrFile;
+            return true;
+        }
+        return false;
+    }
 }
 
 #elif PLATFORM_LINUX
 
 #include <sys/stat.h>
 
-namespace System
-{
-	bool CreateDirectory(const char* directory)
-	{
-		return mkdir(directory, 0777) == 0;
-	}
+namespace System {
+    bool CreateDirectory(const char* directory) { return mkdir(directory, 0777) == 0; }
 
-	void DebugBreak()
-	{
-		assert(false); //@TODO: better way to do this?
-	}
+    void DebugBreak() {
+        assert(false); //@TODO: better way to do this?
+    }
 
-	void MessageBox(const char* title, const char* message)
-	{
-		printf("%s: %s\n", title, message);
-	}
-	
-	bool SupportsOpenFileDialog()
-	{
-		return false;
-	}
+    void MessageBox(const char* title, const char* message) { printf("%s: %s\n", title, message); }
 
-	bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter)
-	{
-		assert(SupportsOpenFileDialog());
-		return false;
-	}
+    bool SupportsOpenFileDialog() { return false; }
+
+    bool OpenFileDialog(std::string& fileSelected, const char* title, const char* filter) {
+        assert(SupportsOpenFileDialog());
+        return false;
+    }
 }
 
 #else
