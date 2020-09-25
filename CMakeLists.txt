@@ -1,6 +1,9 @@
 cmake_minimum_required (VERSION 3.2)
 project (nes-emu)
 
+SET(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # To find SDL2 using find_package below, we set the module path to a directory containing
 # the FindSDL2.cmake module script.
 # NOTE: On Windows, set "SDL2" environment variable to the path to the SDL2 development libraries root
