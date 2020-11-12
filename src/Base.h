@@ -11,6 +11,8 @@
 	#define PLATFORM_WINDOWS 1
 #elif __linux__
 	#define PLATFORM_LINUX 1
+#elif __APPLE__
+	#define PLATFORM_MAC 1
 #else
 	#error "Define current platform"
 #endif
